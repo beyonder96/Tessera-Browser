@@ -1,13 +1,23 @@
 package com.tessera.browser.ui
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Environment
+import android.webkit.CookieManager
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import androidx.activity.compose.BackHandler
@@ -50,6 +60,28 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     val context = LocalContext.current
+
+    // File Upload (<input type="file">) Callback & Activity Result Launcher
+    var fileUploadCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uris = if (result.resultCode == Activity.RESULT_OK) {
+            val intent = result.data
+            if (intent?.clipData != null) {
+                val clipData = intent.clipData!!
+                Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
+            } else if (intent?.data != null) {
+                arrayOf(intent.data!!)
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+        fileUploadCallback?.onReceiveValue(uris)
+        fileUploadCallback = null
+    }
 
     // Handle back navigation:
     // 1. If WebView has back history -> goBack()
@@ -158,6 +190,54 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             webChromeClient = object : WebChromeClient() {
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                     viewModel.updateProgress(newProgress / 100f)
+                                }
+
+                                override fun onShowFileChooser(
+                                    webView: WebView?,
+                                    filePathCallback: ValueCallback<Array<Uri>>?,
+                                    fileChooserParams: FileChooserParams?
+                                ): Boolean {
+                                    fileUploadCallback?.onReceiveValue(null)
+                                    fileUploadCallback = filePathCallback
+
+                                    return try {
+                                        val intent = fileChooserParams?.createIntent()
+                                            ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                                                type = "*/*"
+                                                addCategory(Intent.CATEGORY_OPENABLE)
+                                            }
+                                        fileChooserLauncher.launch(intent)
+                                        true
+                                    } catch (e: Exception) {
+                                        fileUploadCallback?.onReceiveValue(null)
+                                        fileUploadCallback = null
+                                        false
+                                    }
+                                }
+                            }
+
+                            // File Downloads Handler
+                            setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+                                try {
+                                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+                                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                                        setMimeType(mimetype)
+                                        val cookies = CookieManager.getInstance().getCookie(url)
+                                        if (cookies != null) {
+                                            addRequestHeader("cookie", cookies)
+                                        }
+                                        addRequestHeader("User-Agent", userAgent)
+                                        setDescription("Baixando com Tessera Browser...")
+                                        setTitle(fileName)
+                                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                        setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                                    }
+
+                                    val downloadManager = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                                    downloadManager.enqueue(request)
+                                    Toast.makeText(ctx, "Iniciando download: $fileName", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(ctx, "Falha ao iniciar download", Toast.LENGTH_SHORT).show()
                                 }
                             }
 
