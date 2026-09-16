@@ -1,12 +1,13 @@
 package com.tessera.browser.data
 
-import androidx.compose.ui.graphics.Color
+import androidx.annotation.DrawableRes
 
 data class SpeedDialItem(
     val id: String,
     val title: String,
     val url: String,
-    val iconEmoji: String? = null,
+    @DrawableRes val iconRes: Int? = null,
+    val iconUrl: String? = null,
     val initial: String? = null,
     val badgeColor: Long = 0xFF2A2522
 )

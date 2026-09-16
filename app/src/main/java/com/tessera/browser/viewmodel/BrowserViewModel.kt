@@ -38,42 +38,42 @@ data class BrowserUiState(
             id = "1",
             title = "DuckDuckGo",
             url = "https://duckduckgo.com",
-            iconEmoji = "🦆",
+            iconRes = com.tessera.browser.R.drawable.ic_brand_duckduckgo,
             badgeColor = 0xFFDE5833
         ),
         SpeedDialItem(
             id = "2",
             title = "Google",
             url = "https://www.google.com",
-            iconEmoji = "🔍",
+            iconRes = com.tessera.browser.R.drawable.ic_brand_google,
             badgeColor = 0xFF4285F4
         ),
         SpeedDialItem(
             id = "3",
             title = "YouTube",
             url = "https://www.youtube.com",
-            iconEmoji = "▶️",
+            iconRes = com.tessera.browser.R.drawable.ic_brand_youtube,
             badgeColor = 0xFFFF0000
         ),
         SpeedDialItem(
             id = "4",
             title = "Wikipedia",
             url = "https://pt.wikipedia.org",
-            iconEmoji = "📖",
-            badgeColor = 0xFF333333
+            iconRes = com.tessera.browser.R.drawable.ic_brand_wikipedia,
+            badgeColor = 0xFF2C3238
         ),
         SpeedDialItem(
             id = "5",
             title = "GitHub",
             url = "https://github.com",
-            iconEmoji = "🐙",
+            iconRes = com.tessera.browser.R.drawable.ic_brand_github,
             badgeColor = 0xFF24292E
         ),
         SpeedDialItem(
             id = "6",
             title = "Reddit",
             url = "https://reddit.com",
-            iconEmoji = "🤖",
+            iconRes = com.tessera.browser.R.drawable.ic_brand_reddit,
             badgeColor = 0xFFFF4500
         )
     )
@@ -113,7 +113,7 @@ class BrowserViewModel : ViewModel() {
 
     fun onPageStarted(url: String?) {
         if (!url.isNullOrBlank() && !_uiState.value.isHomePage) {
-            _uiState.update { it.copy(displayUrl = url) }
+            _uiState.update { it.copy(currentUrl = url, displayUrl = url) }
         }
     }
 
@@ -122,6 +122,7 @@ class BrowserViewModel : ViewModel() {
             it.copy(
                 progress = 0f,
                 canGoBack = canBack,
+                currentUrl = url ?: it.currentUrl,
                 displayUrl = url ?: it.displayUrl
             )
         }
@@ -194,15 +195,47 @@ class BrowserViewModel : ViewModel() {
     fun addSpeedDialItem(title: String, rawUrl: String) {
         val url = formatInputAsUrl(rawUrl.trim())
         val initialLetter = title.firstOrNull()?.uppercase() ?: "W"
+        val lowerUrl = url.lowercase()
+
+        val detectedIconRes: Int? = when {
+            lowerUrl.contains("google.com") -> com.tessera.browser.R.drawable.ic_brand_google
+            lowerUrl.contains("youtube.com") || lowerUrl.contains("youtu.be") -> com.tessera.browser.R.drawable.ic_brand_youtube
+            lowerUrl.contains("github.com") -> com.tessera.browser.R.drawable.ic_brand_github
+            lowerUrl.contains("reddit.com") -> com.tessera.browser.R.drawable.ic_brand_reddit
+            lowerUrl.contains("duckduckgo.com") -> com.tessera.browser.R.drawable.ic_brand_duckduckgo
+            lowerUrl.contains("wikipedia.org") -> com.tessera.browser.R.drawable.ic_brand_wikipedia
+            lowerUrl.contains("twitter.com") || lowerUrl.contains("x.com") -> com.tessera.browser.R.drawable.ic_brand_x_twitter
+            else -> null
+        }
+
+        val domain = extractDomain(url)
+        val iconUrl = if (detectedIconRes == null && domain.isNotBlank()) {
+            "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+        } else {
+            null
+        }
+
         val newItem = SpeedDialItem(
             id = UUID.randomUUID().toString(),
             title = title.trim(),
             url = url,
+            iconRes = detectedIconRes,
+            iconUrl = iconUrl,
             initial = initialLetter,
-            badgeColor = 0xFF3D322B
+            badgeColor = 0xFF2D2420
         )
         _uiState.update {
             it.copy(speedDialItems = it.speedDialItems + newItem)
+        }
+    }
+
+    private fun extractDomain(url: String): String {
+        return try {
+            val uri = java.net.URI(url)
+            val host = uri.host ?: ""
+            if (host.startsWith("www.")) host.substring(4) else host
+        } catch (e: Exception) {
+            url.replace("https://", "").replace("http://", "").split("/").firstOrNull() ?: ""
         }
     }
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -32,7 +33,6 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.NorthEast
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.StarOutline
-import androidx.compose.material.icons.rounded.ViewSidebar
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -387,7 +387,7 @@ fun QuickSettingsPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ViewSidebar,
+                    imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)

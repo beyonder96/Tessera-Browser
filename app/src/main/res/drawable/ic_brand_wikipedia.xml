@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Dark Slate Base Circle -->
+    <path
+        android:fillColor="#2C3238"
+        android:pathData="M12,12m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+    <!-- Wikipedia Stylized Serif 'W' -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5.5,7.5h3.2v0.6c-0.6,0.1 -0.8,0.3 -0.8,0.7c0,0.2 0.1,0.5 0.2,0.8l2.2,5.8l1.7,-4.8c-0.2,-0.5 -0.4,-0.9 -0.6,-1.1c-0.3,-0.3 -0.7,-0.5 -1.2,-0.6V8.3h3.5v0.6c-0.6,0.1 -0.9,0.3 -0.9,0.7c0,0.2 0.1,0.5 0.2,0.8l1.8,4.7l1.7,-4.6c0.2,-0.5 0.3,-0.8 0.3,-1c0,-0.4 -0.3,-0.6 -0.9,-0.7V8.3h2.6v0.6c-0.6,0.1 -0.8,0.4 -1,0.9l-2.6,6.9h-1.3l-2.1,-5.5l-2.1,5.5H9.6L6.5,9.7c-0.3,-0.7 -0.6,-1.1 -1,-1.3V7.5z" />
+</vector>

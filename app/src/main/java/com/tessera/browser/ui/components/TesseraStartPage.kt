@@ -3,10 +3,12 @@ package com.tessera.browser.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,15 +34,20 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,8 +68,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
 
@@ -84,6 +94,7 @@ fun TesseraStartPage(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<SpeedDialItem?>(null) }
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
 
@@ -94,6 +105,44 @@ fun TesseraStartPage(
                 onAddShortcut(title, url)
                 showAddDialog = false
             }
+        )
+    }
+
+    if (itemToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { itemToDelete = null },
+            title = {
+                Text(
+                    text = "Remover atalho",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "Deseja remover \"${itemToDelete?.title}\" da Discagem Rápida?",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        itemToDelete?.let { onRemoveShortcut(it.id) }
+                        itemToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF6B6B))
+                ) {
+                    Text("Remover", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToDelete = null }) {
+                    Text("Cancelar", color = Color.White.copy(alpha = 0.65f))
+                }
+            },
+            containerColor = Color(0xF2201916),
+            shape = RoundedCornerShape(20.dp)
         )
     }
 
@@ -138,14 +187,13 @@ fun TesseraStartPage(
             )
         }
 
-        // Main scrollable content
+        // Main scrollable content (Top bar, favorites, speed dials, easter egg)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Top Bar
@@ -168,27 +216,13 @@ fun TesseraStartPage(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // Central Search Pill (Opera style "Pesquisar na Web")
-            CentralSearchPill(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = {
-                    if (searchQuery.isNotBlank()) {
-                        focusManager.clearFocus()
-                        onSearch(searchQuery.trim())
-                    }
-                },
-                onAddShortcut = { showAddDialog = true }
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Speed Dial Grid ("Discagem Rápida")
+            // Speed Dial Grid ("Discagem Rápida" with official brand icons)
             SpeedDialSection(
                 items = speedDialItems,
                 onItemClick = onOpenUrl,
+                onItemLongClick = { itemToDelete = it },
                 onAddClick = { showAddDialog = true }
             )
 
@@ -198,8 +232,26 @@ fun TesseraStartPage(
                 InaraCatBadge()
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
+
+        // Opera Air Floating Bottom Search Bar (Rodapé ergonômico)
+        StartPageBottomSearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            onSearch = {
+                if (searchQuery.isNotBlank()) {
+                    focusManager.clearFocus()
+                    onSearch(searchQuery.trim())
+                }
+            },
+            onAddShortcut = { showAddDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        )
     }
 }
 
@@ -278,7 +330,7 @@ private fun StartPageTopBar(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tessera AI Action Button (can be toggled in Quick Settings)
+            // Tessera AI Action Button
             if (showAiButton) {
                 Box(
                     modifier = Modifier
@@ -347,119 +399,15 @@ private fun FavoritesBar(
         items.forEach { item ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.clickable { onOpenUrl(item.url) }
             ) {
-                Text(
-                    text = item.iconEmoji ?: item.initial ?: "•",
-                    fontSize = 12.sp
-                )
+                ShortcutIcon(item = item, size = 16.dp)
                 Text(
                     text = item.title,
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = Color.White.copy(alpha = 0.85f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CentralSearchPill(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    onAddShortcut: () -> Unit
-) {
-    val pillShape = RoundedCornerShape(26.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(24.dp, shape = pillShape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(pillShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xCC231B17), Color(0xAA181310))
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        Color.White.copy(alpha = 0.04f)
-                    )
-                ),
-                shape = pillShape
-            )
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Search icon badge
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Pesquisar",
-                    tint = Color(0xFF64B5F6),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Search input field
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (query.isEmpty()) {
-                    Text(
-                        text = "Pesquisar na Web",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
-
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    textStyle = TextStyle(
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal
-                    ),
-                    cursorBrush = SolidColor(Color(0xFF64B5F6)),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSearch() })
-                )
-            }
-
-            // Add (+) button inside search pill
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onAddShortcut),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = "Adicionar atalho",
-                    tint = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -471,6 +419,7 @@ private fun CentralSearchPill(
 private fun SpeedDialSection(
     items: List<SpeedDialItem>,
     onItemClick: (String) -> Unit,
+    onItemLongClick: (SpeedDialItem) -> Unit,
     onAddClick: () -> Unit
 ) {
     FlowRow(
@@ -481,11 +430,9 @@ private fun SpeedDialSection(
     ) {
         items.forEach { item ->
             SpeedDialTile(
-                title = item.title,
-                iconEmoji = item.iconEmoji,
-                initial = item.initial,
-                badgeColor = Color(item.badgeColor),
-                onClick = { onItemClick(item.url) }
+                item = item,
+                onClick = { onItemClick(item.url) },
+                onLongClick = { onItemLongClick(item) }
             )
         }
 
@@ -494,13 +441,12 @@ private fun SpeedDialSection(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SpeedDialTile(
-    title: String,
-    iconEmoji: String?,
-    initial: String?,
-    badgeColor: Color,
-    onClick: () -> Unit
+    item: SpeedDialItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val tileShape = RoundedCornerShape(18.dp)
 
@@ -508,7 +454,11 @@ private fun SpeedDialTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(72.dp)
-            .clickable(onClick = onClick)
+            .clip(tileShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Box(
             modifier = Modifier
@@ -529,39 +479,84 @@ private fun SpeedDialTile(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (iconEmoji != null) {
-                Text(
-                    text = iconEmoji,
-                    fontSize = 24.sp
-                )
-            } else if (initial != null) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(badgeColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = initial,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            ShortcutIcon(item = item, size = 32.dp)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = title,
-            color = Color.White.copy(alpha = 0.85f),
+            text = item.title,
+            color = Color.White.copy(alpha = 0.88f),
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ShortcutIcon(
+    item: SpeedDialItem,
+    size: Dp = 32.dp
+) {
+    if (item.iconRes != null) {
+        Image(
+            painter = painterResource(id = item.iconRes),
+            contentDescription = item.title,
+            modifier = Modifier.size(size)
+        )
+    } else if (!item.iconUrl.isNullOrBlank()) {
+        SubcomposeAsyncImage(
+            model = item.iconUrl,
+            contentDescription = item.title,
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape),
+            loading = {
+                InitialBadge(
+                    initial = item.initial,
+                    badgeColor = Color(item.badgeColor),
+                    size = size
+                )
+            },
+            error = {
+                InitialBadge(
+                    initial = item.initial,
+                    badgeColor = Color(item.badgeColor),
+                    size = size
+                )
+            }
+        )
+    } else {
+        InitialBadge(
+            initial = item.initial,
+            badgeColor = Color(item.badgeColor),
+            size = size
+        )
+    }
+}
+
+@Composable
+private fun InitialBadge(
+    initial: String?,
+    badgeColor: Color,
+    size: Dp = 32.dp
+) {
+    val letter = initial?.firstOrNull()?.uppercase() ?: "•"
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(badgeColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = letter,
+            color = Color.White,
+            fontSize = (size.value * 0.45f).sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -607,6 +602,141 @@ private fun AddShortcutTile(onClick: () -> Unit) {
             fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+private fun StartPageBottomSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onAddShortcut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pillShape = RoundedCornerShape(28.dp)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(24.dp, shape = pillShape, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(pillShape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xF2221B17), Color(0xEE16110F))
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.24f),
+                        Color.White.copy(alpha = 0.05f)
+                    )
+                ),
+                shape = pillShape
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Search icon badge with cyan accent
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.07f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = "Pesquisar",
+                    tint = Color(0xFF64B5F6),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Search input field
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = "Pesquisar ou digitar endereço...",
+                        color = Color.White.copy(alpha = 0.42f),
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = Color.White,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    cursorBrush = SolidColor(Color(0xFF64B5F6)),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch() })
+                )
+            }
+
+            // Actions on the right: Clear & Go if typing, or Add shortcut (+) if empty
+            if (query.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { onQueryChange("") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Limpar",
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF64B5F6))
+                        .clickable(onClick = onSearch),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = "Ir",
+                        tint = Color(0xFF0D1822),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onAddShortcut),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "Adicionar atalho",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
     }
 }
 

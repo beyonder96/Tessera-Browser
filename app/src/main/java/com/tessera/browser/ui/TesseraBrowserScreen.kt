@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +60,16 @@ import com.tessera.browser.viewmodel.BrowserViewModel
 fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+
+    // Synchronize navigation requests from state to WebView safely
+    LaunchedEffect(state.currentUrl, state.isHomePage) {
+        if (!state.isHomePage && state.currentUrl.isNotBlank() && state.currentUrl != lastLoadedUrl) {
+            lastLoadedUrl = state.currentUrl
+            webViewInstance?.loadUrl(state.currentUrl)
+        }
+    }
 
     // File Upload (<input type="file">) Callback & Activity Result Launcher
     var fileUploadCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -143,9 +153,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         WebView(ctx).apply {
                             isNestedScrollingEnabled = true
 
+                            val cookieManager = CookieManager.getInstance()
+                            cookieManager.setAcceptCookie(true)
+                            cookieManager.setAcceptThirdPartyCookies(this, true)
+
                             settings.apply {
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
+                                mediaPlaybackRequiresUserGesture = false
                                 loadWithOverviewMode = true
                                 useWideViewPort = true
                                 setSupportZoom(true)
@@ -179,11 +194,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     url: String?,
                                     favicon: Bitmap?
                                 ) {
-                                    viewModel.onPageStarted(url)
+                                    if (!url.isNullOrBlank()) {
+                                        lastLoadedUrl = url
+                                        viewModel.onPageStarted(url)
+                                    }
                                 }
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
-                                    viewModel.onPageFinished(url, canGoBack())
+                                    if (!url.isNullOrBlank()) {
+                                        lastLoadedUrl = url
+                                        viewModel.onPageFinished(url, canGoBack())
+                                    }
                                 }
                             }
 
@@ -242,14 +263,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
 
                             loadUrl(state.currentUrl)
+                            lastLoadedUrl = state.currentUrl
                             webViewInstance = this
                         }
                     },
                     update = { view ->
                         applyForceDark(view.settings, state.forceDarkPages)
-                        if (view.url != state.currentUrl && state.currentUrl.isNotBlank()) {
-                            view.loadUrl(state.currentUrl)
-                        }
                     }
                 )
 

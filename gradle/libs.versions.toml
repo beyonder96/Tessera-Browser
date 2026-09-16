@@ -6,8 +6,10 @@ activityCompose = "1.9.3"
 lifecycleViewModel = "2.8.7"
 coreKtx = "1.15.0"
 webkit = "1.12.1"
+coil = "2.7.0"
 
 [libraries]
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
