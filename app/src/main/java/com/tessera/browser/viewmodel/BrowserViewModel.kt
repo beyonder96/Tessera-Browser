@@ -75,7 +75,8 @@ data class BrowserTab(
     val isHomePage: Boolean = true,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val lastAccessedTimestamp: Long = System.currentTimeMillis()
 )
 
 data class HistoryEntry(
@@ -113,6 +114,18 @@ data class BrowserUiState(
     val isIncognitoMode: Boolean = false,
     val isReaderModeActive: Boolean = false,
     val isReaderModeAvailable: Boolean = false,
+
+    // Recursos Avançados (Chrome, Opera & Arc)
+    val isDesktopMode: Boolean = false,
+    val cookieBlockerEnabled: Boolean = true,
+    val isInFullscreenVideo: Boolean = false,
+    val showFindInPage: Boolean = false,
+    val findQuery: String = "",
+    val findMatchIndex: Int = 0,
+    val findMatchCount: Int = 0,
+    val peekUrl: String? = null,
+    val peekTitle: String? = null,
+    val showPeekModal: Boolean = false,
 
     // Multi-tabs
     val tabs: List<BrowserTab> = listOf(
@@ -520,8 +533,13 @@ class BrowserViewModel : ViewModel() {
 
     fun selectTab(tabId: String) {
         val targetTab = _uiState.value.tabs.find { it.id == tabId } ?: return
+        val now = System.currentTimeMillis()
         _uiState.update { state ->
+            val updatedTabs = state.tabs.map {
+                if (it.id == tabId) it.copy(lastAccessedTimestamp = now) else it
+            }
             state.copy(
+                tabs = updatedTabs,
                 activeTabId = tabId,
                 isHomePage = targetTab.isHomePage,
                 currentUrl = targetTab.url,
@@ -556,6 +574,26 @@ class BrowserViewModel : ViewModel() {
                 displayUrl = if (nextActiveTab.isHomePage) "" else nextActiveTab.url,
                 canGoBack = nextActiveTab.canGoBack
             )
+        }
+    }
+
+    fun archiveInactiveTabs(thresholdHours: Long = 24) {
+        val now = System.currentTimeMillis()
+        val thresholdMillis = thresholdHours * 60 * 60 * 1000L
+        _uiState.update { state ->
+            val remainingTabs = state.tabs.filter { tab ->
+                tab.id == state.activeTabId || tab.isPinned || (now - tab.lastAccessedTimestamp) < thresholdMillis
+            }
+            if (remainingTabs.isEmpty()) {
+                val newId = UUID.randomUUID().toString()
+                state.copy(
+                    tabs = listOf(BrowserTab(id = newId, isHomePage = true)),
+                    activeTabId = newId,
+                    isHomePage = true
+                )
+            } else {
+                state.copy(tabs = remainingTabs)
+            }
         }
     }
 
@@ -918,6 +956,8 @@ class BrowserViewModel : ViewModel() {
                 val adBlock = if (prefs.contains("ad_block_enabled")) prefs.getBoolean("ad_block_enabled", true) else null
                 val showWeather = if (prefs.contains("show_weather_widget")) prefs.getBoolean("show_weather_widget", true) else null
                 val showQuotes = if (prefs.contains("show_quotes_widget")) prefs.getBoolean("show_quotes_widget", true) else null
+                val cookieBlocker = if (prefs.contains("cookie_blocker_enabled")) prefs.getBoolean("cookie_blocker_enabled", true) else null
+                val isDesktop = if (prefs.contains("is_desktop_mode")) prefs.getBoolean("is_desktop_mode", false) else null
 
                 _uiState.update { current ->
                     current.copy(
@@ -932,6 +972,8 @@ class BrowserViewModel : ViewModel() {
                         showCatInara = showCatInara ?: current.showCatInara,
                         tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
                         adBlockEnabled = adBlock ?: current.adBlockEnabled,
+                        cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
+                        isDesktopMode = isDesktop ?: current.isDesktopMode,
                         showWeatherWidget = showWeather ?: current.showWeatherWidget,
                         showQuotesWidget = showQuotes ?: current.showQuotesWidget
                     )
@@ -990,6 +1032,8 @@ class BrowserViewModel : ViewModel() {
                     .putBoolean("show_cat_inara", s.showCatInara)
                     .putBoolean("tessera_ai_enabled", s.tesseraAiEnabled)
                     .putBoolean("ad_block_enabled", s.adBlockEnabled)
+                    .putBoolean("cookie_blocker_enabled", s.cookieBlockerEnabled)
+                    .putBoolean("is_desktop_mode", s.isDesktopMode)
                     .putBoolean("show_weather_widget", s.showWeatherWidget)
                     .putBoolean("show_quotes_widget", s.showQuotesWidget)
                     .apply()
@@ -997,6 +1041,87 @@ class BrowserViewModel : ViewModel() {
                 Log.e("BrowserViewModel", "Erro ao salvar configurações", e)
             }
         }
+    }
+
+    // ADVANCED BROWSER FEATURES (Chrome, Opera, Arc)
+    fun toggleDesktopMode() {
+        _uiState.update { it.copy(isDesktopMode = !it.isDesktopMode) }
+        saveSettings()
+    }
+
+    fun setDesktopMode(enabled: Boolean) {
+        _uiState.update { it.copy(isDesktopMode = enabled) }
+        saveSettings()
+    }
+
+    fun toggleCookieBlocker() {
+        _uiState.update { it.copy(cookieBlockerEnabled = !it.cookieBlockerEnabled) }
+        saveSettings()
+    }
+
+    fun setCookieBlockerEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(cookieBlockerEnabled = enabled) }
+        saveSettings()
+    }
+
+    fun setFullscreenVideo(active: Boolean) {
+        _uiState.update { it.copy(isInFullscreenVideo = active) }
+    }
+
+    fun openFindInPage() {
+        _uiState.update { it.copy(showFindInPage = true) }
+    }
+
+    fun closeFindInPage() {
+        _uiState.update {
+            it.copy(
+                showFindInPage = false,
+                findQuery = "",
+                findMatchIndex = 0,
+                findMatchCount = 0
+            )
+        }
+    }
+
+    fun updateFindQuery(query: String) {
+        _uiState.update { it.copy(findQuery = query) }
+    }
+
+    fun updateFindResults(activeMatchOrdinal: Int, numberOfMatches: Int) {
+        _uiState.update {
+            it.copy(
+                findMatchIndex = if (numberOfMatches > 0) activeMatchOrdinal else 0,
+                findMatchCount = numberOfMatches
+            )
+        }
+    }
+
+    fun showPeekModal(url: String, title: String? = null) {
+        _uiState.update {
+            it.copy(
+                peekUrl = url,
+                peekTitle = title,
+                showPeekModal = true
+            )
+        }
+    }
+
+    fun dismissPeekModal() {
+        _uiState.update {
+            it.copy(
+                showPeekModal = false,
+                peekUrl = null,
+                peekTitle = null
+            )
+        }
+    }
+
+    fun browseForMe(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        val prompt = "Navegue na web e sintetize com tópicos objetivos, respostas diretas e fontes: $trimmed"
+        val aiUrl = "https://duck.ai/?q=${URLEncoder.encode(prompt, "UTF-8")}"
+        openUrl(aiUrl)
     }
 
     // QUICK AI ACTIONS MODAL

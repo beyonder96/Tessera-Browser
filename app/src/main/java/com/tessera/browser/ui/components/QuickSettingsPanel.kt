@@ -30,6 +30,8 @@ import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.History
@@ -37,6 +39,9 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.NorthEast
 import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.WbSunny
@@ -76,6 +81,9 @@ fun QuickSettingsPanel(
     showSidebar: Boolean,
     autoHideSidebar: Boolean,
     adBlockEnabled: Boolean = true,
+    isDesktopMode: Boolean = false,
+    cookieBlockerEnabled: Boolean = true,
+    isWebPageActive: Boolean = false,
     showWeatherWidget: Boolean = true,
     showQuotesWidget: Boolean = true,
     onDarkModeChanged: (Boolean) -> Unit,
@@ -92,6 +100,11 @@ fun QuickSettingsPanel(
     onShowSidebarChanged: (Boolean) -> Unit,
     onAutoHideSidebarChanged: (Boolean) -> Unit,
     onAdBlockChanged: (Boolean) -> Unit,
+    onDesktopModeChanged: (Boolean) -> Unit = {},
+    onCookieBlockerChanged: (Boolean) -> Unit = {},
+    onFindInPage: () -> Unit = {},
+    onSharePage: () -> Unit = {},
+    onPrintPage: () -> Unit = {},
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit = {},
     onDismiss: () -> Unit,
@@ -379,6 +392,204 @@ fun QuickSettingsPanel(
                 tint = cardArrowTint,
                 modifier = Modifier.size(16.dp)
             )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsDivider(isDarkMode = isDarkMode)
+
+        // SEÇÃO: FERRAMENTAS DA PÁGINA (CHROME & OPERA)
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = "Ferramentas da página",
+            color = sectionHeaderColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Versão para Computador (Desktop)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Computer,
+                    contentDescription = null,
+                    tint = if (isDesktopMode) Color(0xFF42A5F5) else secondaryIconTint,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Versão para computador",
+                    color = secondaryTextColor,
+                    fontSize = 14.5.sp
+                )
+            }
+            TesseraSwitch(
+                checked = isDesktopMode,
+                onCheckedChange = onDesktopModeChanged,
+                isDarkMode = isDarkMode
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Bloqueador de Avisos de Cookies
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Cookie,
+                    contentDescription = null,
+                    tint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else secondaryIconTint,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Bloquear avisos de cookies (LGPD)",
+                    color = secondaryTextColor,
+                    fontSize = 14.5.sp
+                )
+            }
+            TesseraSwitch(
+                checked = cookieBlockerEnabled,
+                onCheckedChange = onCookieBlockerChanged,
+                isDarkMode = isDarkMode
+            )
+        }
+
+        if (isWebPageActive) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Localizar na Página
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onFindInPage()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Localizar na página",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Compartilhar Página
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onSharePage()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Compartilhar página",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Imprimir / Salvar em PDF
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onPrintPage()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Print,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Salvar em PDF / Imprimir",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))

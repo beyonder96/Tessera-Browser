@@ -73,6 +73,7 @@ fun TabsModal(
     onDismiss: () -> Unit,
     onTogglePin: (String) -> Unit = {},
     onCloseAllTabs: () -> Unit = {},
+    onArchiveInactiveTabs: () -> Unit = {},
     onOpenHistory: () -> Unit = {},
     accentColor: Color = Color(0xFF0288D1),
     isDarkMode: Boolean = false,
@@ -338,6 +339,13 @@ fun TabsModal(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Arquivar abas inativas (24h)") },
+                            onClick = {
+                                showMenu = false
+                                onArchiveInactiveTabs()
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Fechar todas as guias") },
                             onClick = {

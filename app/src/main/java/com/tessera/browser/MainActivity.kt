@@ -43,6 +43,19 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (viewModel.uiState.value.isInFullscreenVideo) {
+                try {
+                    enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
+                } catch (e: Exception) {
+                    // Ignora se PiP não estiver disponível
+                }
+            }
+        }
+    }
+
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
 

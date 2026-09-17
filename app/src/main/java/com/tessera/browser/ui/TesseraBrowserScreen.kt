@@ -70,16 +70,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.print.PrintAttributes
+import android.print.PrintManager
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.tessera.browser.ui.components.AiActionsModal
+import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
+import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraStartPage
 import com.tessera.browser.viewmodel.BrowserViewModel
 import java.io.ByteArrayInputStream
+
+private const val MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
+private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
 private val AdBlockHosts = setOf(
     "doubleclick.net", "googleadservices.com", "googlesyndication.com",
@@ -190,21 +197,29 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
     // System Back navigation priority:
     // 0. Dismiss search editing (keyboard)
-    // 1. Exit Fullscreen Video
-    // 2. Dismiss Quick Settings
-    // 3. Dismiss Tabs Modal
-    // 4. Dismiss History/Bookmarks Modal
-    // 5. Dismiss AI Actions Modal
-    // 6. Collapse expanded AirBar
-    // 7. WebView history back
-    // 8. Go Home
-    BackHandler(enabled = isSearchEditing || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
+    // 1. Dismiss Find in Page
+    // 2. Dismiss Peek Modal
+    // 3. Exit Fullscreen Video
+    // 4. Dismiss Quick Settings
+    // 5. Dismiss Tabs Modal
+    // 6. Dismiss History/Bookmarks Modal
+    // 7. Dismiss AI Actions Modal
+    // 8. Collapse expanded AirBar
+    // 9. WebView history back
+    // 10. Go Home
+    BackHandler(enabled = isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
         if (isSearchEditing) {
             isSearchEditing = false
+        } else if (state.showFindInPage) {
+            webViewInstance?.clearMatches()
+            viewModel.closeFindInPage()
+        } else if (state.showPeekModal) {
+            viewModel.dismissPeekModal()
         } else if (customView != null) {
             customViewCallback?.onCustomViewHidden()
             customView = null
             customViewCallback = null
+            viewModel.setFullscreenVideo(false)
         } else if (state.showQuickSettings) {
             viewModel.dismissQuickSettings()
         } else if (state.showTabsModal) {
@@ -300,11 +315,33 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                                 javaScriptCanOpenWindowsAutomatically = true
 
-                                // Standard modern Chrome mobile UA so AI pages (Duck.ai, Perplexity, etc.) load flawlessly
-                                userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
+                                // Standard modern Chrome mobile/desktop UA
+                                userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else MOBILE_USER_AGENT
 
                                 applyForceDark(this, state.forceDarkPages)
                                 setGeolocationEnabled(true)
+                            }
+
+                            // Find in Page results listener
+                            setFindListener { activeMatchOrdinal, numberOfMatches, _ ->
+                                viewModel.updateFindResults(
+                                    if (numberOfMatches > 0) activeMatchOrdinal + 1 else 0,
+                                    numberOfMatches
+                                )
+                            }
+
+                            // Arc Peek / Link Preview on long-press
+                            setOnLongClickListener {
+                                val result = hitTestResult
+                                val type = result.type
+                                if (type == WebView.HitTestResult.SRC_ANCHOR_TYPE || type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
+                                    val linkUrl = result.extra
+                                    if (!linkUrl.isNullOrBlank()) {
+                                        viewModel.showPeekModal(linkUrl)
+                                        return@setOnLongClickListener true
+                                    }
+                                }
+                                false
                             }
 
                             addJavascriptInterface(
@@ -428,6 +465,42 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
 
+                                        // Cookie banner blocker injection (Opera-style)
+                                        if (state.cookieBlockerEnabled) {
+                                            view?.evaluateJavascript(
+                                                """
+                                                (function() {
+                                                    var selectors = [
+                                                        '#onetrust-banner-sdk', '#onetrust-consent-sdk', '.onetrust-pc-dark-filter',
+                                                        '.cookie-banner', '.cookie-notice', '.cookie-consent', '.cc-banner', '.cc-window',
+                                                        '#CybotCookiebotDialog', '#CybotCookiebotDialogBodyUnderlay',
+                                                        '[id*="cookie-banner"]', '[id*="cookie-consent"]', '[id*="cookieConsent"]',
+                                                        '[class*="cookie-banner"]', '[class*="cookie-consent"]', '[class*="CookieConsent"]',
+                                                        '.cmp-container', '#cmp-app', '#cmpbox', '.qc-cmp2-container',
+                                                        '#sp_message_container', '.truste_overlay', '.truste_box_overlay'
+                                                    ];
+                                                    selectors.forEach(function(sel) {
+                                                        var els = document.querySelectorAll(sel);
+                                                        for (var i = 0; i < els.length; i++) {
+                                                            els[i].style.setProperty('display', 'none', 'important');
+                                                            els[i].style.setProperty('visibility', 'hidden', 'important');
+                                                            els[i].style.setProperty('opacity', '0', 'important');
+                                                            els[i].style.setProperty('pointer-events', 'none', 'important');
+                                                        }
+                                                    });
+                                                    if (document.body) {
+                                                        document.body.style.setProperty('overflow', 'auto', 'important');
+                                                        document.body.style.setProperty('position', 'static', 'important');
+                                                    }
+                                                    if (document.documentElement) {
+                                                        document.documentElement.style.setProperty('overflow', 'auto', 'important');
+                                                    }
+                                                })();
+                                                """.trimIndent(),
+                                                null
+                                            )
+                                        }
+
                                         // Detect Reader Mode availability on actual articles/content pages
                                         view?.evaluateJavascript(
                                             """
@@ -470,12 +543,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     }
                                     customView = view
                                     customViewCallback = callback
+                                    viewModel.setFullscreenVideo(true)
                                 }
 
                                 override fun onHideCustomView() {
                                     customViewCallback?.onCustomViewHidden()
                                     customView = null
                                     customViewCallback = null
+                                    viewModel.setFullscreenVideo(false)
                                 }
 
                                 override fun onJsAlert(
@@ -582,6 +657,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     },
                     update = { view ->
                         applyForceDark(view.settings, state.forceDarkPages)
+                        val targetUa = if (state.isDesktopMode) DESKTOP_USER_AGENT else MOBILE_USER_AGENT
+                        if (view.settings.userAgentString != targetUa) {
+                            view.settings.userAgentString = targetUa
+                            view.settings.useWideViewPort = true
+                            view.reload()
+                        }
                     }
                 )
 
@@ -651,6 +732,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSearch = { query -> viewModel.openUrl(query) },
                 onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
                 onOpenAi = { query -> viewModel.openAiQuery(query) },
+                onBrowseForMe = { query -> viewModel.browseForMe(query) },
                 isEditingExternal = isSearchEditing,
                 onEditingChange = { isSearchEditing = it },
                 onFastAction = {
@@ -855,6 +937,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onDismiss = { viewModel.dismissTabsModal() },
                 onTogglePin = { viewModel.togglePinTab(it) },
                 onCloseAllTabs = { viewModel.closeAllTabs() },
+                onArchiveInactiveTabs = { viewModel.archiveInactiveTabs() },
                 onOpenHistory = {
                     viewModel.dismissTabsModal()
                     viewModel.toggleHistoryModal()
@@ -981,6 +1064,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 showSidebar = state.showSidebar,
                 autoHideSidebar = state.autoHideSidebar,
                 adBlockEnabled = state.adBlockEnabled,
+                isDesktopMode = state.isDesktopMode,
+                cookieBlockerEnabled = state.cookieBlockerEnabled,
+                isWebPageActive = !state.isHomePage,
                 showWeatherWidget = state.showWeatherWidget,
                 showQuotesWidget = state.showQuotesWidget,
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
@@ -997,6 +1083,30 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onShowSidebarChanged = { viewModel.setShowSidebar(it) },
                 onAutoHideSidebarChanged = { viewModel.setAutoHideSidebar(it) },
                 onAdBlockChanged = { viewModel.setAdBlockEnabled(it) },
+                onDesktopModeChanged = { viewModel.toggleDesktopMode() },
+                onCookieBlockerChanged = { viewModel.toggleCookieBlocker() },
+                onFindInPage = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.openFindInPage()
+                },
+                onSharePage = {
+                    viewModel.dismissQuickSettings()
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, webViewInstance?.title ?: "Tessera Browser")
+                        putExtra(Intent.EXTRA_TEXT, "${webViewInstance?.title.orEmpty()}\n${state.displayUrl}".trim())
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Compartilhar Página"))
+                },
+                onPrintPage = {
+                    viewModel.dismissQuickSettings()
+                    webViewInstance?.let { webView ->
+                        val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                        val printAdapter = webView.createPrintDocumentAdapter("Tessera_${System.currentTimeMillis()}")
+                        val jobName = "${webView.title ?: "Documento"}_Tessera"
+                        printManager?.print(jobName, printAdapter, PrintAttributes.Builder().build())
+                    }
+                },
                 onOpenHistory = {
                     viewModel.dismissQuickSettings()
                     viewModel.openHistoryModal(0)
@@ -1007,6 +1117,79 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 },
                 onDismiss = { viewModel.dismissQuickSettings() }
             )
+        }
+
+        // FIND IN PAGE FLOATING OVERLAY (Chrome-style)
+        AnimatedVisibility(
+            visible = state.showFindInPage && !state.isHomePage,
+            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(260)) + fadeIn(tween(260)),
+            exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(220)) + fadeOut(tween(220)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .displayCutoutPadding()
+        ) {
+            FindInPageBar(
+                query = state.findQuery,
+                matchIndex = state.findMatchIndex,
+                matchCount = state.findMatchCount,
+                onQueryChange = { query ->
+                    viewModel.updateFindQuery(query)
+                    webViewInstance?.findAllAsync(query)
+                },
+                onFindNext = {
+                    webViewInstance?.findNext(true)
+                },
+                onFindPrevious = {
+                    webViewInstance?.findNext(false)
+                },
+                onClose = {
+                    webViewInstance?.clearMatches()
+                    viewModel.closeFindInPage()
+                },
+                isDarkMode = state.isDarkMode,
+                accentColor = state.activeWallpaper.accentColor
+            )
+        }
+
+        // ARC SEARCH LINK PEEK PREVIEW MODAL
+        if (state.showPeekModal && state.peekUrl != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        viewModel.dismissPeekModal()
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showPeekModal && state.peekUrl != null,
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            state.peekUrl?.let { peekUrl ->
+                PeekPreviewModal(
+                    url = peekUrl,
+                    title = state.peekTitle,
+                    isDarkMode = state.isDarkMode,
+                    accentColor = state.activeWallpaper.accentColor,
+                    onOpenInCurrentTab = {
+                        viewModel.dismissPeekModal()
+                        viewModel.openUrl(peekUrl)
+                    },
+                    onOpenInNewTab = {
+                        viewModel.dismissPeekModal()
+                        viewModel.addNewTab(url = peekUrl, isHome = false)
+                    },
+                    onDismiss = { viewModel.dismissPeekModal() }
+                )
+            }
         }
 
         // HTML5 FULLSCREEN VIDEO OVERLAY

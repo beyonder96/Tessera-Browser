@@ -97,6 +97,7 @@ fun TesseraAirBar(
     onSearch: (String) -> Unit,
     onQueryChange: (String) -> Unit = {},
     onOpenAi: (String) -> Unit = {},
+    onBrowseForMe: (String) -> Unit = onOpenAi,
     onOpenAiAction: () -> Unit,
     onToggleBookmark: () -> Unit,
     onToggleIncognito: () -> Unit = {},
@@ -331,29 +332,29 @@ fun TesseraAirBar(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(16.dp))
-                                        .background(Color(0xFF00E5FF).copy(alpha = 0.15f))
-                                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                        .background(Color(0xFF00E5FF).copy(alpha = 0.18f))
+                                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
                                         .clickable {
                                             isEditing = false
-                                            onOpenAi(queryText.trim())
+                                            onBrowseForMe(queryText.trim())
                                         }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        .padding(horizontal = 9.dp, vertical = 5.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.AutoAwesome,
-                                            contentDescription = "IA",
+                                            contentDescription = "Navegue por Mim",
                                             tint = Color(0xFF00E5FF),
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(13.dp)
                                         )
                                         Text(
-                                            text = "IA",
-                                            color = if (isDarkMode) Color.White else Color(0xFF0097A7),
-                                            fontSize = 12.sp,
+                                            text = "Navegue por Mim",
+                                            color = if (isDarkMode) Color.White else Color(0xFF00838F),
+                                            fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
