@@ -1,17 +1,25 @@
 package com.tessera.browser.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.view.View
 import androidx.core.content.ContextCompat
 import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
+import android.webkit.JavascriptInterface
+import android.webkit.JsResult
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -33,11 +41,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -76,19 +89,38 @@ private val AdBlockHosts = setOf(
     "zedo.com", "advertising.com", "rubiconproject.com", "pubmatic.com"
 )
 
+class TesseraWebBridge(private val onReaderExit: () -> Unit) {
+    @JavascriptInterface
+    fun onReaderModeExited() {
+        onReaderExit()
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
+    var customView by remember { mutableStateOf<View?>(null) }
+    var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     val context = LocalContext.current
 
-    // Fetch initial weather and financial quotes for home widgets, and init downloads
+    // Request POST_NOTIFICATIONS on Android 13+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* result ignored */ }
+
+    // Fetch initial weather, financial quotes, init persistence, and request notification permission
     LaunchedEffect(Unit) {
         viewModel.fetchWeather(context)
         viewModel.fetchQuotes()
-        viewModel.initDownloads(context)
+        viewModel.initPersistence(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     // Listen for system download completions to update status in real time
@@ -150,17 +182,26 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     }
 
     var isAirBarExpanded by remember { mutableStateOf(false) }
+    var isSearchEditing by remember { mutableStateOf(false) }
 
     // System Back navigation priority:
-    // 1. Dismiss Quick Settings
-    // 2. Dismiss Tabs Modal
-    // 3. Dismiss History/Bookmarks Modal
-    // 4. Dismiss AI Actions Modal
-    // 5. Collapse expanded AirBar
-    // 6. WebView history back
-    // 7. Go Home
-    BackHandler(enabled = !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
-        if (state.showQuickSettings) {
+    // 0. Dismiss search editing (keyboard)
+    // 1. Exit Fullscreen Video
+    // 2. Dismiss Quick Settings
+    // 3. Dismiss Tabs Modal
+    // 4. Dismiss History/Bookmarks Modal
+    // 5. Dismiss AI Actions Modal
+    // 6. Collapse expanded AirBar
+    // 7. WebView history back
+    // 8. Go Home
+    BackHandler(enabled = isSearchEditing || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
+        if (isSearchEditing) {
+            isSearchEditing = false
+        } else if (customView != null) {
+            customViewCallback?.onCustomViewHidden()
+            customView = null
+            customViewCallback = null
+        } else if (state.showQuickSettings) {
             viewModel.dismissQuickSettings()
         } else if (state.showTabsModal) {
             viewModel.dismissTabsModal()
@@ -218,7 +259,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSearch = { query -> viewModel.openUrl(query) },
                 onOpenAi = { query -> viewModel.openAiQuery(query) },
                 onOpenUrl = { url -> viewModel.openUrl(url) },
-                onOpenSettings = { viewModel.toggleQuickSettings() }
+                onOpenSettings = { viewModel.toggleQuickSettings() },
+                onSearchClick = { isSearchEditing = true }
             )
         } else {
             // WEBVIEW BROWSER VIEW
@@ -257,7 +299,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
 
                                 applyForceDark(this, state.forceDarkPages)
+                                setGeolocationEnabled(true)
                             }
+
+                            addJavascriptInterface(
+                                TesseraWebBridge { viewModel.setReaderModeActive(false) },
+                                "TesseraBridge"
+                            )
 
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(
@@ -377,6 +425,71 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     viewModel.updateProgress(newProgress / 100f)
                                 }
 
+                                override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                                    if (customView != null) {
+                                        callback?.onCustomViewHidden()
+                                        return
+                                    }
+                                    customView = view
+                                    customViewCallback = callback
+                                }
+
+                                override fun onHideCustomView() {
+                                    customViewCallback?.onCustomViewHidden()
+                                    customView = null
+                                    customViewCallback = null
+                                }
+
+                                override fun onJsAlert(
+                                    view: WebView?,
+                                    url: String?,
+                                    message: String?,
+                                    result: JsResult?
+                                ): Boolean {
+                                    AlertDialog.Builder(view?.context ?: context)
+                                        .setTitle(view?.title ?: "Aviso")
+                                        .setMessage(message ?: "")
+                                        .setPositiveButton("OK") { _, _ -> result?.confirm() }
+                                        .setOnCancelListener { result?.cancel() }
+                                        .show()
+                                    return true
+                                }
+
+                                override fun onJsConfirm(
+                                    view: WebView?,
+                                    url: String?,
+                                    message: String?,
+                                    result: JsResult?
+                                ): Boolean {
+                                    AlertDialog.Builder(view?.context ?: context)
+                                        .setTitle(view?.title ?: "Confirmação")
+                                        .setMessage(message ?: "")
+                                        .setPositiveButton("OK") { _, _ -> result?.confirm() }
+                                        .setNegativeButton("Cancelar") { _, _ -> result?.cancel() }
+                                        .setOnCancelListener { result?.cancel() }
+                                        .show()
+                                    return true
+                                }
+
+                                override fun onGeolocationPermissionsShowPrompt(
+                                    origin: String?,
+                                    callback: GeolocationPermissions.Callback?
+                                ) {
+                                    AlertDialog.Builder(context)
+                                        .setTitle("Permissão de Localização")
+                                        .setMessage("$origin gostaria de acessar sua localização.")
+                                        .setPositiveButton("Permitir") { _, _ ->
+                                            callback?.invoke(origin, true, true)
+                                        }
+                                        .setNegativeButton("Bloquear") { _, _ ->
+                                            callback?.invoke(origin, false, false)
+                                        }
+                                        .setOnCancelListener {
+                                            callback?.invoke(origin, false, false)
+                                        }
+                                        .show()
+                                }
+
                                 override fun onShowFileChooser(
                                     webView: WebView?,
                                     filePathCallback: ValueCallback<Array<Uri>>?,
@@ -448,6 +561,21 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             }
         }
 
+        // Dim scrim background when user is typing in the search bar
+        if (isSearchEditing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        isSearchEditing = false
+                    }
+            )
+        }
+
         // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
         AnimatedVisibility(
             visible = state.isBarVisible,
@@ -461,7 +589,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             ),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
         ) {
             TesseraAirBar(
                 progress = state.progress,
@@ -475,11 +603,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 isReaderModeActive = state.isReaderModeActive,
                 isReaderModeAvailable = state.isReaderModeAvailable,
                 favorites = state.speedDialItems,
+                searchSuggestions = state.searchSuggestions,
                 onBack = { webViewInstance?.goBack() },
                 onForward = { webViewInstance?.goForward() },
                 onHome = { viewModel.goHome() },
                 onReload = { webViewInstance?.reload() },
                 onSearch = { query -> viewModel.openUrl(query) },
+                onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
+                onOpenAi = { query -> viewModel.openAiQuery(query) },
+                isEditingExternal = isSearchEditing,
+                onEditingChange = { isSearchEditing = it },
                 onFastAction = {
                     if (state.isHomePage) {
                         viewModel.openAiQuery("")
@@ -630,6 +763,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 document.getElementById('tir-exit').onclick = function() {
                                     reader.remove();
                                     document.documentElement.style.overflow = '';
+                                    if (window.TesseraBridge && window.TesseraBridge.onReaderModeExited) {
+                                        window.TesseraBridge.onReaderModeExited();
+                                    }
                                 };
                             })();
                         """.trimIndent()
@@ -830,6 +966,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.openDownloadsModal()
                 },
                 onDismiss = { viewModel.dismissQuickSettings() }
+            )
+        }
+
+        // HTML5 FULLSCREEN VIDEO OVERLAY
+        if (customView != null) {
+            AndroidView(
+                factory = { customView!! },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
             )
         }
     }

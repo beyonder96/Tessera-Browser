@@ -1,11 +1,14 @@
 package com.tessera.browser.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -28,14 +31,20 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.NorthWest
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -80,11 +89,14 @@ fun TesseraAirBar(
     isReaderModeActive: Boolean = false,
     isReaderModeAvailable: Boolean = false,
     favorites: List<SpeedDialItem> = emptyList(),
+    searchSuggestions: List<String> = emptyList(),
     onBack: () -> Unit,
     onForward: () -> Unit = {},
     onHome: () -> Unit = {},
     onReload: () -> Unit = {},
     onSearch: (String) -> Unit,
+    onQueryChange: (String) -> Unit = {},
+    onOpenAi: (String) -> Unit = {},
     onOpenAiAction: () -> Unit,
     onToggleBookmark: () -> Unit,
     onToggleIncognito: () -> Unit = {},
@@ -96,6 +108,8 @@ fun TesseraAirBar(
     onFastAction: () -> Unit = {},
     isExpanded: Boolean = false,
     onExpandedChange: (Boolean) -> Unit = {},
+    isEditingExternal: Boolean = false,
+    onEditingChange: (Boolean) -> Unit = {},
     accentColor: Color = Color(0xFF0288D1),
     modifier: Modifier = Modifier
 ) {
@@ -106,10 +120,21 @@ fun TesseraAirBar(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(displayUrl) {
-        queryText = displayUrl
+        if (!isEditing) {
+            queryText = displayUrl
+        }
+    }
+
+    LaunchedEffect(isEditingExternal) {
+        if (isEditingExternal && !isEditing) {
+            isEditing = true
+        } else if (!isEditingExternal && isEditing) {
+            isEditing = false
+        }
     }
 
     LaunchedEffect(isEditing) {
+        onEditingChange(isEditing)
         if (isEditing) {
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -117,6 +142,10 @@ fun TesseraAirBar(
             keyboardController?.hide()
             focusManager.clearFocus()
         }
+    }
+
+    BackHandler(enabled = isEditing) {
+        isEditing = false
     }
 
     val animatedProgress by animateFloatAsState(
@@ -150,6 +179,23 @@ fun TesseraAirBar(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Floating search suggestions card (appears above the search bar while typing)
+            if (isEditing && queryText.isNotBlank() && searchSuggestions.isNotEmpty()) {
+                SearchSuggestionsFloatingCard(
+                    suggestions = searchSuggestions,
+                    onSelect = {
+                        isEditing = false
+                        onSearch(it)
+                    },
+                    onInsert = {
+                        queryText = it
+                        onQueryChange(it)
+                    },
+                    accentColor = accentColor,
+                    isDarkMode = isDarkMode
+                )
+            }
+
             // Linear progress indicator when loading
             if (progress > 0f && progress < 1f) {
                 LinearProgressIndicator(
@@ -186,7 +232,9 @@ fun TesseraAirBar(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
-                        isEditing = true
+                        if (!isEditing) {
+                            isEditing = true
+                        }
                     }
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
@@ -196,50 +244,200 @@ fun TesseraAirBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left: Back < and Forward > Chevrons
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
+                    if (isEditing) {
+                        // Left: Back/Dismiss button
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .clickable(enabled = canGoBack, onClick = onBack),
+                                .clickable { isEditing = false },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = "Voltar",
-                                tint = if (canGoBack) contentColor else mutedColor,
-                                modifier = Modifier.size(22.dp)
+                                tint = contentColor,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
+                        // Center: Search input
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .clickable(enabled = canGoForward, onClick = onForward),
-                            contentAlignment = Alignment.Center
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = "Avançar",
-                                tint = if (canGoForward) contentColor else mutedColor,
-                                modifier = Modifier.size(22.dp)
+                            if (queryText.isEmpty()) {
+                                Text(
+                                    text = "Pesquisar ou digitar endereço",
+                                    color = mutedColor,
+                                    fontSize = 14.5.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            BasicTextField(
+                                value = queryText,
+                                onValueChange = {
+                                    queryText = it
+                                    onQueryChange(it)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester),
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = contentColor,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                cursorBrush = SolidColor(accentColor),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(
+                                    onGo = {
+                                        if (queryText.isNotBlank()) {
+                                            isEditing = false
+                                            onSearch(queryText.trim())
+                                        }
+                                    }
+                                )
                             )
                         }
-                    }
 
-                    // Center: Address / Search Text Field
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!isEditing) {
+                        // Right: Actions (Clear, AI, Go)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (queryText.isNotBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            queryText = ""
+                                            onQueryChange("")
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Limpar",
+                                        tint = mutedColor,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color(0xFF00E5FF).copy(alpha = 0.15f))
+                                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                        .clickable {
+                                            isEditing = false
+                                            onOpenAi(queryText.trim())
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AutoAwesome,
+                                            contentDescription = "IA",
+                                            tint = Color(0xFF00E5FF),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = "IA",
+                                            color = if (isDarkMode) Color.White else Color(0xFF0097A7),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor)
+                                        .clickable {
+                                            isEditing = false
+                                            onSearch(queryText.trim())
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                        contentDescription = "Ir",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .clickable { isEditing = false },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Cancelar",
+                                        tint = mutedColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Left: Back < and Forward > Chevrons
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .clickable(enabled = canGoBack, onClick = onBack),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                                    contentDescription = "Voltar",
+                                    tint = if (canGoBack) contentColor else mutedColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .clickable(enabled = canGoForward, onClick = onForward),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    contentDescription = "Avançar",
+                                    tint = if (canGoForward) contentColor else mutedColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        // Center: Display host or placeholder
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             val hostText = if (displayUrl.isNotBlank()) {
                                 try {
                                     val uri = java.net.URI(displayUrl)
@@ -261,232 +459,274 @@ fun TesseraAirBar(
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.Center
                             )
-                        } else {
-                            BasicTextField(
-                                value = queryText,
-                                onValueChange = { queryText = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester),
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = contentColor,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center
-                                ),
-                                cursorBrush = SolidColor(accentColor),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                                keyboardActions = KeyboardActions(
-                                    onGo = {
-                                        if (queryText.isNotBlank()) {
-                                            isEditing = false
-                                            onSearch(queryText.trim())
-                                        }
-                                    }
-                                )
-                            )
                         }
-                    }
 
-                    // Right: Close (if editing) OR Black Circle with Electric Bolt Icon ⚡
-                    if (isEditing && queryText.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    queryText = ""
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Limpar",
-                                tint = mutedColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    } else if (isReaderModeAvailable || isReaderModeActive) {
-                        // Reader Mode Button: Appears ONLY when visiting a page with readable article/content
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .shadow(4.dp, CircleShape)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isReaderModeActive) accentColor else Color(0xFF222222)
+                        // Right: Reader mode button if available
+                        if (isReaderModeAvailable || isReaderModeActive) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .shadow(4.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isReaderModeActive) accentColor else Color(0xFF222222)
+                                    )
+                                    .clickable {
+                                        onToggleReaderMode()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                    contentDescription = if (isReaderModeActive) "Sair do Modo Leitura" else "Ativar Modo Leitura",
+                                    tint = if (isReaderModeActive) Color.White else accentColor,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                .clickable {
-                                    onToggleReaderMode()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                contentDescription = if (isReaderModeActive) "Sair do Modo Leitura" else "Ativar Modo Leitura",
-                                tint = if (isReaderModeActive) Color.White else accentColor,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.size(34.dp))
                         }
                     }
                 }
             }
 
-            // 2. BOTTOM ELEMENT: EXACT 5 BUTTONS IN ORDER
-            // [ Incógnito | Favoritos | Botão IA (Orb) | Abas (Badge) | Configurações ]
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
+            // 2. BOTTOM ELEMENT: EXACT 5 BUTTONS IN ORDER (Smoothly hides during editing)
+            AnimatedVisibility(
+                visible = !isEditing,
+                enter = fadeIn(tween(160)) + expandVertically(),
+                exit = fadeOut(tween(140)) + shrinkVertically()
             ) {
-                // 1. Incógnito Button (Spy hat & glasses line icon)
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isIncognito) accentColor.copy(alpha = 0.15f) else Color.Transparent
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleIncognito
-                        ),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceAround
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_incognito),
-                        contentDescription = "Navegação Anônima",
-                        tint = if (isIncognito) accentColor else contentColor,
-                        modifier = Modifier.size(23.dp)
-                    )
-                }
-
-                // 2. Favoritos Button (Star icon)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleBookmark
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                        contentDescription = "Favoritos",
-                        tint = if (isBookmarked) Color(0xFFFFB300) else contentColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb)
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = CircleShape,
-                            ambientColor = Color(0x6680D8FF),
-                            spotColor = Color(0x99B388FF)
-                        )
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF80D8FF), // Vivid Soft Cyan
-                                    Color(0xFF82B1FF), // Soft Sky Blue
-                                    Color(0xFFB388FF), // Soft Lilac
-                                    Color(0xFFEA80FC)  // Soft Rose Violet
-                                )
-                            )
-                        )
-                        .border(
-                            width = 1.2.dp,
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.95f),
-                                    Color.White.copy(alpha = 0.35f)
-                                )
-                            ),
-                            shape = CircleShape
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onOpenAiAction
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Soft specular glossy highlight on top of the orb
+                    // 1. Incógnito Button (Spy hat & glasses line icon)
                     Box(
                         modifier = Modifier
-                            .size(16.dp)
-                            .align(Alignment.TopCenter)
-                            .padding(top = 4.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.45f))
-                    )
-                }
-
-                // 4. Abas Button (Rounded square with border and number badge)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onOpenTabs
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val tabBadgeShape = RoundedCornerShape(8.dp)
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(tabBadgeShape)
-                            .border(
-                                width = 1.8.dp,
-                                color = contentColor,
-                                shape = tabBadgeShape
+                            .background(
+                                if (isIncognito) accentColor.copy(alpha = 0.15f) else Color.Transparent
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onToggleIncognito
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = tabCount.toString(),
-                            color = contentColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
+                        Icon(
+                            painter = painterResource(R.drawable.ic_incognito),
+                            contentDescription = "Navegação Anônima",
+                            tint = if (isIncognito) accentColor else contentColor,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
+
+                    // 2. Favoritos Button (Star icon)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onToggleBookmark
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = "Favoritos",
+                            tint = if (isBookmarked) Color(0xFFFFB300) else contentColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .shadow(
+                                elevation = 16.dp,
+                                shape = CircleShape,
+                                ambientColor = Color(0x6680D8FF),
+                                spotColor = Color(0x99B388FF)
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF80D8FF), // Vivid Soft Cyan
+                                        Color(0xFF82B1FF), // Soft Sky Blue
+                                        Color(0xFFB388FF), // Soft Lilac
+                                        Color(0xFFEA80FC)  // Soft Rose Violet
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.2.dp,
+                                brush = Brush.verticalGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = 0.95f),
+                                        Color.White.copy(alpha = 0.35f)
+                                    )
+                                ),
+                                shape = CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onOpenAiAction
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Soft specular glossy highlight on top of the orb
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .align(Alignment.TopCenter)
+                                .padding(top = 4.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.45f))
+                        )
+                    }
+
+                    // 4. Abas Button (Rounded square with border and number badge)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onOpenTabs
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val tabBadgeShape = RoundedCornerShape(8.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(tabBadgeShape)
+                                .border(
+                                    width = 1.8.dp,
+                                    color = contentColor,
+                                    shape = tabBadgeShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = tabCount.toString(),
+                                color = contentColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // 5. Configurações Button (Hamburger menu icon ≡)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onOpenSettings
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Menu,
+                            contentDescription = "Configurações",
+                            tint = contentColor,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
+            }
+        }
+    }
+}
 
-                // 5. Configurações Button (Hamburger menu icon ≡)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onOpenSettings
-                        ),
-                    contentAlignment = Alignment.Center
+@Composable
+private fun SearchSuggestionsFloatingCard(
+    suggestions: List<String>,
+    onSelect: (String) -> Unit,
+    onInsert: (String) -> Unit,
+    accentColor: Color,
+    isDarkMode: Boolean
+) {
+    val cardShape = RoundedCornerShape(20.dp)
+    val cardBg = if (isDarkMode) Color(0xF0201A16) else Color(0xF8FFFFFF)
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1C1C1E)
+    val iconTint = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF8E8E93)
+    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 16.dp,
+                shape = cardShape,
+                ambientColor = Color.Black.copy(alpha = 0.2f),
+                spotColor = Color.Black.copy(alpha = 0.15f)
+            )
+            .clip(cardShape)
+            .background(cardBg)
+            .border(1.dp, cardBorder, cardShape)
+            .padding(vertical = 4.dp)
+    ) {
+        suggestions.take(5).forEachIndexed { index, suggestion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(suggestion) }
+                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Menu,
-                        contentDescription = "Configurações",
-                        tint = contentColor,
-                        modifier = Modifier.size(24.dp)
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = suggestion,
+                        color = textColor,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Icon(
+                    imageVector = Icons.Rounded.NorthWest,
+                    contentDescription = "Inserir",
+                    tint = accentColor,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { onInsert(suggestion) }
+                )
+            }
+
+            if (index < suggestions.take(5).size - 1) {
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
+                    modifier = Modifier.padding(horizontal = 14.dp)
+                )
             }
         }
     }
