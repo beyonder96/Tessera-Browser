@@ -1,5 +1,11 @@
 package com.tessera.browser.viewmodel
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.LocationManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tessera.browser.data.AvailableWallpapers
@@ -14,12 +20,40 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 import java.util.UUID
+
+data class WeatherData(
+    val cityName: String = "São Paulo",
+    val temperature: Int = 24,
+    val apparentTemperature: Int = 24,
+    val humidity: Int = 65,
+    val conditionText: String = "Parcialmente nublado",
+    val weatherCode: Int = 1,
+    val isDay: Boolean = true,
+    val isLoading: Boolean = false,
+    val lastUpdated: Long = System.currentTimeMillis()
+)
+
+data class QuoteItem(
+    val symbol: String, // "USD", "EUR", "BTC"
+    val name: String,   // "Dólar", "Euro", "Bitcoin"
+    val value: String,  // "R$ 5,64"
+    val change: String, // "+0,42%"
+    val isPositive: Boolean
+)
+
+data class QuotesData(
+    val items: List<QuoteItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val lastUpdated: Long = System.currentTimeMillis()
+)
 
 data class BrowserTab(
     val id: String = UUID.randomUUID().toString(),
@@ -72,6 +106,12 @@ data class BrowserUiState(
         "Cotação do Dólar",
         "Cinema & Séries"
     ),
+
+    // Widgets da Home
+    val showWeatherWidget: Boolean = true,
+    val showQuotesWidget: Boolean = true,
+    val weatherData: WeatherData? = null,
+    val quotesData: QuotesData? = null,
 
     // Configuração Fácil
     val isDarkMode: Boolean = true,
@@ -477,6 +517,265 @@ class BrowserViewModel : ViewModel() {
 
     fun toggleQuickSettings() {
         _uiState.update { it.copy(showQuickSettings = !it.showQuickSettings) }
+    }
+
+    fun setShowWeatherWidget(enabled: Boolean) {
+        _uiState.update { it.copy(showWeatherWidget = enabled) }
+    }
+
+    fun setShowQuotesWidget(enabled: Boolean) {
+        _uiState.update { it.copy(showQuotesWidget = enabled) }
+    }
+
+    private fun getWeatherConditionText(code: Int, isDay: Boolean): String {
+        return when (code) {
+            0 -> if (isDay) "Céu limpo" else "Noite limpa"
+            1 -> "Predominantemente ensolarado"
+            2 -> "Parcialmente nublado"
+            3 -> "Nublado"
+            45, 48 -> "Nevoeiro"
+            51, 53, 55 -> "Garoa leve"
+            56, 57 -> "Garoa congelante"
+            61, 63 -> "Chuva moderada"
+            65 -> "Chuva forte"
+            66, 67 -> "Chuva congelante"
+            71, 73, 75 -> "Neve"
+            77 -> "Grãos de neve"
+            80, 81, 82 -> "Pancadas de chuva"
+            85, 86 -> "Pancadas de neve"
+            95 -> "Tempestade"
+            96, 99 -> "Tempestade com granizo"
+            else -> if (isDay) "Ensolarado" else "Céu limpo"
+        }
+    }
+
+    fun fetchWeather(context: Context, forceRefresh: Boolean = false) {
+        val current = _uiState.value.weatherData
+        if (!forceRefresh && current != null && (System.currentTimeMillis() - current.lastUpdated < 15 * 60 * 1000)) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(weatherData = it.weatherData?.copy(isLoading = true) ?: WeatherData(isLoading = true))
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            var lat = -23.5505
+            var lon = -46.6333
+            var cityName = "São Paulo"
+            var hasGpsLocation = false
+
+            // 1. Try Android LocationManager if coarse location is granted
+            try {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasPermission) {
+                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    if (locationManager != null) {
+                        val providers = listOf(
+                            LocationManager.NETWORK_PROVIDER,
+                            LocationManager.GPS_PROVIDER,
+                            LocationManager.PASSIVE_PROVIDER
+                        )
+                        for (provider in providers) {
+                            try {
+                                if (locationManager.isProviderEnabled(provider)) {
+                                    val loc = locationManager.getLastKnownLocation(provider)
+                                    if (loc != null) {
+                                        lat = loc.latitude
+                                        lon = loc.longitude
+                                        hasGpsLocation = true
+                                        break
+                                    }
+                                }
+                            } catch (e: SecurityException) {
+                                // Ignore permission races
+                            }
+                        }
+                    }
+
+                    if (hasGpsLocation) {
+                        try {
+                            val geocoder = Geocoder(context, Locale.getDefault())
+                            @Suppress("DEPRECATION")
+                            val addresses = geocoder.getFromLocation(lat, lon, 1)
+                            val address = addresses?.firstOrNull()
+                            if (address != null) {
+                                val detectedCity = address.locality ?: address.subAdminArea ?: address.adminArea
+                                if (!detectedCity.isNullOrBlank()) {
+                                    cityName = detectedCity
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Geocoder may fail on offline or emulators
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore location errors
+            }
+
+            // 2. If no GPS location, fallback to IP-based Geolocation
+            if (!hasGpsLocation) {
+                try {
+                    val ipUrl = URL("https://ipapi.co/json/")
+                    val conn = ipUrl.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 3000
+                    conn.readTimeout = 3000
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+                    if (conn.responseCode == 200) {
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        val json = JSONObject(body)
+                        if (json.has("latitude") && json.has("longitude")) {
+                            lat = json.optDouble("latitude", lat)
+                            lon = json.optDouble("longitude", lon)
+                            val city = json.optString("city", "")
+                            if (city.isNotBlank()) cityName = city
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Fallback to default
+                }
+            }
+
+            // 3. Query Open-Meteo Weather API
+            try {
+                val weatherUrl = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code&timezone=auto")
+                val conn = weatherUrl.openConnection() as HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                if (conn.responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(body)
+                    val currentJson = json.optJSONObject("current")
+                    if (currentJson != null) {
+                        val temp = currentJson.optDouble("temperature_2m", 22.0).toInt()
+                        val apparentTemp = currentJson.optDouble("apparent_temperature", temp.toDouble()).toInt()
+                        val humidity = currentJson.optInt("relative_humidity_2m", 60)
+                        val isDay = currentJson.optInt("is_day", 1) == 1
+                        val weatherCode = currentJson.optInt("weather_code", 1)
+                        val condition = getWeatherConditionText(weatherCode, isDay)
+
+                        val weather = WeatherData(
+                            cityName = cityName,
+                            temperature = temp,
+                            apparentTemperature = apparentTemp,
+                            humidity = humidity,
+                            conditionText = condition,
+                            weatherCode = weatherCode,
+                            isDay = isDay,
+                            isLoading = false,
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                        _uiState.update { it.copy(weatherData = weather) }
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                // Weather query failed
+            }
+
+            // If fetch failed, use cached or fallback
+            _uiState.update {
+                it.copy(
+                    weatherData = it.weatherData?.copy(isLoading = false) ?: WeatherData(
+                        cityName = cityName,
+                        temperature = 22,
+                        conditionText = "Parcialmente nublado",
+                        isLoading = false,
+                        lastUpdated = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
+
+    fun fetchQuotes(forceRefresh: Boolean = false) {
+        val current = _uiState.value.quotesData
+        if (!forceRefresh && current != null && (System.currentTimeMillis() - current.lastUpdated < 5 * 60 * 1000)) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(quotesData = it.quotesData?.copy(isLoading = true) ?: QuotesData(isLoading = true))
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                if (conn.responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(body)
+                    val items = mutableListOf<QuoteItem>()
+
+                    if (json.has("USDBRL")) {
+                        val obj = json.getJSONObject("USDBRL")
+                        val bid = obj.optDouble("bid", 5.60)
+                        val pct = obj.optDouble("pctChange", 0.0)
+                        val formattedVal = String.format(Locale.US, "R$ %.2f", bid).replace('.', ',')
+                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
+                        items.add(QuoteItem("USD", "Dólar", formattedVal, formattedPct, pct >= 0))
+                    }
+
+                    if (json.has("EURBRL")) {
+                        val obj = json.getJSONObject("EURBRL")
+                        val bid = obj.optDouble("bid", 6.15)
+                        val pct = obj.optDouble("pctChange", 0.0)
+                        val formattedVal = String.format(Locale.US, "R$ %.2f", bid).replace('.', ',')
+                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
+                        items.add(QuoteItem("EUR", "Euro", formattedVal, formattedPct, pct >= 0))
+                    }
+
+                    if (json.has("BTCBRL")) {
+                        val obj = json.getJSONObject("BTCBRL")
+                        val bid = obj.optDouble("bid", 355000.0)
+                        val pct = obj.optDouble("pctChange", 0.0)
+                        val valText = if (bid >= 1000) {
+                            String.format(Locale.US, "R$ %.0fk", bid / 1000.0).replace('.', ',')
+                        } else {
+                            String.format(Locale.US, "R$ %.0f", bid)
+                        }
+                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
+                        items.add(QuoteItem("BTC", "Bitcoin", valText, formattedPct, pct >= 0))
+                    }
+
+                    if (items.isNotEmpty()) {
+                        _uiState.update {
+                            it.copy(
+                                quotesData = QuotesData(
+                                    items = items,
+                                    isLoading = false,
+                                    lastUpdated = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore network error
+            }
+
+            _uiState.update {
+                it.copy(
+                    quotesData = it.quotesData?.copy(isLoading = false) ?: QuotesData(
+                        items = listOf(
+                            QuoteItem("USD", "Dólar", "R$ 5,64", "+0,35%", true),
+                            QuoteItem("EUR", "Euro", "R$ 6,18", "-0,12%", false),
+                            QuoteItem("BTC", "Bitcoin", "R$ 358k", "+1,85%", true)
+                        ),
+                        isLoading = false,
+                        lastUpdated = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
     }
 
     fun dismissQuickSettings() {

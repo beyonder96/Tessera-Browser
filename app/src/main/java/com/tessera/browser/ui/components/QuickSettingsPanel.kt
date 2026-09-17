@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
@@ -36,11 +37,7 @@ import androidx.compose.material.icons.rounded.NorthEast
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.StarOutline
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.NorthEast
-import androidx.compose.material.icons.rounded.Pets
-import androidx.compose.material.icons.rounded.StarOutline
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,12 +71,16 @@ fun QuickSettingsPanel(
     showSidebar: Boolean,
     autoHideSidebar: Boolean,
     adBlockEnabled: Boolean = true,
+    showWeatherWidget: Boolean = true,
+    showQuotesWidget: Boolean = true,
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
     onShowWallpaperChanged: (Boolean) -> Unit,
     onSelectWallpaper: (String) -> Unit,
     onShowFavoritesBarChanged: (Boolean) -> Unit,
     onShowCatInaraChanged: (Boolean) -> Unit,
+    onShowWeatherWidgetChanged: (Boolean) -> Unit = {},
+    onShowQuotesWidgetChanged: (Boolean) -> Unit = {},
     onTesseraAiChanged: (Boolean) -> Unit,
     onAiToolbarButtonChanged: (Boolean) -> Unit,
     onAiTextHighlightPromptsChanged: (Boolean) -> Unit,
@@ -336,7 +337,78 @@ fun QuickSettingsPanel(
         Spacer(modifier = Modifier.height(14.dp))
         SettingsDivider()
 
-        // 4. SEÇÃO: CONFIGURAÇÕES DO GATO (EASTER EGG INARA)
+        // 4. SEÇÃO: WIDGETS DA TELA INICIAL
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = "Widgets da tela inicial",
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Widget de Tempo / Clima
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.WbSunny,
+                    contentDescription = null,
+                    tint = Color(0xFFFFA726),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Widget de tempo (clima)",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.5.sp
+                )
+            }
+            TesseraSwitch(
+                checked = showWeatherWidget,
+                onCheckedChange = onShowWeatherWidgetChanged
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Widget de Cotações
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Widget de cotações (USD, EUR, BTC)",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.5.sp
+                )
+            }
+            TesseraSwitch(
+                checked = showQuotesWidget,
+                onCheckedChange = onShowQuotesWidgetChanged
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsDivider()
+
+        // 5. SEÇÃO: CONFIGURAÇÕES DO GATO (EASTER EGG INARA)
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = "Configurações do mascote",

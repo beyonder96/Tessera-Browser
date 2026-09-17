@@ -80,6 +80,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
+    // Fetch initial weather and financial quotes for home widgets
+    LaunchedEffect(Unit) {
+        viewModel.fetchWeather(context)
+        viewModel.fetchQuotes()
+    }
+
     // Synchronize navigation requests from state to WebView safely
     LaunchedEffect(state.currentUrl, state.isHomePage, state.activeTabId) {
         if (!state.isHomePage && state.currentUrl.isNotBlank() && state.currentUrl != lastLoadedUrl) {
@@ -169,6 +175,11 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 favorites = state.speedDialItems,
                 searchSuggestions = state.searchSuggestions,
                 trendingTopics = state.trendingTopics,
+                showWeatherWidget = state.showWeatherWidget,
+                showQuotesWidget = state.showQuotesWidget,
+                weatherData = state.weatherData,
+                quotesData = state.quotesData,
+                onRefreshWeather = { viewModel.fetchWeather(context, forceRefresh = true) },
                 onSearchQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
                 onSearch = { query -> viewModel.openUrl(query) },
                 onOpenAi = { query -> viewModel.openAiQuery(query) },
@@ -557,12 +568,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 showSidebar = state.showSidebar,
                 autoHideSidebar = state.autoHideSidebar,
                 adBlockEnabled = state.adBlockEnabled,
+                showWeatherWidget = state.showWeatherWidget,
+                showQuotesWidget = state.showQuotesWidget,
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
                 onSelectWallpaper = { viewModel.selectWallpaper(it) },
                 onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
                 onShowCatInaraChanged = { viewModel.setShowCatInara(it) },
+                onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
+                onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
                 onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
                 onAiToolbarButtonChanged = { viewModel.setAiToolbarButton(it) },
                 onAiTextHighlightPromptsChanged = { viewModel.setAiTextHighlightPrompts(it) },

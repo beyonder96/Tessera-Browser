@@ -77,6 +77,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.viewmodel.QuotesData
+import com.tessera.browser.viewmodel.WeatherData
 
 @Composable
 fun TesseraStartPage(
@@ -87,6 +89,11 @@ fun TesseraStartPage(
     favorites: List<SpeedDialItem>,
     searchSuggestions: List<String>,
     trendingTopics: List<String>,
+    showWeatherWidget: Boolean = true,
+    showQuotesWidget: Boolean = true,
+    weatherData: WeatherData? = null,
+    quotesData: QuotesData? = null,
+    onRefreshWeather: () -> Unit = {},
     onSearchQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onOpenAi: (String) -> Unit,
@@ -164,6 +171,31 @@ fun TesseraStartPage(
                 .padding(top = 8.dp)
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
+
+        // Minimalist Home Widgets (Weather & Quotes)
+        if (!isSearchExpanded && (showWeatherWidget || showQuotesWidget)) {
+            HomeWidgetsContainer(
+                showWeather = showWeatherWidget,
+                showQuotes = showQuotesWidget,
+                weatherData = weatherData,
+                quotesData = quotesData,
+                isDarkMode = isDarkMode,
+                accentColor = activeWallpaper.accentColor,
+                onRefreshWeather = onRefreshWeather,
+                onQuoteClick = { quote ->
+                    onSearch("cotação ${quote.name.lowercase()} hoje")
+                },
+                onWeatherClick = {
+                    val city = weatherData?.cityName ?: "São Paulo"
+                    onSearch("previsão do tempo $city")
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .displayCutoutPadding()
+                    .padding(top = 70.dp)
+            )
+        }
 
         // Center Hero: Magnifying Glass ("Lupa")
         if (!isSearchExpanded) {
