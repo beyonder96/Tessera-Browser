@@ -58,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -65,6 +66,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -127,33 +129,43 @@ fun TesseraStartPage(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Dynamic Wallpaper Background (Mediterranean Summer Villa or Custom/Gradient)
+        // Dynamic Wallpaper Background (Mediterranean Summer Villa or Custom/Gradient) with gentle blur
         if (showWallpaper) {
-            if (!customWallpaperUri.isNullOrBlank()) {
-                SubcomposeAsyncImage(
-                    model = customWallpaperUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (activeWallpaper.drawableRes != null) {
-                Image(
-                    painter = painterResource(activeWallpaper.drawableRes),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colors = activeWallpaper.gradientColors,
-                                radius = 1800f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.08f
+                        scaleY = 1.08f
+                    }
+                    .blur(radius = 10.dp)
+            ) {
+                if (!customWallpaperUri.isNullOrBlank()) {
+                    SubcomposeAsyncImage(
+                        model = customWallpaperUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (activeWallpaper.drawableRes != null) {
+                    Image(
+                        painter = painterResource(activeWallpaper.drawableRes),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.radialGradient(
+                                    colors = activeWallpaper.gradientColors,
+                                    radius = 1800f
+                                )
                             )
-                        )
-                )
+                    )
+                }
             }
 
             // Ambient lighting vignette layer
@@ -231,6 +243,7 @@ fun TesseraStartPage(
         if (!isSearchExpanded && favorites.isNotEmpty()) {
             BottomFavoritesBar(
                 items = favorites,
+                isDarkMode = isDarkMode,
                 onItemClick = onOpenUrl,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -362,27 +375,50 @@ private fun CentralBrandHero(
 @Composable
 private fun BottomFavoritesBar(
     items: List<SpeedDialItem>,
+    isDarkMode: Boolean,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(26.dp)
     val scrollState = rememberScrollState()
 
+    val containerBg = if (isDarkMode) {
+        Brush.verticalGradient(
+            listOf(Color(0xEE221B17), Color(0xF815100E))
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(Color(0xFFFFFFFF), Color(0xFFF7F7FA))
+        )
+    }
+
+    val containerBorder = if (isDarkMode) {
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(Color.Black.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.04f))
+        )
+    }
+
+    val itemBg = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0x0C000000)
+    val itemTextColor = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1C1C1E)
+    val bookmarkTint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(20.dp, shape = shape)
-            .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xEE221B17), Color(0xF815100E))
-                )
+            .shadow(
+                elevation = if (isDarkMode) 20.dp else 12.dp,
+                shape = shape,
+                spotColor = if (isDarkMode) Color.Black else Color(0x30000000)
             )
+            .clip(shape)
+            .background(containerBg)
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                ),
+                brush = containerBorder,
                 shape = shape
             )
             .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -397,7 +433,7 @@ private fun BottomFavoritesBar(
             Icon(
                 imageVector = Icons.Rounded.Bookmark,
                 contentDescription = "Favoritos",
-                tint = Color(0xFF64B5F6),
+                tint = bookmarkTint,
                 modifier = Modifier.size(18.dp)
             )
 
@@ -407,14 +443,14 @@ private fun BottomFavoritesBar(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
+                        .background(itemBg)
                         .clickable { onItemClick(item.url) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     ShortcutIcon(item = item, size = 18.dp)
                     Text(
                         text = item.title,
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = itemTextColor,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1

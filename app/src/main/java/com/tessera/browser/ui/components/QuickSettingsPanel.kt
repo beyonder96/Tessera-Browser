@@ -51,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -99,24 +100,53 @@ fun QuickSettingsPanel(
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     val verticalScrollState = rememberScrollState()
 
+    val panelBg = if (isDarkMode) {
+        Brush.verticalGradient(
+            listOf(Color(0xF51E1916), Color(0xF815110E))
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(Color(0xFFFFFFFF), Color(0xFFF8F8FA))
+        )
+    }
+
+    val panelBorder = if (isDarkMode) {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.22f),
+                Color.White.copy(alpha = 0.05f)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color.Black.copy(alpha = 0.08f),
+                Color.Black.copy(alpha = 0.03f)
+            )
+        )
+    }
+
+    val titleColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF19191C)
+    val closeIconTint = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF48484A)
+    val primaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF1C1C1E)
+    val secondaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF2C2C2E)
+    val tertiaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366)
+    val sectionHeaderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
+    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0x0A000000)
+    val cardArrowTint = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
+    val cardHistoryIconTint = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF3A3A3C)
+    val infoIconTint = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF8E8E93)
+    val secondaryIconTint = if (isDarkMode) Color.White.copy(alpha = 0.6f) else Color(0xFF8E8E93)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight(0.85f)
             .clip(panelShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xF51E1916), Color(0xF815110E))
-                )
-            )
+            .background(panelBg)
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        Color.White.copy(alpha = 0.05f)
-                    )
-                ),
+                brush = panelBorder,
                 shape = panelShape
             )
             .padding(horizontal = 24.dp)
@@ -131,7 +161,7 @@ fun QuickSettingsPanel(
         ) {
             Text(
                 text = "Configuração fácil",
-                color = Color.White.copy(alpha = 0.95f),
+                color = titleColor,
                 fontSize = 19.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -142,14 +172,14 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Fechar",
-                    tint = Color.White.copy(alpha = 0.7f),
+                    tint = closeIconTint,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 1. SEÇÃO: AMBIENTE
         Spacer(modifier = Modifier.height(16.dp))
@@ -160,7 +190,7 @@ fun QuickSettingsPanel(
         ) {
             Text(
                 text = "Ambiente",
-                color = Color.White.copy(alpha = 0.88f),
+                color = primaryTextColor,
                 fontSize = 15.5.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -185,30 +215,31 @@ fun QuickSettingsPanel(
             ) {
                 Text(
                     text = "Forçar páginas escuras",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
                 Icon(
                     imageVector = Icons.Rounded.Info,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.45f),
+                    tint = infoIconTint,
                     modifier = Modifier.size(16.dp)
                 )
                 Icon(
                     imageVector = Icons.Rounded.NorthEast,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.45f),
+                    tint = infoIconTint,
                     modifier = Modifier.size(14.dp)
                 )
             }
             TesseraSwitch(
                 checked = forceDarkPages,
-                onCheckedChange = onForceDarkPagesChanged
+                onCheckedChange = onForceDarkPagesChanged,
+                isDarkMode = isDarkMode
             )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 2. SEÇÃO: PAPEL DE PAREDE
         Spacer(modifier = Modifier.height(14.dp))
@@ -219,13 +250,14 @@ fun QuickSettingsPanel(
         ) {
             Text(
                 text = "Exibir papel de parede",
-                color = Color.White.copy(alpha = 0.88f),
+                color = primaryTextColor,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium
             )
             TesseraSwitch(
                 checked = showWallpaper,
-                onCheckedChange = onShowWallpaperChanged
+                onCheckedChange = onShowWallpaperChanged,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -235,12 +267,13 @@ fun QuickSettingsPanel(
             WallpaperCarousel(
                 wallpapers = AvailableWallpapers,
                 selectedId = selectedWallpaperId,
-                onSelect = onSelectWallpaper
+                onSelect = onSelectWallpaper,
+                isDarkMode = isDarkMode
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 3. SEÇÃO: SEGURANÇA E NAVEGAÇÃO
         Spacer(modifier = Modifier.height(14.dp))
@@ -256,18 +289,19 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.Shield,
                     contentDescription = null,
-                    tint = Color(0xFF64B5F6),
+                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Bloqueador de anúncios (AdBlock)",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = adBlockEnabled,
-                onCheckedChange = onAdBlockChanged
+                onCheckedChange = onAdBlockChanged,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -278,7 +312,7 @@ fun QuickSettingsPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.06f))
+                .background(cardBg)
                 .clickable(onClick = onOpenHistory)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -291,12 +325,12 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.History,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = cardHistoryIconTint,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Histórico e Favoritos",
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -304,7 +338,7 @@ fun QuickSettingsPanel(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = cardArrowTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -316,7 +350,7 @@ fun QuickSettingsPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.06f))
+                .background(cardBg)
                 .clickable(onClick = onOpenDownloads)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -329,12 +363,12 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.Download,
                     contentDescription = null,
-                    tint = Color(0xFF81C784),
+                    tint = if (isDarkMode) Color(0xFF81C784) else Color(0xFF2E7D32),
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Downloads",
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -342,7 +376,7 @@ fun QuickSettingsPanel(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = cardArrowTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -362,29 +396,30 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.StarOutline,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = secondaryIconTint,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Exibir a barra de favoritos",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = showFavoritesBar,
-                onCheckedChange = onShowFavoritesBarChanged
+                onCheckedChange = onShowFavoritesBarChanged,
+                isDarkMode = isDarkMode
             )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 4. SEÇÃO: WIDGETS DA TELA INICIAL
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = "Widgets da tela inicial",
-            color = Color.White.copy(alpha = 0.5f),
+            color = sectionHeaderColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -408,13 +443,14 @@ fun QuickSettingsPanel(
                 )
                 Text(
                     text = "Widget de tempo (clima)",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = showWeatherWidget,
-                onCheckedChange = onShowWeatherWidgetChanged
+                onCheckedChange = onShowWeatherWidgetChanged,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -438,24 +474,25 @@ fun QuickSettingsPanel(
                 )
                 Text(
                     text = "Widget de cotações (USD, EUR, BTC)",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = showQuotesWidget,
-                onCheckedChange = onShowQuotesWidgetChanged
+                onCheckedChange = onShowQuotesWidgetChanged,
+                isDarkMode = isDarkMode
             )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 5. SEÇÃO: CONFIGURAÇÕES DO GATO (EASTER EGG INARA)
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = "Configurações do mascote",
-            color = Color.White.copy(alpha = 0.5f),
+            color = sectionHeaderColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -477,18 +514,19 @@ fun QuickSettingsPanel(
                 )
                 Text(
                     text = "Mostrar Inara 🐾",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = showCatInara,
-                onCheckedChange = onShowCatInaraChanged
+                onCheckedChange = onShowCatInaraChanged,
+                isDarkMode = isDarkMode
             )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 5. SEÇÃO: TESSERA AI (OPERA AI)
         Spacer(modifier = Modifier.height(14.dp))
@@ -504,19 +542,20 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.Rounded.AutoAwesome,
                     contentDescription = null,
-                    tint = Color(0xFF64B5F6),
+                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4),
                     modifier = Modifier.size(19.dp)
                 )
                 Text(
                     text = "Tessera AI",
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = primaryTextColor,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
             TesseraSwitch(
                 checked = tesseraAiEnabled,
-                onCheckedChange = onTesseraAiChanged
+                onCheckedChange = onTesseraAiChanged,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -532,13 +571,14 @@ fun QuickSettingsPanel(
             ) {
                 Text(
                     text = "Botão de IA na barra de ferramentas",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = tertiaryTextColor,
                     fontSize = 13.5.sp,
                     modifier = Modifier.weight(1f)
                 )
                 TesseraSwitch(
                     checked = aiToolbarButton,
-                    onCheckedChange = onAiToolbarButtonChanged
+                    onCheckedChange = onAiToolbarButtonChanged,
+                    isDarkMode = isDarkMode
                 )
             }
 
@@ -553,19 +593,20 @@ fun QuickSettingsPanel(
             ) {
                 Text(
                     text = "Avisos da IA no pop-up de destaque do texto",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = tertiaryTextColor,
                     fontSize = 13.5.sp,
                     modifier = Modifier.weight(1f)
                 )
                 TesseraSwitch(
                     checked = aiTextHighlightPrompts,
-                    onCheckedChange = onAiTextHighlightPromptsChanged
+                    onCheckedChange = onAiTextHighlightPromptsChanged,
+                    isDarkMode = isDarkMode
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider()
+        SettingsDivider(isDarkMode = isDarkMode)
 
         // 6. SEÇÃO: BARRA LATERAL
         Spacer(modifier = Modifier.height(14.dp))
@@ -581,18 +622,19 @@ fun QuickSettingsPanel(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = secondaryIconTint,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Exibir a barra lateral",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = secondaryTextColor,
                     fontSize = 14.5.sp
                 )
             }
             TesseraSwitch(
                 checked = showSidebar,
-                onCheckedChange = onShowSidebarChanged
+                onCheckedChange = onShowSidebarChanged,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -607,13 +649,14 @@ fun QuickSettingsPanel(
             ) {
                 Text(
                     text = "Ocultar automaticamente a barra lateral",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = tertiaryTextColor,
                     fontSize = 13.5.sp,
                     modifier = Modifier.weight(1f)
                 )
                 TesseraSwitch(
                     checked = autoHideSidebar,
-                    onCheckedChange = onAutoHideSidebarChanged
+                    onCheckedChange = onAutoHideSidebarChanged,
+                    isDarkMode = isDarkMode
                 )
             }
         }
@@ -626,7 +669,8 @@ fun QuickSettingsPanel(
 private fun WallpaperCarousel(
     wallpapers: List<WallpaperTheme>,
     selectedId: String,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    isDarkMode: Boolean = true
 ) {
     val scrollState = rememberScrollState()
 
@@ -650,7 +694,7 @@ private fun WallpaperCarousel(
                         .clip(shape)
                         .border(
                             width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) theme.accentColor else Color.White.copy(alpha = 0.15f),
+                            color = if (isSelected) theme.accentColor else (if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)),
                             shape = shape
                         ),
                     contentAlignment = Alignment.Center
@@ -691,7 +735,7 @@ private fun WallpaperCarousel(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = theme.name,
-                    color = if (isSelected) theme.accentColor else Color.White.copy(alpha = 0.75f),
+                    color = if (isSelected) theme.accentColor else (if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366)),
                     fontSize = 11.5.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
@@ -710,8 +754,12 @@ private fun ThemeTogglePill(
     Row(
         modifier = Modifier
             .clip(pillShape)
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), pillShape)
+            .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0x0E000000))
+            .border(
+                1.dp,
+                if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0x18000000),
+                pillShape
+            )
             .clickable(onClick = onToggle)
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -719,12 +767,14 @@ private fun ThemeTogglePill(
         ThemeIconChip(
             icon = Icons.Rounded.LightMode,
             isSelected = !isDarkMode,
+            isDarkMode = isDarkMode,
             description = "Modo claro"
         )
         Spacer(modifier = Modifier.width(4.dp))
         ThemeIconChip(
             icon = Icons.Rounded.DarkMode,
             isSelected = isDarkMode,
+            isDarkMode = isDarkMode,
             description = "Modo escuro"
         )
     }
@@ -734,17 +784,31 @@ private fun ThemeTogglePill(
 private fun ThemeIconChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isSelected: Boolean,
+    isDarkMode: Boolean = true,
     description: String
 ) {
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White.copy(alpha = 0.18f) else Color.Transparent,
+        targetValue = if (isSelected) {
+            if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.White
+        } else Color.Transparent,
         animationSpec = tween(200),
         label = "chip_bg"
     )
 
+    val iconTint = if (isSelected) {
+        if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E)
+    } else {
+        if (isDarkMode) Color.White.copy(alpha = 0.4f) else Color(0xFF8E8E93)
+    }
+
     Box(
         modifier = Modifier
             .size(32.dp)
+            .then(
+                if (isSelected && !isDarkMode) {
+                    Modifier.shadow(2.dp, CircleShape)
+                } else Modifier
+            )
             .clip(CircleShape)
             .background(bgColor),
         contentAlignment = Alignment.Center
@@ -752,7 +816,7 @@ private fun ThemeIconChip(
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = Color.White.copy(alpha = if (isSelected) 0.95f else 0.4f),
+            tint = iconTint,
             modifier = Modifier.size(18.dp)
         )
     }
@@ -761,26 +825,29 @@ private fun ThemeIconChip(
 @Composable
 private fun TesseraSwitch(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    isDarkMode: Boolean = true
 ) {
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
             checkedThumbColor = Color.White,
-            checkedTrackColor = Color(0xFF64B5F6),
+            checkedTrackColor = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4),
             checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-            uncheckedTrackColor = Color.White.copy(alpha = 0.12f),
-            uncheckedBorderColor = Color.White.copy(alpha = 0.15f)
+            uncheckedThumbColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color.White,
+            uncheckedTrackColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0x24000000),
+            uncheckedBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color(0x18000000)
         )
     )
 }
 
 @Composable
-private fun SettingsDivider() {
+private fun SettingsDivider(
+    isDarkMode: Boolean = true
+) {
     HorizontalDivider(
         thickness = 1.dp,
-        color = Color.White.copy(alpha = 0.07f)
+        color = if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color(0x0E000000)
     )
 }
