@@ -170,6 +170,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             TesseraStartPage(
                 activeWallpaper = state.activeWallpaper,
                 showWallpaper = state.showWallpaper,
+                customWallpaperUri = state.customWallpaperUri,
                 showCatInara = state.showCatInara,
                 isDarkMode = state.isDarkMode,
                 favorites = state.speedDialItems,
@@ -274,13 +275,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     if (!url.isNullOrBlank()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageStarted(url)
+                                        viewModel.setReaderModeAvailable(false)
                                     }
                                 }
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     if (!url.isNullOrBlank()) {
                                         lastLoadedUrl = url
-                                        viewModel.onPageFinished(url, canGoBack(), view?.title)
+                                        viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
+
+                                        // Detect Reader Mode availability on page
+                                        view?.evaluateJavascript(
+                                            "(function() { " +
+                                            "  var article = document.querySelector('article, [itemprop=\"articleBody\"], main, .post-content, .entry-content'); " +
+                                            "  var pCount = document.querySelectorAll('p').length; " +
+                                            "  var textLength = document.body ? (document.body.innerText || '').length : 0; " +
+                                            "  return (article !== null || pCount >= 4 || textLength > 1200) ? 'true' : 'false'; " +
+                                            "})()"
+                                        ) { result ->
+                                            val isAvailable = result?.replace("\"", "")?.trim() == "true"
+                                            viewModel.setReaderModeAvailable(isAvailable)
+                                        }
                                     }
                                 }
                             }
@@ -362,68 +377,123 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
                     )
                 }
-
-                // Floating TesseraAirBar (minimized as Lupa or expanded)
-                AnimatedVisibility(
-                    visible = state.isBarVisible,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = tween(280)
-                    ),
-                    exit = slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(280)
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                ) {
-                    TesseraAirBar(
-                        progress = state.progress,
-                        displayUrl = state.displayUrl,
-                        canGoBack = state.canGoBack,
-                        tabCount = state.tabs.size,
-                        isBookmarked = state.isCurrentPageBookmarked,
-                        favorites = state.speedDialItems,
-                        onBack = { webViewInstance?.goBack() },
-                        onHome = {
-                            isAirBarExpanded = false
-                            viewModel.goHome()
-                        },
-                        onReload = { webViewInstance?.reload() },
-                        onSearch = { query ->
-                            isAirBarExpanded = false
-                            viewModel.openUrl(query)
-                        },
-                        onOpenAiAction = {
-                            isAirBarExpanded = false
-                            viewModel.toggleAiActionModal()
-                        },
-                        onToggleBookmark = {
-                            viewModel.toggleBookmark(
-                                title = webViewInstance?.title ?: "",
-                                url = state.displayUrl
-                            )
-                        },
-                        onOpenTabs = {
-                            isAirBarExpanded = false
-                            viewModel.toggleTabsModal()
-                        },
-                        onOpenHistory = {
-                            isAirBarExpanded = false
-                            viewModel.toggleHistoryModal()
-                        },
-                        onOpenSettings = { viewModel.toggleQuickSettings() },
-                        onOpenFavorite = { url ->
-                            isAirBarExpanded = false
-                            viewModel.openUrl(url)
-                        },
-                        isExpanded = isAirBarExpanded,
-                        onExpandedChange = { isAirBarExpanded = it },
-                        accentColor = state.activeWallpaper.accentColor
-                    )
-                }
             }
+        }
+
+        // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
+        AnimatedVisibility(
+            visible = state.isBarVisible,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(280)
+            ),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(280)
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+        ) {
+            TesseraAirBar(
+                progress = state.progress,
+                displayUrl = if (state.isHomePage) "" else state.displayUrl,
+                canGoBack = if (state.isHomePage) false else state.canGoBack,
+                canGoForward = if (state.isHomePage) false else state.canGoForward,
+                tabCount = state.tabs.size,
+                isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
+                isIncognito = state.isIncognitoMode,
+                isDarkMode = state.isDarkMode,
+                isReaderModeActive = state.isReaderModeActive,
+                isReaderModeAvailable = state.isReaderModeAvailable,
+                favorites = state.speedDialItems,
+                onBack = { webViewInstance?.goBack() },
+                onForward = { webViewInstance?.goForward() },
+                onHome = { viewModel.goHome() },
+                onReload = { webViewInstance?.reload() },
+                onSearch = { query -> viewModel.openUrl(query) },
+                onFastAction = {
+                    if (state.isHomePage) {
+                        viewModel.openAiQuery("")
+                    } else {
+                        webViewInstance?.reload()
+                    }
+                },
+                onOpenAiAction = { viewModel.toggleAiActionModal() },
+                onToggleBookmark = {
+                    if (state.isHomePage) {
+                        viewModel.toggleHistoryModal()
+                    } else {
+                        viewModel.toggleBookmark(
+                            title = webViewInstance?.title ?: "",
+                            url = state.displayUrl
+                        )
+                    }
+                },
+                onToggleIncognito = { viewModel.toggleIncognitoMode() },
+                onToggleReaderMode = {
+                    val willBeActive = !state.isReaderModeActive
+                    viewModel.toggleReaderMode()
+                    if (willBeActive) {
+                        val bg = if (state.isDarkMode) "#141414" else "#FBF9F5"
+                        val fg = if (state.isDarkMode) "#E6E6E6" else "#202020"
+                        val css = """
+                            (function() {
+                                var existing = document.getElementById('tessera-reader-style');
+                                if (existing) existing.remove();
+                                var style = document.createElement('style');
+                                style.id = 'tessera-reader-style';
+                                style.innerHTML = `
+                                    header, footer, nav, aside, iframe, .advertisement, .ad, .ads, .sidebar, .comments, #comments, .social-share, .cookie-banner {
+                                        display: none !important;
+                                    }
+                                    body {
+                                        background-color: $bg !important;
+                                        color: $fg !important;
+                                        max-width: 720px !important;
+                                        margin: 0 auto !important;
+                                        padding: 28px 20px !important;
+                                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+                                        font-size: 20px !important;
+                                        line-height: 1.75 !important;
+                                        letter-spacing: 0.01em !important;
+                                    }
+                                    p, li {
+                                        font-size: 20px !important;
+                                        line-height: 1.75 !important;
+                                        color: $fg !important;
+                                        margin-bottom: 1.5em !important;
+                                    }
+                                    h1, h2, h3, h4 {
+                                        color: $fg !important;
+                                        line-height: 1.3 !important;
+                                        margin-top: 1.6em !important;
+                                        margin-bottom: 0.7em !important;
+                                    }
+                                    img {
+                                        max-width: 100% !important;
+                                        height: auto !important;
+                                        border-radius: 12px !important;
+                                        margin: 16px 0 !important;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            })()
+                        """.trimIndent()
+                        webViewInstance?.evaluateJavascript(css, null)
+                    } else {
+                        webViewInstance?.evaluateJavascript(
+                            "(function() { var el = document.getElementById('tessera-reader-style'); if (el) el.remove(); })()",
+                            null
+                        )
+                    }
+                },
+                onOpenTabs = { viewModel.toggleTabsModal() },
+                onOpenHistory = { viewModel.toggleHistoryModal() },
+                onOpenSettings = { viewModel.toggleQuickSettings() },
+                onOpenFavorite = { url -> viewModel.openUrl(url) },
+                accentColor = state.activeWallpaper.accentColor
+            )
         }
 
         // TABS MODAL OVERLAY
@@ -454,7 +524,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onCloseTab = { viewModel.closeTab(it) },
                 onNewTab = { viewModel.addNewTab() },
                 onDismiss = { viewModel.dismissTabsModal() },
-                accentColor = state.activeWallpaper.accentColor
+                onTogglePin = { viewModel.togglePinTab(it) },
+                onCloseAllTabs = { viewModel.closeAllTabs() },
+                onOpenHistory = {
+                    viewModel.dismissTabsModal()
+                    viewModel.toggleHistoryModal()
+                },
+                accentColor = state.activeWallpaper.accentColor,
+                isDarkMode = state.isDarkMode
             )
         }
 

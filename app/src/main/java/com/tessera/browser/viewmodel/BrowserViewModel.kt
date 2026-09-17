@@ -60,7 +60,9 @@ data class BrowserTab(
     val url: String = "https://duckduckgo.com",
     val title: String = "Nova Guia",
     val isHomePage: Boolean = true,
-    val canGoBack: Boolean = false
+    val canGoBack: Boolean = false,
+    val canGoForward: Boolean = false,
+    val isPinned: Boolean = false
 )
 
 data class HistoryEntry(
@@ -76,8 +78,12 @@ data class BrowserUiState(
     val displayUrl: String = "",
     val progress: Float = 0f,
     val canGoBack: Boolean = false,
+    val canGoForward: Boolean = false,
     val isBarVisible: Boolean = true,
     val showQuickSettings: Boolean = false,
+    val isIncognitoMode: Boolean = false,
+    val isReaderModeActive: Boolean = false,
+    val isReaderModeAvailable: Boolean = false,
 
     // Multi-tabs
     val tabs: List<BrowserTab> = listOf(
@@ -114,10 +120,11 @@ data class BrowserUiState(
     val quotesData: QuotesData? = null,
 
     // Configuração Fácil
-    val isDarkMode: Boolean = true,
+    val isDarkMode: Boolean = false,
     val forceDarkPages: Boolean = false,
     val showWallpaper: Boolean = true,
-    val selectedWallpaperId: String = "nebula",
+    val selectedWallpaperId: String = "summer_villa",
+    val customWallpaperUri: String? = null,
     val showFavoritesBar: Boolean = true,
     val showCatInara: Boolean = false,
     val tesseraAiEnabled: Boolean = true,
@@ -202,6 +209,8 @@ class BrowserViewModel : ViewModel() {
                 currentUrl = formattedUrl,
                 displayUrl = formattedUrl,
                 isBarVisible = true,
+                isReaderModeActive = false,
+                isReaderModeAvailable = false,
                 tabs = updatedTabs,
                 searchSuggestions = emptyList()
             )
@@ -270,7 +279,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    fun onPageFinished(url: String?, canBack: Boolean, title: String? = null) {
+    fun onPageFinished(url: String?, canBack: Boolean, canForward: Boolean = false, title: String? = null) {
         val effectiveUrl = url ?: _uiState.value.currentUrl
         val effectiveTitle = if (!title.isNullOrBlank()) title else extractDomain(effectiveUrl)
 
@@ -281,13 +290,14 @@ class BrowserViewModel : ViewModel() {
                         url = effectiveUrl,
                         title = effectiveTitle,
                         canGoBack = canBack,
+                        canGoForward = canForward,
                         isHomePage = false
                     )
                 } else tab
             }
 
-            // Register in history if viewing a website
-            val newHistory = if (!state.isHomePage && effectiveUrl.isNotBlank() && effectiveUrl.startsWith("http")) {
+            // Register in history if viewing a website and not in incognito mode
+            val newHistory = if (!state.isIncognitoMode && !state.isHomePage && effectiveUrl.isNotBlank() && effectiveUrl.startsWith("http")) {
                 val entry = HistoryEntry(title = effectiveTitle, url = effectiveUrl)
                 (listOf(entry) + state.history.filterNot { it.url == effectiveUrl }).take(100)
             } else {
@@ -297,12 +307,72 @@ class BrowserViewModel : ViewModel() {
             state.copy(
                 progress = 0f,
                 canGoBack = canBack,
+                canGoForward = canForward,
                 currentUrl = effectiveUrl,
                 displayUrl = effectiveUrl,
                 tabs = updatedTabs,
                 history = newHistory
             )
         }
+    }
+
+    fun toggleIncognitoMode() {
+        _uiState.update { it.copy(isIncognitoMode = !it.isIncognitoMode) }
+    }
+
+    fun toggleReaderMode() {
+        _uiState.update { it.copy(isReaderModeActive = !it.isReaderModeActive) }
+    }
+
+    fun setReaderModeAvailable(available: Boolean) {
+        _uiState.update { it.copy(isReaderModeAvailable = available) }
+    }
+
+    fun setReaderModeActive(active: Boolean) {
+        _uiState.update { it.copy(isReaderModeActive = active) }
+    }
+
+    fun togglePinTab(tabId: String) {
+        _uiState.update { state ->
+            val updatedTabs = state.tabs.map { tab ->
+                if (tab.id == tabId) tab.copy(isPinned = !tab.isPinned) else tab
+            }
+            state.copy(tabs = updatedTabs)
+        }
+    }
+
+    fun closeAllTabs() {
+        val pinnedTabs = _uiState.value.tabs.filter { it.isPinned }
+        if (pinnedTabs.isNotEmpty()) {
+            _uiState.update { state ->
+                val first = pinnedTabs.first()
+                state.copy(
+                    tabs = pinnedTabs,
+                    activeTabId = first.id,
+                    isHomePage = first.isHomePage,
+                    currentUrl = first.url,
+                    displayUrl = if (first.isHomePage) "" else first.url,
+                    showTabsModal = false
+                )
+            }
+        } else {
+            val newId = UUID.randomUUID().toString()
+            val defaultTab = BrowserTab(id = newId, isHomePage = true)
+            _uiState.update { state ->
+                state.copy(
+                    tabs = listOf(defaultTab),
+                    activeTabId = newId,
+                    isHomePage = true,
+                    currentUrl = "https://duckduckgo.com",
+                    displayUrl = "",
+                    showTabsModal = false
+                )
+            }
+        }
+    }
+
+    fun setCustomWallpaperUri(uri: String?) {
+        _uiState.update { it.copy(customWallpaperUri = uri, showWallpaper = true) }
     }
 
     fun updateProgress(progress: Float) {

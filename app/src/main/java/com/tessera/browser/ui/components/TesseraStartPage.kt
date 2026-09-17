@@ -65,6 +65,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -84,6 +85,7 @@ import com.tessera.browser.viewmodel.WeatherData
 fun TesseraStartPage(
     activeWallpaper: WallpaperTheme,
     showWallpaper: Boolean,
+    customWallpaperUri: String? = null,
     showCatInara: Boolean,
     isDarkMode: Boolean,
     favorites: List<SpeedDialItem>,
@@ -125,29 +127,46 @@ fun TesseraStartPage(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Dynamic Abstract Wallpaper Background
+        // Dynamic Wallpaper Background (Mediterranean Summer Villa or Custom/Gradient)
         if (showWallpaper) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = activeWallpaper.gradientColors,
-                            radius = 1800f
+            if (!customWallpaperUri.isNullOrBlank()) {
+                SubcomposeAsyncImage(
+                    model = customWallpaperUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (activeWallpaper.drawableRes != null) {
+                Image(
+                    painter = painterResource(activeWallpaper.drawableRes),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = activeWallpaper.gradientColors,
+                                radius = 1800f
+                            )
                         )
-                    )
-            )
+                )
+            }
 
-            // Deep dark ambient vignette
+            // Ambient lighting vignette layer
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0x880E0B0A),
-                                Color(0x33120E0D),
-                                Color(0xDD0A0807)
+                                Color(0x44000000),
+                                Color(0x15000000),
+                                Color(0x25000000),
+                                Color(0x77000000)
                             )
                         )
                     )
@@ -216,19 +235,20 @@ fun TesseraStartPage(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 84.dp)
+                    .padding(bottom = 190.dp)
             )
         }
 
-        // BARRA DE FAVORITOS NO RODAPÉ (Uso com uma mão)
-        if (!isSearchExpanded) {
+        // BARRA DE FAVORITOS NO RODAPÉ (Uso com uma mão, flutuando acima da barra inferior)
+        if (!isSearchExpanded && favorites.isNotEmpty()) {
             BottomFavoritesBar(
                 items = favorites,
                 onItemClick = onOpenUrl,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .padding(bottom = 122.dp)
+                    .padding(horizontal = 16.dp)
             )
         }
 
@@ -391,49 +411,78 @@ private fun CentralLupaHero(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .size(60.dp)
-            .shadow(
-                elevation = 20.dp,
-                shape = CircleShape,
-                ambientColor = Color.Black,
-                spotColor = accentColor.copy(alpha = 0.5f)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // "Browse Now" capsule pill (Matches Image 2)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xBB221C18))
+                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                )
+                .padding(horizontal = 32.dp, vertical = 11.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Browse Now",
+                color = Color.White,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.4.sp
             )
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0x35FFFFFF),
-                        Color(0x15FFFFFF),
-                        Color(0x0AFFFFFF)
+        }
+
+        // Lupa Icon Button
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .shadow(
+                    elevation = 16.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black,
+                    spotColor = accentColor.copy(alpha = 0.5f)
+                )
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x35FFFFFF),
+                            Color(0x15FFFFFF),
+                            Color(0x0AFFFFFF)
+                        )
                     )
                 )
-            )
-            .border(
-                width = 1.5.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.4f),
-                        accentColor.copy(alpha = 0.4f),
-                        Color.White.copy(alpha = 0.08f)
-                    )
+                .border(
+                    width = 1.2.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.45f),
+                            accentColor.copy(alpha = 0.4f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    ),
+                    shape = CircleShape
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
                 ),
-                shape = CircleShape
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = "Pesquisar",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = "Pesquisar",
-            tint = Color.White,
-            modifier = Modifier.size(28.dp)
-        )
+        }
     }
 }
 

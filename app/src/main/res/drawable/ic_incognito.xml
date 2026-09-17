@@ -1,0 +1,33 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <!-- Fedora Hat Brim -->
+  <path
+      android:pathData="M2,12 C2,10.9 5.5,10 12,10 C18.5,10 22,10.9 22,12 C22,12.5 19.5,13.2 15,13.4 L17.5,6 C17.7,5.4 17.3,4.7 16.6,4.5 L14.5,4 C13,4.5 11,4.5 9.5,4 L7.4,4.5 C6.7,4.7 6.3,5.4 6.5,6 L9,13.4 C4.5,13.2 2,12.5 2,12 Z"
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.5"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"/>
+  <!-- Glasses Left Lens -->
+  <path
+      android:pathData="M6,17 C6,15.62 7.12,14.5 8.5,14.5 C9.88,14.5 11,15.62 11,17 C11,18.38 9.88,19.5 8.5,19.5 C7.12,19.5 6,18.38 6,17 Z"
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.5"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"/>
+  <!-- Glasses Right Lens -->
+  <path
+      android:pathData="M13,17 C13,15.62 14.12,14.5 15.5,14.5 C16.88,14.5 18,15.62 18,17 C18,18.38 16.88,19.5 15.5,19.5 C14.12,19.5 13,18.38 13,17 Z"
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.5"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"/>
+  <!-- Glasses Bridge -->
+  <path
+      android:pathData="M11,17 L13,17"
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.5"
+      android:strokeLineCap="round"/>
+</vector>

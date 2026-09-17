@@ -1,6 +1,7 @@
 package com.tessera.browser.data
 
 import androidx.compose.ui.graphics.Color
+import com.tessera.browser.R
 
 data class WallpaperTheme(
     val id: String,
@@ -11,6 +12,20 @@ data class WallpaperTheme(
 )
 
 val AvailableWallpapers = listOf(
+    WallpaperTheme(
+        id = "summer_villa",
+        name = "Villa Mediterrânea",
+        drawableRes = R.drawable.wallpaper_summer_villa,
+        gradientColors = listOf(Color(0xFF64B5F6), Color(0xFF1E88E5), Color(0xFF0D47A1)),
+        accentColor = Color(0xFF0288D1)
+    ),
+    WallpaperTheme(
+        id = "chocolate_silk",
+        name = "Seda Chocolate",
+        drawableRes = R.drawable.wallpaper_chocolate_silk,
+        gradientColors = listOf(Color(0xFF4E342E), Color(0xFF271A16), Color(0xFF120C0A)),
+        accentColor = Color(0xFFFFB74D)
+    ),
     WallpaperTheme(
         id = "nebula",
         name = "Nebulosa Cósmica",
