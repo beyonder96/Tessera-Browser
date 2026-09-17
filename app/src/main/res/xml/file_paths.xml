@@ -9,6 +9,9 @@
     <files-path
         name="internal_download"
         path="." />
+    <external-path
+        name="external_root"
+        path="." />
     <cache-path
         name="internal_cache"
         path="." />

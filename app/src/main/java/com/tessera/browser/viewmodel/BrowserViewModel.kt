@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Environment
 import android.util.Log
 import android.webkit.CookieManager
+import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -82,7 +83,23 @@ data class HistoryEntry(
     val title: String = "",
     val url: String,
     val timestamp: Long = System.currentTimeMillis()
-)
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("title", title)
+        put("url", url)
+        put("timestamp", timestamp)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): HistoryEntry = HistoryEntry(
+            id = json.optString("id", UUID.randomUUID().toString()),
+            title = json.optString("title", ""),
+            url = json.optString("url", ""),
+            timestamp = json.optLong("timestamp", System.currentTimeMillis())
+        )
+    }
+}
 
 data class BrowserUiState(
     val isHomePage: Boolean = true,
@@ -130,8 +147,24 @@ data class BrowserUiState(
     // Widgets da Home
     val showWeatherWidget: Boolean = true,
     val showQuotesWidget: Boolean = true,
-    val weatherData: WeatherData? = null,
-    val quotesData: QuotesData? = null,
+    val weatherData: WeatherData? = WeatherData(
+        cityName = "São Paulo",
+        temperature = 24,
+        apparentTemperature = 24,
+        humidity = 65,
+        conditionText = "Parcialmente nublado",
+        weatherCode = 1,
+        isDay = true,
+        isLoading = false
+    ),
+    val quotesData: QuotesData? = QuotesData(
+        items = listOf(
+            QuoteItem("USD", "Dólar", "R$ 5,64", "+0,35%", true),
+            QuoteItem("EUR", "Euro", "R$ 6,18", "-0,12%", false),
+            QuoteItem("BTC", "Bitcoin", "R$ 358k", "+1,85%", true)
+        ),
+        isLoading = false
+    ),
 
     // Configuração Fácil
     val isDarkMode: Boolean = false,
@@ -206,6 +239,7 @@ class BrowserViewModel : ViewModel() {
     val uiState: StateFlow<BrowserUiState> = _uiState.asStateFlow()
 
     private var suggestionJob: Job? = null
+    private var appContext: Context? = null
 
     fun openUrl(rawInput: String) {
         val trimmed = rawInput.trim()
@@ -297,6 +331,7 @@ class BrowserViewModel : ViewModel() {
         val effectiveUrl = url ?: _uiState.value.currentUrl
         val effectiveTitle = if (!title.isNullOrBlank()) title else extractDomain(effectiveUrl)
 
+        val previousHistory = _uiState.value.history
         _uiState.update { state ->
             val updatedTabs = state.tabs.map { tab ->
                 if (tab.id == state.activeTabId) {
@@ -327,6 +362,10 @@ class BrowserViewModel : ViewModel() {
                 tabs = updatedTabs,
                 history = newHistory
             )
+        }
+
+        if (_uiState.value.history !== previousHistory) {
+            saveHistory()
         }
     }
 
@@ -387,6 +426,7 @@ class BrowserViewModel : ViewModel() {
 
     fun setCustomWallpaperUri(uri: String?) {
         _uiState.update { it.copy(customWallpaperUri = uri, showWallpaper = true) }
+        saveSettings()
     }
 
     fun updateProgress(progress: Float) {
@@ -479,6 +519,7 @@ class BrowserViewModel : ViewModel() {
             _uiState.update { state ->
                 state.copy(speedDialItems = state.speedDialItems.filterNot { it.url.equals(targetUrl, ignoreCase = true) })
             }
+            saveBookmarks()
         } else {
             addSpeedDialItem(title.ifBlank { extractDomain(targetUrl) }, targetUrl)
         }
@@ -486,6 +527,7 @@ class BrowserViewModel : ViewModel() {
 
     fun clearHistory() {
         _uiState.update { it.copy(history = emptyList()) }
+        saveHistory()
     }
 
     fun toggleHistoryModal() {
@@ -506,6 +548,14 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissHistoryModal() {
         _uiState.update { it.copy(showHistoryModal = false) }
+    }
+
+    // PERSISTENCE SUBSYSTEM (Bookmarks, History, Settings & Downloads)
+    fun initPersistence(context: Context) {
+        val app = context.applicationContext
+        appContext = app
+        initDownloads(app)
+        loadPreferences(app)
     }
 
     // DOWNLOADS SUBSYSTEM
@@ -619,8 +669,19 @@ class BrowserViewModel : ViewModel() {
                     "${context.packageName}.fileprovider",
                     file
                 )
+                val ext = file.extension.lowercase()
+                var resolvedMime = item.mimeType
+                if (ext == "apk") {
+                    resolvedMime = "application/vnd.android.package-archive"
+                } else if (resolvedMime.isBlank() || resolvedMime == "*/*" || resolvedMime == "application/octet-stream") {
+                    val fromExt = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                    if (!fromExt.isNullOrBlank()) {
+                        resolvedMime = fromExt
+                    }
+                }
+
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, if (item.mimeType.isNotBlank()) item.mimeType else "*/*")
+                    setDataAndType(uri, resolvedMime)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
@@ -645,8 +706,18 @@ class BrowserViewModel : ViewModel() {
                     "${context.packageName}.fileprovider",
                     file
                 )
+                val ext = file.extension.lowercase()
+                var resolvedMime = item.mimeType
+                if (ext == "apk") {
+                    resolvedMime = "application/vnd.android.package-archive"
+                } else if (resolvedMime.isBlank() || resolvedMime == "*/*" || resolvedMime == "application/octet-stream") {
+                    val fromExt = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                    if (!fromExt.isNullOrBlank()) {
+                        resolvedMime = fromExt
+                    }
+                }
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = if (item.mimeType.isNotBlank()) item.mimeType else "*/*"
+                    type = resolvedMime
                     putExtra(Intent.EXTRA_STREAM, uri)
                     putExtra(Intent.EXTRA_SUBJECT, item.fileName)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -715,6 +786,126 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    private fun loadPreferences(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = context.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+
+                // Bookmarks
+                val bookmarksJson = prefs.getString("bookmarks_list", null)
+                val loadedBookmarks = if (!bookmarksJson.isNullOrBlank()) {
+                    val arr = JSONArray(bookmarksJson)
+                    val list = mutableListOf<SpeedDialItem>()
+                    for (i in 0 until arr.length()) {
+                        list.add(SpeedDialItem.fromJson(arr.getJSONObject(i)))
+                    }
+                    list
+                } else null
+
+                // History
+                val historyJson = prefs.getString("history_list", null)
+                val loadedHistory = if (!historyJson.isNullOrBlank()) {
+                    val arr = JSONArray(historyJson)
+                    val list = mutableListOf<HistoryEntry>()
+                    for (i in 0 until arr.length()) {
+                        list.add(HistoryEntry.fromJson(arr.getJSONObject(i)))
+                    }
+                    list
+                } else null
+
+                // Settings
+                val isDark = if (prefs.contains("is_dark_mode")) prefs.getBoolean("is_dark_mode", false) else null
+                val forceDark = if (prefs.contains("force_dark_pages")) prefs.getBoolean("force_dark_pages", false) else null
+                val showWallpaper = if (prefs.contains("show_wallpaper")) prefs.getBoolean("show_wallpaper", true) else null
+                val selectedWallpaper = prefs.getString("selected_wallpaper_id", null)
+                val customWallpaper = prefs.getString("custom_wallpaper_uri", null)
+                val showFavorites = if (prefs.contains("show_favorites_bar")) prefs.getBoolean("show_favorites_bar", true) else null
+                val showCatInara = if (prefs.contains("show_cat_inara")) prefs.getBoolean("show_cat_inara", false) else null
+                val tesseraAi = if (prefs.contains("tessera_ai_enabled")) prefs.getBoolean("tessera_ai_enabled", true) else null
+                val adBlock = if (prefs.contains("ad_block_enabled")) prefs.getBoolean("ad_block_enabled", true) else null
+                val showWeather = if (prefs.contains("show_weather_widget")) prefs.getBoolean("show_weather_widget", true) else null
+                val showQuotes = if (prefs.contains("show_quotes_widget")) prefs.getBoolean("show_quotes_widget", true) else null
+
+                _uiState.update { current ->
+                    current.copy(
+                        speedDialItems = loadedBookmarks ?: current.speedDialItems,
+                        history = loadedHistory ?: current.history,
+                        isDarkMode = isDark ?: current.isDarkMode,
+                        forceDarkPages = forceDark ?: current.forceDarkPages,
+                        showWallpaper = showWallpaper ?: current.showWallpaper,
+                        selectedWallpaperId = selectedWallpaper ?: current.selectedWallpaperId,
+                        customWallpaperUri = customWallpaper ?: current.customWallpaperUri,
+                        showFavoritesBar = showFavorites ?: current.showFavoritesBar,
+                        showCatInara = showCatInara ?: current.showCatInara,
+                        tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
+                        adBlockEnabled = adBlock ?: current.adBlockEnabled,
+                        showWeatherWidget = showWeather ?: current.showWeatherWidget,
+                        showQuotesWidget = showQuotes ?: current.showQuotesWidget
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao carregar preferências", e)
+            }
+        }
+    }
+
+    private fun saveBookmarks() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.speedDialItems.forEach { item ->
+                    arr.put(item.toJson())
+                }
+                prefs.edit().putString("bookmarks_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar favoritos", e)
+            }
+        }
+    }
+
+    private fun saveHistory() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.history.take(100).forEach { entry ->
+                    arr.put(entry.toJson())
+                }
+                prefs.edit().putString("history_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar histórico", e)
+            }
+        }
+    }
+
+    private fun saveSettings() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val s = _uiState.value
+                prefs.edit()
+                    .putBoolean("is_dark_mode", s.isDarkMode)
+                    .putBoolean("force_dark_pages", s.forceDarkPages)
+                    .putBoolean("show_wallpaper", s.showWallpaper)
+                    .putString("selected_wallpaper_id", s.selectedWallpaperId)
+                    .putString("custom_wallpaper_uri", s.customWallpaperUri)
+                    .putBoolean("show_favorites_bar", s.showFavoritesBar)
+                    .putBoolean("show_cat_inara", s.showCatInara)
+                    .putBoolean("tessera_ai_enabled", s.tesseraAiEnabled)
+                    .putBoolean("ad_block_enabled", s.adBlockEnabled)
+                    .putBoolean("show_weather_widget", s.showWeatherWidget)
+                    .putBoolean("show_quotes_widget", s.showQuotesWidget)
+                    .apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar configurações", e)
+            }
+        }
+    }
+
     // QUICK AI ACTIONS MODAL
     fun toggleAiActionModal() {
         _uiState.update { it.copy(showAiActionModal = !it.showAiActionModal) }
@@ -772,50 +963,62 @@ class BrowserViewModel : ViewModel() {
     // Settings mutators
     fun setAdBlockEnabled(enabled: Boolean) {
         _uiState.update { it.copy(adBlockEnabled = enabled) }
+        saveSettings()
     }
 
     fun setDarkMode(enabled: Boolean) {
         _uiState.update { it.copy(isDarkMode = enabled) }
+        saveSettings()
     }
 
     fun setForceDarkPages(enabled: Boolean) {
         _uiState.update { it.copy(forceDarkPages = enabled) }
+        saveSettings()
     }
 
     fun setShowWallpaper(enabled: Boolean) {
         _uiState.update { it.copy(showWallpaper = enabled) }
+        saveSettings()
     }
 
     fun selectWallpaper(wallpaperId: String) {
         _uiState.update { it.copy(selectedWallpaperId = wallpaperId, showWallpaper = true) }
+        saveSettings()
     }
 
     fun setShowFavoritesBar(enabled: Boolean) {
         _uiState.update { it.copy(showFavoritesBar = enabled) }
+        saveSettings()
     }
 
     fun setShowCatInara(enabled: Boolean) {
         _uiState.update { it.copy(showCatInara = enabled) }
+        saveSettings()
     }
 
     fun setTesseraAiEnabled(enabled: Boolean) {
         _uiState.update { it.copy(tesseraAiEnabled = enabled) }
+        saveSettings()
     }
 
     fun setAiToolbarButton(enabled: Boolean) {
         _uiState.update { it.copy(aiToolbarButton = enabled) }
+        saveSettings()
     }
 
     fun setAiTextHighlightPrompts(enabled: Boolean) {
         _uiState.update { it.copy(aiTextHighlightPrompts = enabled) }
+        saveSettings()
     }
 
     fun setShowSidebar(enabled: Boolean) {
         _uiState.update { it.copy(showSidebar = enabled) }
+        saveSettings()
     }
 
     fun setAutoHideSidebar(enabled: Boolean) {
         _uiState.update { it.copy(autoHideSidebar = enabled) }
+        saveSettings()
     }
 
     fun toggleQuickSettings() {
@@ -824,10 +1027,12 @@ class BrowserViewModel : ViewModel() {
 
     fun setShowWeatherWidget(enabled: Boolean) {
         _uiState.update { it.copy(showWeatherWidget = enabled) }
+        saveSettings()
     }
 
     fun setShowQuotesWidget(enabled: Boolean) {
         _uiState.update { it.copy(showQuotesWidget = enabled) }
+        saveSettings()
     }
 
     private fun getWeatherConditionText(code: Int, isDay: Boolean): String {
@@ -1134,6 +1339,7 @@ class BrowserViewModel : ViewModel() {
         _uiState.update {
             it.copy(speedDialItems = it.speedDialItems + newItem)
         }
+        saveBookmarks()
     }
 
     private fun extractDomain(url: String): String {
@@ -1150,6 +1356,7 @@ class BrowserViewModel : ViewModel() {
         _uiState.update {
             it.copy(speedDialItems = it.speedDialItems.filterNot { item -> item.id == id })
         }
+        saveBookmarks()
     }
 
     private fun formatInputAsUrl(rawInput: String): String {
