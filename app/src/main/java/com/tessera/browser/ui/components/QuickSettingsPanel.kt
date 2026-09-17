@@ -23,11 +23,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.NorthEast
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.NorthEast
@@ -65,6 +73,7 @@ fun QuickSettingsPanel(
     aiTextHighlightPrompts: Boolean,
     showSidebar: Boolean,
     autoHideSidebar: Boolean,
+    adBlockEnabled: Boolean = true,
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
     onShowWallpaperChanged: (Boolean) -> Unit,
@@ -76,6 +85,8 @@ fun QuickSettingsPanel(
     onAiTextHighlightPromptsChanged: (Boolean) -> Unit,
     onShowSidebarChanged: (Boolean) -> Unit,
     onAutoHideSidebarChanged: (Boolean) -> Unit,
+    onAdBlockChanged: (Boolean) -> Unit,
+    onOpenHistory: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -225,8 +236,76 @@ fun QuickSettingsPanel(
         Spacer(modifier = Modifier.height(16.dp))
         SettingsDivider()
 
-        // 3. SEÇÃO: BARRA DE FAVORITOS
+        // 3. SEÇÃO: SEGURANÇA E NAVEGAÇÃO
         Spacer(modifier = Modifier.height(14.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Shield,
+                    contentDescription = null,
+                    tint = Color(0xFF64B5F6),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Bloqueador de anúncios (AdBlock)",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.5.sp
+                )
+            }
+            TesseraSwitch(
+                checked = adBlockEnabled,
+                onCheckedChange = onAdBlockChanged
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Histórico e Favoritos
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .clickable(onClick = onOpenHistory)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Histórico e Favoritos",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 4. SEÇÃO: BARRA DE FAVORITOS
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

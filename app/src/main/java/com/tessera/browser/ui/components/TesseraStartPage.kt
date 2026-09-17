@@ -7,11 +7,14 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +30,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -34,8 +39,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -57,11 +66,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
+import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
 
 @Composable
@@ -69,8 +83,14 @@ fun TesseraStartPage(
     activeWallpaper: WallpaperTheme,
     showWallpaper: Boolean,
     showCatInara: Boolean,
+    isDarkMode: Boolean,
+    favorites: List<SpeedDialItem>,
+    searchSuggestions: List<String>,
+    trendingTopics: List<String>,
+    onSearchQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onOpenAi: (String) -> Unit,
+    onOpenUrl: (String) -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -80,17 +100,19 @@ fun TesseraStartPage(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Automatically request focus and open keyboard when search is expanded
+    // Request focus and show keyboard when expanded
     LaunchedEffect(isSearchExpanded) {
         if (isSearchExpanded) {
             focusRequester.requestFocus()
             keyboardController?.show()
         } else {
             keyboardController?.hide()
+            searchQuery = ""
+            onSearchQueryChange("")
         }
     }
 
-    // Collapse search bar on system back press
+    // Collapse search bar on back press
     BackHandler(enabled = isSearchExpanded) {
         isSearchExpanded = false
     }
@@ -109,31 +131,31 @@ fun TesseraStartPage(
                     )
             )
 
-            // Deep dark ambient overlay
+            // Deep dark ambient vignette
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0x990E0B0A),
-                                Color(0x44120E0D),
+                                Color(0x880E0B0A),
+                                Color(0x33120E0D),
                                 Color(0xDD0A0807)
                             )
                         )
                     )
             )
         } else {
-            // Pure dark background when wallpaper is toggled off
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF120E0D))
+                    .background(if (isDarkMode) Color(0xFF120E0D) else Color(0xFFF7F8FA))
             )
         }
 
         // Top Header Bar
         StartPageTopBar(
+            isDarkMode = isDarkMode,
             onOpenSettings = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -143,44 +165,118 @@ fun TesseraStartPage(
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
 
-        // Center Hero: Magnifying Glass ("Lupa") or Expanded Encorpada Search Bar
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .imePadding(),
-            contentAlignment = Alignment.Center
-        ) {
-            // Unexpanded State: Magnifying Glass Hero Trigger in the Center
-            AnimatedVisibility(
-                visible = !isSearchExpanded,
-                enter = fadeIn(tween(250)) + scaleIn(spring(stiffness = Spring.StiffnessMediumLow)),
-                exit = fadeOut(tween(200)) + scaleOut(tween(200))
+        // Center Hero: Magnifying Glass ("Lupa")
+        if (!isSearchExpanded) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
                 CentralLupaHero(
                     accentColor = activeWallpaper.accentColor,
                     onClick = { isSearchExpanded = true }
                 )
             }
+        }
 
-            // Expanded State: Encorpada Search Bar Modal in the Center
-            AnimatedVisibility(
-                visible = isSearchExpanded,
-                enter = fadeIn(tween(300)) + scaleIn(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)),
-                exit = fadeOut(tween(200)) + scaleOut(tween(200))
+        // Easter Egg: Inara the Cat
+        if (showCatInara && !isSearchExpanded) {
+            InaraCatBadge(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 84.dp)
+            )
+        }
+
+        // BARRA DE FAVORITOS NO RODAPÉ (Uso com uma mão)
+        if (!isSearchExpanded) {
+            BottomFavoritesBar(
+                items = favorites,
+                onItemClick = onOpenUrl,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            )
+        }
+
+        // Scrim when search is expanded to dismiss on tap outside
+        if (isSearchExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        isSearchExpanded = false
+                    }
+            )
+        }
+
+        // SEARCH BAR ANCHORED AT THE BOTTOM (ABOVE KEYBOARD, ONE-HANDED REACH)
+        AnimatedVisibility(
+            visible = isSearchExpanded,
+            enter = fadeIn(tween(200)) + slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+            ),
+            exit = fadeOut(tween(180)) + slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(200)
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Search Predictions (when typing) OR Trending Topics (when empty)
+                if (searchQuery.isNotBlank() && searchSuggestions.isNotEmpty()) {
+                    SearchSuggestionsCard(
+                        suggestions = searchSuggestions,
+                        onSelect = {
+                            isSearchExpanded = false
+                            onSearch(it)
+                        },
+                        onInsert = {
+                            searchQuery = it
+                            onSearchQueryChange(it)
+                        },
+                        accentColor = activeWallpaper.accentColor
+                    )
+                } else if (searchQuery.isBlank()) {
+                    TrendingTopicsRow(
+                        topics = trendingTopics,
+                        onSelect = {
+                            isSearchExpanded = false
+                            onSearch(it)
+                        },
+                        accentColor = activeWallpaper.accentColor
+                    )
+                }
+
+                // Encorpada Search Bar positioned comfortably at thumb height above keyboard
                 EncorpadaSearchBar(
                     query = searchQuery,
-                    onQueryChange = { searchQuery = it },
+                    onQueryChange = {
+                        searchQuery = it
+                        onSearchQueryChange(it)
+                    },
                     onSearch = {
                         if (searchQuery.isNotBlank()) {
-                            onSearch(searchQuery.trim())
                             isSearchExpanded = false
+                            onSearch(searchQuery.trim())
                         }
                     },
                     onAiClick = {
-                        onOpenAi(searchQuery.trim())
                         isSearchExpanded = false
+                        onOpenAi(searchQuery.trim())
                     },
                     onCollapse = { isSearchExpanded = false },
                     accentColor = activeWallpaper.accentColor,
@@ -188,21 +284,12 @@ fun TesseraStartPage(
                 )
             }
         }
-
-        // Easter Egg: Inara the Cat (Mascote)
-        if (showCatInara && !isSearchExpanded) {
-            InaraCatBadge(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 32.dp)
-            )
-        }
     }
 }
 
 @Composable
 private fun StartPageTopBar(
+    isDarkMode: Boolean,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -240,7 +327,7 @@ private fun StartPageTopBar(
 
             Text(
                 text = "Tessera",
-                color = Color.White.copy(alpha = 0.95f),
+                color = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1A1A1A),
                 fontSize = 19.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.5.sp
@@ -252,15 +339,15 @@ private fun StartPageTopBar(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                .background(Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.2f))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                 .clickable(onClick = onOpenSettings),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Rounded.Tune,
                 contentDescription = "Configuração fácil",
-                tint = Color.White.copy(alpha = 0.9f),
+                tint = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1A1A1A),
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -319,6 +406,191 @@ private fun CentralLupaHero(
 }
 
 @Composable
+private fun BottomFavoritesBar(
+    items: List<SpeedDialItem>,
+    onItemClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(26.dp)
+    val scrollState = rememberScrollState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(20.dp, shape = shape)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xEE221B17), Color(0xF815100E))
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+                ),
+                shape = shape
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Bookmark,
+                contentDescription = "Favoritos",
+                tint = Color(0xFF64B5F6),
+                modifier = Modifier.size(18.dp)
+            )
+
+            items.forEach { item ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .clickable { onItemClick(item.url) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    ShortcutIcon(item = item, size = 18.dp)
+                    Text(
+                        text = item.title,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendingTopicsRow(
+    topics: List<String>,
+    onSelect: (String) -> Unit,
+    accentColor: Color
+) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xF51E1815))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = "Tendências de Pesquisa",
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            topics.forEach { topic ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+                        .clickable { onSelect(topic.replace("🔥 ", "")) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = topic,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchSuggestionsCard(
+    suggestions: List<String>,
+    onSelect: (String) -> Unit,
+    onInsert: (String) -> Unit,
+    accentColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xFA1E1815))
+            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(22.dp))
+            .padding(vertical = 6.dp)
+    ) {
+        suggestions.forEach { suggestion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(suggestion) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.45f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = suggestion,
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Rounded.NorthWest,
+                    contentDescription = "Inserir",
+                    tint = accentColor,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { onInsert(suggestion) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EncorpadaSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
@@ -356,7 +628,7 @@ private fun EncorpadaSearchBar(
                 ),
                 shape = barShape
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -366,7 +638,7 @@ private fun EncorpadaSearchBar(
             // Search icon
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.07f)),
                 contentAlignment = Alignment.Center
@@ -375,11 +647,11 @@ private fun EncorpadaSearchBar(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "Pesquisar",
                     tint = accentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            // Input field (Encorpado, 16sp)
+            // Input field (Encorpado, 15.5sp)
             Box(
                 modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.CenterStart
@@ -419,17 +691,21 @@ private fun EncorpadaSearchBar(
                     .background(
                         Brush.horizontalGradient(
                             listOf(
-                                Color(0xFF00E5FF).copy(alpha = 0.18f),
-                                Color(0xFF7C4DFF).copy(alpha = 0.28f)
+                                Color(0xFF00E5FF).copy(alpha = 0.22f),
+                                Color(0xFF7C4DFF).copy(alpha = 0.35f)
                             )
                         )
                     )
                     .border(
-                        1.dp,
-                        Color(0xFF00E5FF).copy(alpha = 0.45f),
+                        1.2.dp,
+                        Color(0xFF00E5FF).copy(alpha = 0.55f),
                         RoundedCornerShape(19.dp)
                     )
-                    .clickable(onClick = onAiClick)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onAiClick
+                    )
                     .padding(horizontal = 11.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -502,6 +778,71 @@ private fun EncorpadaSearchBar(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ShortcutIcon(
+    item: SpeedDialItem,
+    size: Dp = 18.dp
+) {
+    if (item.iconRes != null) {
+        Image(
+            painter = painterResource(id = item.iconRes),
+            contentDescription = item.title,
+            modifier = Modifier.size(size)
+        )
+    } else if (!item.iconUrl.isNullOrBlank()) {
+        SubcomposeAsyncImage(
+            model = item.iconUrl,
+            contentDescription = item.title,
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape),
+            loading = {
+                InitialBadge(
+                    initial = item.initial,
+                    badgeColor = Color(item.badgeColor),
+                    size = size
+                )
+            },
+            error = {
+                InitialBadge(
+                    initial = item.initial,
+                    badgeColor = Color(item.badgeColor),
+                    size = size
+                )
+            }
+        )
+    } else {
+        InitialBadge(
+            initial = item.initial,
+            badgeColor = Color(item.badgeColor),
+            size = size
+        )
+    }
+}
+
+@Composable
+private fun InitialBadge(
+    initial: String?,
+    badgeColor: Color,
+    size: Dp = 18.dp
+) {
+    val letter = initial?.firstOrNull()?.uppercase() ?: "•"
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(badgeColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = letter,
+            color = Color.White,
+            fontSize = (size.value * 0.45f).sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
