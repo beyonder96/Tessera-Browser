@@ -298,6 +298,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 builtInZoomControls = true
                                 displayZoomControls = false
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                                javaScriptCanOpenWindowsAutomatically = true
 
                                 // Standard modern Chrome mobile UA so AI pages (Duck.ai, Perplexity, etc.) load flawlessly
                                 userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
@@ -350,22 +351,34 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
                                     // Intercept direct downloadable files
                                     val cleanUrl = urlString.split("?").firstOrNull()?.lowercase() ?: ""
+                                    val queryPart = urlString.substringAfter("?", "").lowercase()
                                     val isDirectDownload = cleanUrl.endsWith(".apk") || cleanUrl.endsWith(".pdf") ||
                                             cleanUrl.endsWith(".zip") || cleanUrl.endsWith(".rar") || cleanUrl.endsWith(".7z") ||
                                             cleanUrl.endsWith(".tar") || cleanUrl.endsWith(".gz") || cleanUrl.endsWith(".mp3") ||
                                             cleanUrl.endsWith(".mp4") || cleanUrl.endsWith(".wav") || cleanUrl.endsWith(".docx") ||
-                                            cleanUrl.endsWith(".xlsx") || cleanUrl.endsWith(".pptx") || cleanUrl.endsWith(".csv")
+                                            cleanUrl.endsWith(".xlsx") || cleanUrl.endsWith(".pptx") || cleanUrl.endsWith(".csv") ||
+                                            cleanUrl.endsWith(".bin") || cleanUrl.endsWith(".dmg") || cleanUrl.endsWith(".iso") ||
+                                            queryPart.contains(".apk") || queryPart.contains("filename=")
 
                                     if (isDirectDownload) {
                                         val downloadCtx = view?.context ?: context
+                                        val ext = cleanUrl.substringAfterLast('.', "")
+                                        val detectedMime = if (ext == "apk" || queryPart.contains(".apk")) {
+                                            "application/vnd.android.package-archive"
+                                        } else ""
+
                                         val downloadId = viewModel.enqueueDownload(
                                             context = downloadCtx,
                                             url = urlString,
-                                            userAgent = view?.settings?.userAgentString ?: ""
+                                            userAgent = view?.settings?.userAgentString ?: "",
+                                            mimeType = detectedMime
                                         )
                                         if (downloadId != -1L) {
-                                            val guessedName = URLUtil.guessFileName(urlString, null, null)
+                                            val guessedName = URLUtil.guessFileName(urlString, null, detectedMime)
                                             Toast.makeText(downloadCtx, "Iniciando download: $guessedName", Toast.LENGTH_SHORT).show()
+                                            viewModel.openDownloadsModal()
+                                        } else {
+                                            Toast.makeText(downloadCtx, "Falha ao iniciar download", Toast.LENGTH_SHORT).show()
                                         }
                                         return true
                                     }
@@ -552,6 +565,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     )
                                     if (downloadId != -1L) {
                                         Toast.makeText(ctx, "Iniciando download: $fileName", Toast.LENGTH_SHORT).show()
+                                        viewModel.openDownloadsModal()
                                     } else {
                                         Toast.makeText(ctx, "Falha ao iniciar download", Toast.LENGTH_SHORT).show()
                                     }

@@ -629,17 +629,53 @@ class BrowserViewModel : ViewModel() {
     ): Long {
         try {
             val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            var effectiveMime = mimeType
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            if (ext == "apk") {
+                effectiveMime = "application/vnd.android.package-archive"
+            } else if (effectiveMime.isBlank() || effectiveMime == "*/*") {
+                if (ext.isNotBlank()) {
+                    effectiveMime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+                }
+            }
+
+            // Garante que o diretório Downloads público exista
+            try {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) {
+                    downloadsDir.mkdirs()
+                }
+            } catch (e: Exception) {
+                Log.w("BrowserViewModel", "Não foi possível verificar/criar pasta de Downloads", e)
+            }
+
             val request = DownloadManager.Request(Uri.parse(url)).apply {
-                if (mimeType.isNotBlank() && mimeType != "*/*") {
-                    setMimeType(mimeType)
+                if (effectiveMime.isNotBlank() && effectiveMime != "*/*") {
+                    setMimeType(effectiveMime)
                 }
-                val cookies = CookieManager.getInstance().getCookie(url)
-                if (cookies != null) {
-                    addRequestHeader("cookie", cookies)
+                try {
+                    val cookies = CookieManager.getInstance().getCookie(url)
+                    if (!cookies.isNullOrBlank()) {
+                        val cleanCookies = cookies.replace("\n", "").replace("\r", "").trim()
+                        if (cleanCookies.isNotEmpty()) {
+                            addRequestHeader("cookie", cleanCookies)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("BrowserViewModel", "Ignorando erro ao adicionar cookies ao download", e)
                 }
+
                 if (userAgent.isNotBlank()) {
-                    addRequestHeader("User-Agent", userAgent)
+                    try {
+                        val cleanUa = userAgent.replace("\n", "").replace("\r", "").trim()
+                        if (cleanUa.isNotEmpty()) {
+                            addRequestHeader("User-Agent", cleanUa)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("BrowserViewModel", "Ignorando erro ao adicionar User-Agent ao download", e)
+                    }
                 }
+
                 setDescription("Baixando com Tessera Browser...")
                 setTitle(fileName)
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -658,7 +694,7 @@ class BrowserViewModel : ViewModel() {
                 id = downloadId,
                 fileName = fileName,
                 url = url,
-                mimeType = if (mimeType.isNotBlank()) mimeType else "*/*",
+                mimeType = if (effectiveMime.isNotBlank()) effectiveMime else "*/*",
                 filePath = targetFile.absolutePath,
                 status = DownloadStatus.RUNNING,
                 timestamp = System.currentTimeMillis()
