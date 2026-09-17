@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
@@ -91,6 +92,7 @@ fun QuickSettingsPanel(
     onAutoHideSidebarChanged: (Boolean) -> Unit,
     onAdBlockChanged: (Boolean) -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -294,6 +296,44 @@ fun QuickSettingsPanel(
                 )
                 Text(
                     text = "Histórico e Favoritos",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Downloads
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .clickable(onClick = onOpenDownloads)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = null,
+                    tint = Color(0xFF81C784),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Downloads",
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Medium

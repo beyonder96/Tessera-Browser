@@ -35,10 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,7 +97,7 @@ fun HomeWidgetsContainer(
 }
 
 /**
- * Minimalist weather pill displaying temperature, weather condition icon, city, and brief status.
+ * Minimalist weather info displaying temperature, weather condition icon, city, and brief status floating cleanly.
  */
 @Composable
 fun WeatherMinimalWidget(
@@ -106,68 +108,48 @@ fun WeatherMinimalWidget(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pillShape = RoundedCornerShape(22.dp)
     val weatherIcon = getWeatherIcon(data.weatherCode, data.isDay)
-
-    val bgBrush = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xBB231C18), Color(0xD016110F))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xDDFFFFFF), Color(0xEEF2F4F7))
-        )
-    }
-
-    val borderColor = if (isDarkMode) {
-        Color.White.copy(alpha = 0.12f)
-    } else {
-        Color.Black.copy(alpha = 0.08f)
-    }
-
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1E2022)
-    val subTextColor = if (isDarkMode) Color.White.copy(alpha = 0.55f) else Color(0xFF5A6065)
+    val textShadow = Shadow(
+        color = Color.Black.copy(alpha = 0.6f),
+        offset = Offset(0f, 2f),
+        blurRadius = 8f
+    )
+    val textColor = Color.White
+    val subTextColor = Color.White.copy(alpha = 0.88f)
 
     Row(
         modifier = modifier
-            .shadow(
-                elevation = 10.dp,
-                shape = pillShape,
-                ambientColor = Color.Black,
-                spotColor = accentColor.copy(alpha = 0.25f)
-            )
-            .clip(pillShape)
-            .background(bgBrush)
-            .border(1.dp, borderColor, pillShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         // Weather Icon with soft ambient color
         Icon(
             imageVector = weatherIcon,
             contentDescription = data.conditionText,
-            tint = if (data.isDay) Color(0xFFFFA726) else Color(0xFF90CAF9),
-            modifier = Modifier.size(18.dp)
+            tint = if (data.isDay) Color(0xFFFFD54F) else Color(0xFF90CAF9),
+            modifier = Modifier.size(19.dp)
         )
 
         // Temperature & City
         Text(
-            text = "°C",
+            text = "${data.temperature}°C",
             color = textColor,
             fontSize = 13.5.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(shadow = textShadow)
         )
 
         Text(
             text = "•",
             color = subTextColor,
-            fontSize = 11.sp
+            fontSize = 11.sp,
+            style = TextStyle(shadow = textShadow)
         )
 
         Row(
@@ -177,42 +159,45 @@ fun WeatherMinimalWidget(
             Icon(
                 imageVector = Icons.Rounded.LocationOn,
                 contentDescription = null,
-                tint = accentColor.copy(alpha = 0.85f),
-                modifier = Modifier.size(12.dp)
+                tint = Color(0xFF81D4FA),
+                modifier = Modifier.size(13.dp)
             )
             Text(
                 text = data.cityName,
                 color = textColor,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Medium
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                style = TextStyle(shadow = textShadow)
             )
         }
 
         Text(
             text = "•",
             color = subTextColor,
-            fontSize = 11.sp
+            fontSize = 11.sp,
+            style = TextStyle(shadow = textShadow)
         )
 
         // Condition summary
         Text(
             text = data.conditionText,
             color = subTextColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Normal
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Normal,
+            style = TextStyle(shadow = textShadow)
         )
 
         // Loading or refresh indicator
         if (data.isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(12.dp),
-                color = accentColor,
+                color = Color.White,
                 strokeWidth = 1.5.dp
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(20.dp)
                     .clip(CircleShape)
                     .clickable(onClick = onRefresh),
                 contentAlignment = Alignment.Center
@@ -220,8 +205,8 @@ fun WeatherMinimalWidget(
                 Icon(
                     imageVector = Icons.Rounded.Refresh,
                     contentDescription = "Atualizar tempo",
-                    tint = subTextColor.copy(alpha = 0.6f),
-                    modifier = Modifier.size(12.dp)
+                    tint = subTextColor.copy(alpha = 0.75f),
+                    modifier = Modifier.size(13.dp)
                 )
             }
         }
@@ -229,7 +214,7 @@ fun WeatherMinimalWidget(
 }
 
 /**
- * Minimalist ticker of financial quotes (USD, EUR, BTC) with percentage variation badges.
+ * Minimalist ticker of financial quotes (USD, EUR, BTC) floating cleanly without wrapping box.
  */
 @Composable
 fun QuotesMinimalWidget(
@@ -239,40 +224,14 @@ fun QuotesMinimalWidget(
     onQuoteClick: (QuoteItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pillShape = RoundedCornerShape(20.dp)
     val scrollState = rememberScrollState()
-
-    val bgBrush = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0x99231C18), Color(0xBB16110F))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xCCFFFFFF), Color(0xDDEDF0F5))
-        )
-    }
-
-    val borderColor = if (isDarkMode) {
-        Color.White.copy(alpha = 0.09f)
-    } else {
-        Color.Black.copy(alpha = 0.06f)
-    }
 
     Row(
         modifier = modifier
-            .shadow(
-                elevation = 8.dp,
-                shape = pillShape,
-                ambientColor = Color.Black,
-                spotColor = accentColor.copy(alpha = 0.15f)
-            )
-            .clip(pillShape)
-            .background(bgBrush)
-            .border(1.dp, borderColor, pillShape)
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
             .horizontalScroll(scrollState),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         data.items.forEach { quote ->
             QuoteItemChip(
@@ -290,48 +249,53 @@ private fun QuoteItemChip(
     isDarkMode: Boolean,
     onClick: () -> Unit
 ) {
-    val chipShape = RoundedCornerShape(14.dp)
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF212529)
-    val variationColor = if (quote.isPositive) Color(0xFF4CAF50) else Color(0xFFEF5350)
+    val textShadow = Shadow(
+        color = Color.Black.copy(alpha = 0.55f),
+        offset = Offset(0f, 2f),
+        blurRadius = 6f
+    )
+    val textColor = Color.White
+    val variationColor = if (quote.isPositive) Color(0xFF69F0AE) else Color(0xFFFF5252)
 
     Row(
         modifier = Modifier
-            .clip(chipShape)
-            .background(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Text(
             text = quote.symbol,
-            color = textColor,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold
+            color = textColor.copy(alpha = 0.85f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(shadow = textShadow)
         )
 
         Text(
             text = quote.value,
             color = textColor,
             fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            style = TextStyle(shadow = textShadow)
         )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(1.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Icon(
                 imageVector = if (quote.isPositive) Icons.AutoMirrored.Rounded.TrendingUp else Icons.AutoMirrored.Rounded.TrendingDown,
                 contentDescription = null,
                 tint = variationColor,
-                modifier = Modifier.size(11.dp)
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = quote.change,
                 color = variationColor,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Medium
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(shadow = textShadow)
             )
         }
     }

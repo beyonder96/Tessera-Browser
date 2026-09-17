@@ -19,10 +19,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Android
+import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.FolderZip
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.VideoFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -40,6 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tessera.browser.data.DownloadFileType
+import com.tessera.browser.data.DownloadItem
+import com.tessera.browser.data.DownloadStatus
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.viewmodel.HistoryEntry
 
@@ -47,14 +60,21 @@ import com.tessera.browser.viewmodel.HistoryEntry
 fun HistoryBookmarksModal(
     bookmarks: List<SpeedDialItem>,
     history: List<HistoryEntry>,
+    downloads: List<DownloadItem> = emptyList(),
+    initialTab: Int = 0,
+    onTabSelected: ((Int) -> Unit)? = null,
     onSelectUrl: (String) -> Unit,
     onRemoveBookmark: (String) -> Unit,
     onClearHistory: () -> Unit,
+    onOpenDownload: (DownloadItem) -> Unit = {},
+    onShareDownload: (DownloadItem) -> Unit = {},
+    onRemoveDownload: (Long) -> Unit = {},
+    onClearDownloads: () -> Unit = {},
     onDismiss: () -> Unit,
     accentColor: Color = Color(0xFF64B5F6),
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Favoritos, 1 = Histórico
+    var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
     Column(
@@ -99,7 +119,10 @@ fun HistoryBookmarksModal(
                             if (selectedTab == 0) accentColor else Color.White.copy(alpha = 0.1f),
                             RoundedCornerShape(16.dp)
                         )
-                        .clickable { selectedTab = 0 }
+                        .clickable {
+                            selectedTab = 0
+                            onTabSelected?.invoke(0)
+                        }
                         .padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
                     Text(
@@ -120,7 +143,10 @@ fun HistoryBookmarksModal(
                             if (selectedTab == 1) accentColor else Color.White.copy(alpha = 0.1f),
                             RoundedCornerShape(16.dp)
                         )
-                        .clickable { selectedTab = 1 }
+                        .clickable {
+                            selectedTab = 1
+                            onTabSelected?.invoke(1)
+                        }
                         .padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
                     Text(
@@ -128,6 +154,30 @@ fun HistoryBookmarksModal(
                         color = if (selectedTab == 1) accentColor else Color.White.copy(alpha = 0.7f),
                         fontSize = 13.5.sp,
                         fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+
+                // Tab Downloads
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selectedTab == 2) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .border(
+                            1.dp,
+                            if (selectedTab == 2) accentColor else Color.White.copy(alpha = 0.1f),
+                            RoundedCornerShape(16.dp)
+                        )
+                        .clickable {
+                            selectedTab = 2
+                            onTabSelected?.invoke(2)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        text = "Downloads",
+                        color = if (selectedTab == 2) accentColor else Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.5.sp,
+                        fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
@@ -216,7 +266,7 @@ fun HistoryBookmarksModal(
                     }
                 }
             }
-        } else {
+        } else if (selectedTab == 1) {
             // HISTORY LIST
             if (history.isEmpty()) {
                 Box(
@@ -286,6 +336,181 @@ fun HistoryBookmarksModal(
                                     fontSize = 11.5.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // DOWNLOADS LIST (selectedTab == 2)
+            if (downloads.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.25f),
+                            modifier = Modifier.size(52.dp)
+                        )
+                        Text(
+                            text = "Nenhum download recente",
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Arquivos baixados da web aparecerão aqui.",
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${downloads.size} ${if (downloads.size == 1) "item" else "itens"}",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Limpar Downloads",
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable(onClick = onClearDownloads)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(downloads, key = { it.id }) { item ->
+                        val cardShape = RoundedCornerShape(16.dp)
+                        val iconInfo = when (item.fileType) {
+                            DownloadFileType.APK -> Pair(Icons.Rounded.Android, Color(0xFF66BB6A))
+                            DownloadFileType.PDF -> Pair(Icons.Rounded.PictureAsPdf, Color(0xFFEF5350))
+                            DownloadFileType.IMAGE -> Pair(Icons.Rounded.Image, Color(0xFF42A5F5))
+                            DownloadFileType.VIDEO -> Pair(Icons.Rounded.VideoFile, Color(0xFFAB47BC))
+                            DownloadFileType.AUDIO -> Pair(Icons.Rounded.AudioFile, Color(0xFFFFA726))
+                            DownloadFileType.ARCHIVE -> Pair(Icons.Rounded.FolderZip, Color(0xFFFFCA28))
+                            DownloadFileType.DOCUMENT -> Pair(Icons.Rounded.Description, Color(0xFF26A69A))
+                            DownloadFileType.GENERIC -> Pair(Icons.AutoMirrored.Rounded.InsertDriveFile, Color.White.copy(alpha = 0.7f))
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .clickable { onOpenDownload(item) }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(iconInfo.second.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = iconInfo.first,
+                                    contentDescription = null,
+                                    tint = iconInfo.second,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.fileName,
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = item.formattedSize,
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        fontSize = 11.5.sp
+                                    )
+                                    Text(
+                                        text = "•",
+                                        color = Color.White.copy(alpha = 0.3f),
+                                        fontSize = 10.sp
+                                    )
+                                    Text(
+                                        text = item.formattedDate,
+                                        color = Color.White.copy(alpha = 0.45f),
+                                        fontSize = 11.sp
+                                    )
+                                    if (item.status == DownloadStatus.RUNNING || item.status == DownloadStatus.PENDING) {
+                                        Text(
+                                            text = "Baixando...",
+                                            color = accentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    } else if (item.status == DownloadStatus.FAILED) {
+                                        Text(
+                                            text = "Falha",
+                                            color = Color(0xFFFF6B6B),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Share button
+                            IconButton(
+                                onClick = { onShareDownload(item) },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Share,
+                                    contentDescription = "Compartilhar",
+                                    tint = Color.White.copy(alpha = 0.65f),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+
+                            // Remove button
+                            IconButton(
+                                onClick = { onRemoveDownload(item.id) },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Remover",
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }

@@ -8,9 +8,21 @@ import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.DownloadManager
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.util.Log
+import android.webkit.CookieManager
+import android.webkit.URLUtil
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import com.tessera.browser.data.AvailableWallpapers
+import com.tessera.browser.data.DownloadItem
+import com.tessera.browser.data.DownloadStatus
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -92,9 +104,11 @@ data class BrowserUiState(
     val activeTabId: String = "default-tab",
     val showTabsModal: Boolean = false,
 
-    // History & Bookmarks
+    // History, Bookmarks & Downloads
     val history: List<HistoryEntry> = emptyList(),
     val showHistoryModal: Boolean = false,
+    val activeHubTab: Int = 0, // 0 = Favoritos, 1 = Histórico, 2 = Downloads
+    val downloads: List<DownloadItem> = emptyList(),
 
     // Quick AI Actions Modal
     val showAiActionModal: Boolean = false,
@@ -220,9 +234,9 @@ class BrowserViewModel : ViewModel() {
     fun openAiQuery(query: String) {
         val trimmed = query.trim()
         val aiUrl = if (trimmed.isNotBlank()) {
-            "https://duckduckgo.com/?q=${URLEncoder.encode(trimmed, "UTF-8")}&ia=chat"
+            "https://duck.ai/?q=${URLEncoder.encode(trimmed, "UTF-8")}"
         } else {
-            "https://duckduckgo.com/chat"
+            "https://duck.ai/"
         }
         openUrl(aiUrl)
     }
@@ -478,8 +492,227 @@ class BrowserViewModel : ViewModel() {
         _uiState.update { it.copy(showHistoryModal = !it.showHistoryModal) }
     }
 
+    fun openHistoryModal(initialTab: Int = 0) {
+        _uiState.update { it.copy(showHistoryModal = true, activeHubTab = initialTab) }
+    }
+
+    fun openDownloadsModal() {
+        _uiState.update { it.copy(showHistoryModal = true, activeHubTab = 2) }
+    }
+
+    fun setActiveHubTab(tab: Int) {
+        _uiState.update { it.copy(activeHubTab = tab) }
+    }
+
     fun dismissHistoryModal() {
         _uiState.update { it.copy(showHistoryModal = false) }
+    }
+
+    // DOWNLOADS SUBSYSTEM
+    fun initDownloads(context: Context) {
+        loadDownloadsFromPreferences(context)
+    }
+
+    fun enqueueDownload(
+        context: Context,
+        url: String,
+        userAgent: String = "",
+        contentDisposition: String = "",
+        mimeType: String = ""
+    ): Long {
+        try {
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                if (mimeType.isNotBlank() && mimeType != "*/*") {
+                    setMimeType(mimeType)
+                }
+                val cookies = CookieManager.getInstance().getCookie(url)
+                if (cookies != null) {
+                    addRequestHeader("cookie", cookies)
+                }
+                if (userAgent.isNotBlank()) {
+                    addRequestHeader("User-Agent", userAgent)
+                }
+                setDescription("Baixando com Tessera Browser...")
+                setTitle(fileName)
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            }
+
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val downloadId = downloadManager.enqueue(request)
+
+            val targetFile = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                fileName
+            )
+
+            val item = DownloadItem(
+                id = downloadId,
+                fileName = fileName,
+                url = url,
+                mimeType = if (mimeType.isNotBlank()) mimeType else "*/*",
+                filePath = targetFile.absolutePath,
+                status = DownloadStatus.RUNNING,
+                timestamp = System.currentTimeMillis()
+            )
+
+            _uiState.update { state ->
+                val updated = listOf(item) + state.downloads.filterNot { it.id == downloadId }
+                state.copy(downloads = updated)
+            }
+            saveDownloadsToPreferences(context)
+            return downloadId
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao enfileirar download", e)
+            return -1L
+        }
+    }
+
+    fun onDownloadCompleted(context: Context, downloadId: Long) {
+        try {
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            val cursor = downloadManager.query(query)
+            if (cursor != null && cursor.moveToFirst()) {
+                val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                val bytesIdx = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                val fileUriIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+
+                val statusVal = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+                val totalBytes = if (bytesIdx != -1) cursor.getLong(bytesIdx) else -1L
+                val localUri = if (fileUriIdx != -1) cursor.getString(fileUriIdx) else null
+
+                val isSuccess = statusVal == DownloadManager.STATUS_SUCCESSFUL
+                val status = if (isSuccess) DownloadStatus.SUCCESSFUL else DownloadStatus.FAILED
+
+                cursor.close()
+
+                _uiState.update { state ->
+                    val updated = state.downloads.map { item ->
+                        if (item.id == downloadId) {
+                            val resolvedPath = if (localUri != null && localUri.startsWith("file://")) {
+                                Uri.parse(localUri).path ?: item.filePath
+                            } else item.filePath
+                            item.copy(
+                                status = status,
+                                totalBytes = if (totalBytes > 0) totalBytes else item.totalBytes,
+                                filePath = resolvedPath
+                            )
+                        } else item
+                    }
+                    state.copy(downloads = updated)
+                }
+                saveDownloadsToPreferences(context)
+            }
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao processar download completado", e)
+        }
+    }
+
+    fun openDownloadedFile(context: Context, item: DownloadItem) {
+        try {
+            val file = if (item.filePath != null) File(item.filePath) else null
+            if (file != null && file.exists()) {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, if (item.mimeType.isNotBlank()) item.mimeType else "*/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } else {
+                val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "Não foi possível abrir o arquivo: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun shareDownloadedFile(context: Context, item: DownloadItem) {
+        try {
+            val file = if (item.filePath != null) File(item.filePath) else null
+            if (file != null && file.exists()) {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = if (item.mimeType.isNotBlank()) item.mimeType else "*/*"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, item.fileName)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = Intent.createChooser(shareIntent, "Compartilhar ${item.fileName}").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+            } else {
+                Toast.makeText(context, "Arquivo não encontrado para compartilhamento", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "Falha ao compartilhar: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun removeDownload(context: Context?, id: Long) {
+        _uiState.update { state ->
+            val updated = state.downloads.filterNot { it.id == id }
+            state.copy(downloads = updated)
+        }
+        if (context != null) {
+            saveDownloadsToPreferences(context)
+        }
+    }
+
+    fun clearDownloads(context: Context?) {
+        _uiState.update { it.copy(downloads = emptyList()) }
+        if (context != null) {
+            saveDownloadsToPreferences(context)
+        }
+    }
+
+    private fun loadDownloadsFromPreferences(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = context.getSharedPreferences("tessera_downloads", Context.MODE_PRIVATE)
+                val jsonStr = prefs.getString("downloads_list", null)
+                if (!jsonStr.isNullOrBlank()) {
+                    val jsonArr = JSONArray(jsonStr)
+                    val list = mutableListOf<DownloadItem>()
+                    for (i in 0 until jsonArr.length()) {
+                        val obj = jsonArr.getJSONObject(i)
+                        list.add(DownloadItem.fromJson(obj))
+                    }
+                    _uiState.update { it.copy(downloads = list) }
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao carregar downloads", e)
+            }
+        }
+    }
+
+    private fun saveDownloadsToPreferences(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = context.getSharedPreferences("tessera_downloads", Context.MODE_PRIVATE)
+                val jsonArr = JSONArray()
+                _uiState.value.downloads.take(60).forEach { item ->
+                    jsonArr.put(item.toJson())
+                }
+                prefs.edit().putString("downloads_list", jsonArr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar downloads", e)
+            }
+        }
     }
 
     // QUICK AI ACTIONS MODAL
@@ -691,23 +924,36 @@ class BrowserViewModel : ViewModel() {
             // 2. If no GPS location, fallback to IP-based Geolocation
             if (!hasGpsLocation) {
                 try {
-                    val ipUrl = URL("https://ipapi.co/json/")
+                    val ipUrl = URL("https://get.geojs.io/v1/ip/geo.json")
                     val conn = ipUrl.openConnection() as HttpURLConnection
-                    conn.connectTimeout = 3000
-                    conn.readTimeout = 3000
+                    conn.connectTimeout = 3500
+                    conn.readTimeout = 3500
                     conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
                     if (conn.responseCode == 200) {
                         val body = conn.inputStream.bufferedReader().use { it.readText() }
                         val json = JSONObject(body)
-                        if (json.has("latitude") && json.has("longitude")) {
+                        lat = json.optDouble("latitude", lat)
+                        lon = json.optDouble("longitude", lon)
+                        val city = json.optString("city", "")
+                        if (city.isNotBlank()) cityName = city
+                    }
+                } catch (e: Exception) {
+                    try {
+                        val ipUrl = URL("https://ipwho.is/")
+                        val conn = ipUrl.openConnection() as HttpURLConnection
+                        conn.connectTimeout = 3500
+                        conn.readTimeout = 3500
+                        if (conn.responseCode == 200) {
+                            val body = conn.inputStream.bufferedReader().use { it.readText() }
+                            val json = JSONObject(body)
                             lat = json.optDouble("latitude", lat)
                             lon = json.optDouble("longitude", lon)
                             val city = json.optString("city", "")
                             if (city.isNotBlank()) cityName = city
                         }
+                    } catch (ex: Exception) {
+                        // Keep defaults
                     }
-                } catch (e: Exception) {
-                    // Fallback to default
                 }
             }
 

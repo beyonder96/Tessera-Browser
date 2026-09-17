@@ -179,19 +179,7 @@ fun TesseraStartPage(
             )
         }
 
-        // Top Header Bar
-        StartPageTopBar(
-            isDarkMode = isDarkMode,
-            onOpenSettings = onOpenSettings,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .displayCutoutPadding()
-                .padding(top = 8.dp)
-                .padding(horizontal = 20.dp, vertical = 10.dp)
-        )
-
-        // Minimalist Home Widgets (Weather & Quotes)
+        // Minimalist Home Widgets (Weather & Quotes) - Floating cleanly without wrapping box
         if (!isSearchExpanded && (showWeatherWidget || showQuotesWidget)) {
             HomeWidgetsContainer(
                 showWeather = showWeatherWidget,
@@ -212,17 +200,17 @@ fun TesseraStartPage(
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .displayCutoutPadding()
-                    .padding(top = 70.dp)
+                    .padding(top = 16.dp)
             )
         }
 
-        // Center Hero: Magnifying Glass ("Lupa")
+        // Center Hero: Modern Uppercase Typography "TESSERA"
         if (!isSearchExpanded) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CentralLupaHero(
+                CentralBrandHero(
                     accentColor = activeWallpaper.accentColor,
                     onClick = { isSearchExpanded = true }
                 )
@@ -340,149 +328,34 @@ fun TesseraStartPage(
 }
 
 @Composable
-private fun StartPageTopBar(
-    isDarkMode: Boolean,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Left: Tessera Monogram & Title
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.sweepGradient(
-                            listOf(Color(0xFF26A69A), Color(0xFF64B5F6), Color(0xFFBA68C8), Color(0xFF26A69A))
-                        )
-                    )
-                    .padding(2.5.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF14100E)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF64B5F6))
-                )
-            }
-
-            Text(
-                text = "Tessera",
-                color = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1A1A1A),
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.5.sp
-            )
-        }
-
-        // Right: Settings Button
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.2f))
-                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                .clickable(onClick = onOpenSettings),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Tune,
-                contentDescription = "Configuração fácil",
-                tint = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1A1A1A),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun CentralLupaHero(
+private fun CentralBrandHero(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    Box(
+        modifier = Modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // "Browse Now" capsule pill (Matches Image 2)
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xBB221C18))
-                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
+        Text(
+            text = "TESSERA",
+            color = Color.White,
+            fontSize = 38.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 8.sp,
+            style = TextStyle(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.5f),
+                    offset = androidx.compose.ui.geometry.Offset(0f, 4f),
+                    blurRadius = 14f
                 )
-                .padding(horizontal = 32.dp, vertical = 11.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Browse Now",
-                color = Color.White,
-                fontSize = 14.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.4.sp
             )
-        }
-
-        // Lupa Icon Button
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .shadow(
-                    elevation = 16.dp,
-                    shape = CircleShape,
-                    ambientColor = Color.Black,
-                    spotColor = accentColor.copy(alpha = 0.5f)
-                )
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x35FFFFFF),
-                            Color(0x15FFFFFF),
-                            Color(0x0AFFFFFF)
-                        )
-                    )
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.45f),
-                            accentColor.copy(alpha = 0.4f),
-                            Color.White.copy(alpha = 0.08f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Pesquisar",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-        }
+        )
     }
 }
 

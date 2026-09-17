@@ -307,36 +307,25 @@ fun TesseraAirBar(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                    } else {
-                        // Quick Action Button: Switches to Reader Mode if available/active, else Action / Reload (Matches Image 1 & 2)
-                        val isReaderMode = isReaderModeAvailable || isReaderModeActive
+                    } else if (isReaderModeAvailable || isReaderModeActive) {
+                        // Reader Mode Button: Appears ONLY when visiting a page with readable article/content
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
                                 .shadow(4.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isReaderModeActive) accentColor
-                                    else if (isReaderModeAvailable) Color(0xFF222222)
-                                    else Color(0xFF141414)
+                                    if (isReaderModeActive) accentColor else Color(0xFF222222)
                                 )
                                 .clickable {
-                                    if (isEditing) {
-                                        isEditing = false
-                                        if (queryText.isNotBlank()) onSearch(queryText.trim())
-                                    } else if (isReaderMode) {
-                                        onToggleReaderMode()
-                                    } else {
-                                        onFastAction()
-                                        onReload()
-                                    }
+                                    onToggleReaderMode()
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isReaderMode) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.Bolt,
-                                contentDescription = if (isReaderMode) "Modo Leitura" else "Ação Rápida / Recarregar",
-                                tint = if (isReaderModeActive) Color.White else if (isReaderModeAvailable) accentColor else Color.White,
+                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                contentDescription = if (isReaderModeActive) "Sair do Modo Leitura" else "Ativar Modo Leitura",
+                                tint = if (isReaderModeActive) Color.White else accentColor,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
