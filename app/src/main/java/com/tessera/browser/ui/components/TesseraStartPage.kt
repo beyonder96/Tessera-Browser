@@ -1,20 +1,21 @@
 package com.tessera.browser.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,30 +26,22 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,123 +50,74 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
-import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TesseraStartPage(
-    speedDialItems: List<SpeedDialItem>,
     activeWallpaper: WallpaperTheme,
     showWallpaper: Boolean,
-    showFavoritesBar: Boolean,
     showCatInara: Boolean,
-    showAiButton: Boolean,
     onSearch: (String) -> Unit,
-    onOpenUrl: (String) -> Unit,
-    onAddShortcut: (String, String) -> Unit,
-    onRemoveShortcut: (String) -> Unit,
+    onOpenAi: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenAi: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var showAddDialog by remember { mutableStateOf(false) }
-    var itemToDelete by remember { mutableStateOf<SpeedDialItem?>(null) }
-    val focusManager = LocalFocusManager.current
-    val scrollState = rememberScrollState()
+    var isSearchExpanded by remember { mutableStateOf(false) }
 
-    if (showAddDialog) {
-        AddShortcutDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { title, url ->
-                onAddShortcut(title, url)
-                showAddDialog = false
-            }
-        )
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Automatically request focus and open keyboard when search is expanded
+    LaunchedEffect(isSearchExpanded) {
+        if (isSearchExpanded) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        } else {
+            keyboardController?.hide()
+        }
     }
 
-    if (itemToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { itemToDelete = null },
-            title = {
-                Text(
-                    text = "Remover atalho",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text = "Deseja remover \"${itemToDelete?.title}\" da Discagem Rápida?",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 14.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        itemToDelete?.let { onRemoveShortcut(it.id) }
-                        itemToDelete = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF6B6B))
-                ) {
-                    Text("Remover", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { itemToDelete = null }) {
-                    Text("Cancelar", color = Color.White.copy(alpha = 0.65f))
-                }
-            },
-            containerColor = Color(0xF2201916),
-            shape = RoundedCornerShape(20.dp)
-        )
+    // Collapse search bar on system back press
+    BackHandler(enabled = isSearchExpanded) {
+        isSearchExpanded = false
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Dynamic Wallpaper Background
+        // Dynamic Abstract Wallpaper Background
         if (showWallpaper) {
-            if (activeWallpaper.drawableRes != null) {
-                Image(
-                    painter = painterResource(id = activeWallpaper.drawableRes),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Brush.verticalGradient(activeWallpaper.gradientColors))
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = activeWallpaper.gradientColors,
+                            radius = 1800f
+                        )
+                    )
+            )
 
-            // Ambient dark chocolate vignette overlay
+            // Deep dark ambient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0x99100D0B),
-                                Color(0x33140F0D),
-                                Color(0xDD0D0A08)
+                                Color(0x990E0B0A),
+                                Color(0x44120E0D),
+                                Color(0xDD0A0807)
                             )
                         )
                     )
@@ -187,100 +131,95 @@ fun TesseraStartPage(
             )
         }
 
-        // Main scrollable content (Top bar, favorites, speed dials, easter egg)
-        Column(
+        // Top Header Bar
+        StartPageTopBar(
+            onOpenSettings = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        )
+
+        // Center Hero: Magnifying Glass ("Lupa") or Expanded Encorpada Search Bar
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(scrollState)
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 24.dp)
+                .imePadding(),
+            contentAlignment = Alignment.Center
         ) {
-            // Top Bar
-            StartPageTopBar(
-                showAiButton = showAiButton,
-                onOpenSettings = onOpenSettings,
-                onOpenAi = onOpenAi
-            )
-
-            // Optional Favorites Bar (configured via Quick Settings)
+            // Unexpanded State: Magnifying Glass Hero Trigger in the Center
             AnimatedVisibility(
-                visible = showFavoritesBar,
-                enter = fadeIn(),
-                exit = fadeOut()
+                visible = !isSearchExpanded,
+                enter = fadeIn(tween(250)) + scaleIn(spring(stiffness = Spring.StiffnessMediumLow)),
+                exit = fadeOut(tween(200)) + scaleOut(tween(200))
             ) {
-                FavoritesBar(
-                    items = speedDialItems.take(4),
-                    onOpenUrl = onOpenUrl,
-                    modifier = Modifier.padding(top = 16.dp)
+                CentralLupaHero(
+                    accentColor = activeWallpaper.accentColor,
+                    onClick = { isSearchExpanded = true }
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Speed Dial Grid ("Discagem Rápida" with official brand icons)
-            SpeedDialSection(
-                items = speedDialItems,
-                onItemClick = onOpenUrl,
-                onItemLongClick = { itemToDelete = it },
-                onAddClick = { showAddDialog = true }
-            )
-
-            // Easter Egg: Inara the Cat (Configurações do gato)
-            if (showCatInara) {
-                Spacer(modifier = Modifier.height(28.dp))
-                InaraCatBadge()
+            // Expanded State: Encorpada Search Bar Modal in the Center
+            AnimatedVisibility(
+                visible = isSearchExpanded,
+                enter = fadeIn(tween(300)) + scaleIn(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)),
+                exit = fadeOut(tween(200)) + scaleOut(tween(200))
+            ) {
+                EncorpadaSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = {
+                        if (searchQuery.isNotBlank()) {
+                            onSearch(searchQuery.trim())
+                            isSearchExpanded = false
+                        }
+                    },
+                    onAiClick = {
+                        onOpenAi(searchQuery.trim())
+                        isSearchExpanded = false
+                    },
+                    onCollapse = { isSearchExpanded = false },
+                    accentColor = activeWallpaper.accentColor,
+                    focusRequester = focusRequester
+                )
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Opera Air Floating Bottom Search Bar (Rodapé ergonômico)
-        StartPageBottomSearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            onSearch = {
-                if (searchQuery.isNotBlank()) {
-                    focusManager.clearFocus()
-                    onSearch(searchQuery.trim())
-                }
-            },
-            onAddShortcut = { showAddDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+        // Easter Egg: Inara the Cat (Mascote)
+        if (showCatInara && !isSearchExpanded) {
+            InaraCatBadge(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 32.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun StartPageTopBar(
-    showAiButton: Boolean,
     onOpenSettings: () -> Unit,
-    onOpenAi: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left: Monogram Logo + "Discagem Rápida" tab pill
+        // Left: Tessera Monogram & Title
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Tessera monogram logo ring
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.sweepGradient(
-                            listOf(Color(0xFF26A69A), Color(0xFF64B5F6), Color(0xFF26A69A))
+                            listOf(Color(0xFF26A69A), Color(0xFF64B5F6), Color(0xFFBA68C8), Color(0xFF26A69A))
                         )
                     )
                     .padding(2.5.dp)
@@ -290,362 +229,170 @@ private fun StartPageTopBar(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(14.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF26A69A))
+                        .background(Color(0xFF64B5F6))
                 )
             }
 
-            // Tab pill "Discagem Rápida"
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .border(
-                        1.dp,
-                        Color.White.copy(alpha = 0.12f),
-                        RoundedCornerShape(18.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.GridView,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = "Discagem Rápida",
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        // Right: Settings + AI triggers
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Tessera AI Action Button
-            if (showAiButton) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.07f))
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                        .clickable(onClick = onOpenAi),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = "Tessera AI",
-                        tint = Color(0xFF64B5F6),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            // Tune / Settings Button
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.07f))
-                    .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                    .clickable(onClick = onOpenSettings),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = "Configuração fácil",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FavoritesBar(
-    items: List<SpeedDialItem>,
-    onOpenUrl: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val scrollState = rememberScrollState()
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Bookmark,
-            contentDescription = null,
-            tint = Color(0xFF64B5F6),
-            modifier = Modifier.size(16.dp)
-        )
-        items.forEach { item ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.clickable { onOpenUrl(item.url) }
-            ) {
-                ShortcutIcon(item = item, size = 16.dp)
-                Text(
-                    text = item.title,
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SpeedDialSection(
-    items: List<SpeedDialItem>,
-    onItemClick: (String) -> Unit,
-    onItemLongClick: (SpeedDialItem) -> Unit,
-    onAddClick: () -> Unit
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        maxItemsInEachRow = 4
-    ) {
-        items.forEach { item ->
-            SpeedDialTile(
-                item = item,
-                onClick = { onItemClick(item.url) },
-                onLongClick = { onItemLongClick(item) }
+            Text(
+                text = "Tessera",
+                color = Color.White.copy(alpha = 0.95f),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.5.sp
             )
         }
 
-        // Add shortcut button tile
-        AddShortcutTile(onClick = onAddClick)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SpeedDialTile(
-    item: SpeedDialItem,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    val tileShape = RoundedCornerShape(18.dp)
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(72.dp)
-            .clip(tileShape)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
+        // Right: Settings Button
         Box(
             modifier = Modifier
-                .size(60.dp)
-                .shadow(12.dp, shape = tileShape)
-                .clip(tileShape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xD9251E1A), Color(0xB3181310))
-                    )
-                )
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                    ),
-                    shape = tileShape
-                ),
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                .clickable(onClick = onOpenSettings),
             contentAlignment = Alignment.Center
         ) {
-            ShortcutIcon(item = item, size = 32.dp)
+            Icon(
+                imageVector = Icons.Rounded.Tune,
+                contentDescription = "Configuração fácil",
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(20.dp)
+            )
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = item.title,
-            color = Color.White.copy(alpha = 0.88f),
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
     }
 }
 
 @Composable
-private fun ShortcutIcon(
-    item: SpeedDialItem,
-    size: Dp = 32.dp
+private fun CentralLupaHero(
+    accentColor: Color,
+    onClick: () -> Unit
 ) {
-    if (item.iconRes != null) {
-        Image(
-            painter = painterResource(id = item.iconRes),
-            contentDescription = item.title,
-            modifier = Modifier.size(size)
-        )
-    } else if (!item.iconUrl.isNullOrBlank()) {
-        SubcomposeAsyncImage(
-            model = item.iconUrl,
-            contentDescription = item.title,
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape),
-            loading = {
-                InitialBadge(
-                    initial = item.initial,
-                    badgeColor = Color(item.badgeColor),
-                    size = size
-                )
-            },
-            error = {
-                InitialBadge(
-                    initial = item.initial,
-                    badgeColor = Color(item.badgeColor),
-                    size = size
-                )
-            }
-        )
-    } else {
-        InitialBadge(
-            initial = item.initial,
-            badgeColor = Color(item.badgeColor),
-            size = size
-        )
-    }
-}
-
-@Composable
-private fun InitialBadge(
-    initial: String?,
-    badgeColor: Color,
-    size: Dp = 32.dp
-) {
-    val letter = initial?.firstOrNull()?.uppercase() ?: "•"
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(badgeColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = letter,
-            color = Color.White,
-            fontSize = (size.value * 0.45f).sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun AddShortcutTile(onClick: () -> Unit) {
-    val tileShape = RoundedCornerShape(18.dp)
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(72.dp)
-            .clickable(onClick = onClick)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        // Tactile Central Lupa Button
         Box(
             modifier = Modifier
-                .size(60.dp)
-                .clip(tileShape)
-                .background(Color.White.copy(alpha = 0.06f))
+                .size(88.dp)
+                .shadow(
+                    elevation = 28.dp,
+                    shape = CircleShape,
+                    ambientColor = accentColor.copy(alpha = 0.4f),
+                    spotColor = accentColor.copy(alpha = 0.5f)
+                )
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x38FFFFFF),
+                            Color(0x18FFFFFF),
+                            Color(0x0CFFFFFF)
+                        )
+                    )
+                )
                 .border(
-                    width = 1.dp,
+                    width = 1.5.dp,
                     brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.04f))
+                        listOf(
+                            Color.White.copy(alpha = 0.45f),
+                            accentColor.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
                     ),
-                    shape = tileShape
+                    shape = CircleShape
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = "Adicionar atalho",
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(24.dp)
+                imageVector = Icons.Rounded.Search,
+                contentDescription = "Pesquisar",
+                tint = Color.White,
+                modifier = Modifier.size(40.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Adicionar",
-            color = Color.White.copy(alpha = 0.6f),
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
-        )
+        // Subtitle prompt pill
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.07f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 18.dp, vertical = 9.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Toque na lupa para pesquisar ou perguntar à IA",
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun StartPageBottomSearchBar(
+private fun EncorpadaSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onAddShortcut: () -> Unit,
-    modifier: Modifier = Modifier
+    onAiClick: () -> Unit,
+    onCollapse: () -> Unit,
+    accentColor: Color,
+    focusRequester: FocusRequester
 ) {
-    val pillShape = RoundedCornerShape(28.dp)
+    val barShape = RoundedCornerShape(32.dp)
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .shadow(24.dp, shape = pillShape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(pillShape)
+            .shadow(
+                elevation = 32.dp,
+                shape = barShape,
+                ambientColor = Color.Black,
+                spotColor = accentColor.copy(alpha = 0.4f)
+            )
+            .clip(barShape)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xF2221B17), Color(0xEE16110F))
+                    listOf(Color(0xF8241D19), Color(0xFA15100E))
                 )
             )
             .border(
-                width = 1.dp,
+                width = 1.5.dp,
                 brush = Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.24f),
-                        Color.White.copy(alpha = 0.05f)
+                        Color.White.copy(alpha = 0.35f),
+                        accentColor.copy(alpha = 0.3f),
+                        Color.White.copy(alpha = 0.08f)
                     )
                 ),
-                shape = pillShape
+                shape = barShape
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Search icon badge with cyan accent
+            // Search icon
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.07f)),
                 contentAlignment = Alignment.Center
@@ -653,12 +400,12 @@ private fun StartPageBottomSearchBar(
                 Icon(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "Pesquisar",
-                    tint = Color(0xFF64B5F6),
-                    modifier = Modifier.size(20.dp)
+                    tint = accentColor,
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            // Search input field
+            // Input field (Encorpado, 16sp)
             Box(
                 modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.CenterStart
@@ -666,8 +413,8 @@ private fun StartPageBottomSearchBar(
                 if (query.isEmpty()) {
                     Text(
                         text = "Pesquisar ou digitar endereço...",
-                        color = Color.White.copy(alpha = 0.42f),
-                        fontSize = 14.5.sp,
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Normal
                     )
                 }
@@ -675,24 +422,67 @@ private fun StartPageBottomSearchBar(
                 BasicTextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
                     singleLine = true,
                     textStyle = TextStyle(
                         color = Color.White,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Normal
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Medium
                     ),
-                    cursorBrush = SolidColor(Color(0xFF64B5F6)),
+                    cursorBrush = SolidColor(accentColor),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSearch() })
                 )
             }
 
-            // Actions on the right: Clear & Go if typing, or Add shortcut (+) if empty
+            // Embedded Free AI Button (DuckDuckGo AI)
+            Box(
+                modifier = Modifier
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(19.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFF00E5FF).copy(alpha = 0.18f),
+                                Color(0xFF7C4DFF).copy(alpha = 0.28f)
+                            )
+                        )
+                    )
+                    .border(
+                        1.dp,
+                        Color(0xFF00E5FF).copy(alpha = 0.45f),
+                        RoundedCornerShape(19.dp)
+                    )
+                    .clickable(onClick = onAiClick)
+                    .padding(horizontal = 11.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = "IA Gratuita",
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "IA",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Clear or Submit Actions
             if (query.isNotBlank()) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .clickable { onQueryChange("") },
                     contentAlignment = Alignment.Center
@@ -700,39 +490,40 @@ private fun StartPageBottomSearchBar(
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = "Limpar",
-                        tint = Color.White.copy(alpha = 0.6f),
+                        tint = Color.White.copy(alpha = 0.65f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF64B5F6))
+                        .background(accentColor)
                         .clickable(onClick = onSearch),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                         contentDescription = "Ir",
-                        tint = Color(0xFF0D1822),
+                        tint = Color.Black,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             } else {
+                // Collapse button when empty
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .clickable(onClick = onAddShortcut),
+                        .clickable(onClick = onCollapse),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Adicionar atalho",
-                        tint = Color.White.copy(alpha = 0.65f),
-                        modifier = Modifier.size(22.dp)
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Fechar",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -741,13 +532,13 @@ private fun StartPageBottomSearchBar(
 }
 
 @Composable
-private fun InaraCatBadge() {
+private fun InaraCatBadge(modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(20.dp))
             .background(Color(0x33CCA882))
             .border(1.dp, Color(0x66CCA882), RoundedCornerShape(20.dp))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {

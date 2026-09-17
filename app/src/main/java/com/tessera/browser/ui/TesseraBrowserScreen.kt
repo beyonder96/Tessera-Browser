@@ -93,12 +93,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         fileUploadCallback = null
     }
 
+    var isAirBarExpanded by remember { mutableStateOf(false) }
+
     // Handle back navigation:
-    // 1. If WebView has back history -> goBack()
-    // 2. Else if viewing a website -> return to Start Page
-    // 3. If already on Start Page -> system back (exit)
+    // 1. If AirBar is expanded -> collapse to minimized lupa
+    // 2. If WebView has back history -> goBack()
+    // 3. Else if viewing a website -> return to Start Page
+    // 4. If already on Start Page -> system back (exit)
     BackHandler(enabled = !state.isHomePage) {
-        if (state.canGoBack) {
+        if (isAirBarExpanded) {
+            isAirBarExpanded = false
+        } else if (state.canGoBack) {
             webViewInstance?.goBack()
         } else {
             viewModel.goHome()
@@ -125,20 +130,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             .background(Color(0xFF120E0D))
     ) {
         if (state.isHomePage) {
-            // NATIVE START PAGE / DISCAGEM RÁPIDA
+            // NATIVE START PAGE / LUPA CENTRAL
             TesseraStartPage(
-                speedDialItems = state.speedDialItems,
                 activeWallpaper = state.activeWallpaper,
                 showWallpaper = state.showWallpaper,
-                showFavoritesBar = state.showFavoritesBar,
                 showCatInara = state.showCatInara,
-                showAiButton = state.tesseraAiEnabled && state.aiToolbarButton,
                 onSearch = { query -> viewModel.openUrl(query) },
-                onOpenUrl = { url -> viewModel.openUrl(url) },
-                onAddShortcut = { title, url -> viewModel.addSpeedDialItem(title, url) },
-                onRemoveShortcut = { id -> viewModel.removeSpeedDialItem(id) },
-                onOpenSettings = { viewModel.toggleQuickSettings() },
-                onOpenAi = { viewModel.toggleQuickSettings() }
+                onOpenAi = { query -> viewModel.openAiQuery(query) },
+                onOpenSettings = { viewModel.toggleQuickSettings() }
             )
         } else {
             // WEBVIEW BROWSER VIEW
@@ -272,7 +271,21 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     }
                 )
 
-                // Floating TesseraAirBar
+                // Scrim when AirBar is expanded over web content to collapse easily
+                if (isAirBarExpanded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                isAirBarExpanded = false
+                            }
+                    )
+                }
+
+                // Floating TesseraAirBar (minimized as Lupa or expanded)
                 AnimatedVisibility(
                     visible = state.isBarVisible,
                     enter = slideInVertically(
@@ -292,10 +305,23 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         displayUrl = state.displayUrl,
                         canGoBack = state.canGoBack,
                         onBack = { webViewInstance?.goBack() },
-                        onHome = { viewModel.goHome() },
+                        onHome = {
+                            isAirBarExpanded = false
+                            viewModel.goHome()
+                        },
                         onReload = { webViewInstance?.reload() },
-                        onSearch = { query -> viewModel.openUrl(query) },
-                        onOpenSettings = { viewModel.toggleQuickSettings() }
+                        onSearch = { query ->
+                            isAirBarExpanded = false
+                            viewModel.openUrl(query)
+                        },
+                        onOpenAi = { query ->
+                            isAirBarExpanded = false
+                            viewModel.openAiQuery(query)
+                        },
+                        onOpenSettings = { viewModel.toggleQuickSettings() },
+                        isExpanded = isAirBarExpanded,
+                        onExpandedChange = { isAirBarExpanded = it },
+                        accentColor = state.activeWallpaper.accentColor
                     )
                 }
             }

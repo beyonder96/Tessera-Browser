@@ -2,7 +2,6 @@ package com.tessera.browser.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -46,8 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -454,73 +452,47 @@ private fun WallpaperCarousel(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 80.dp, height = 56.dp)
+                        .size(width = 86.dp, height = 58.dp)
                         .clip(shape)
                         .border(
                             width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.15f),
+                            color = if (isSelected) theme.accentColor else Color.White.copy(alpha = 0.15f),
                             shape = shape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (theme.drawableRes != null) {
-                        Image(
-                            painter = painterResource(id = theme.drawableRes),
-                            contentDescription = theme.name,
-                            modifier = Modifier.fillMaxWidth(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Brush.linearGradient(theme.gradientColors))
-                        )
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.linearGradient(theme.gradientColors))
+                    )
 
                     if (isSelected) {
                         Box(
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(24.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF64B5F6)),
+                                .background(theme.accentColor),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Check,
                                 contentDescription = "Selecionado",
                                 tint = Color.Black,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = theme.name,
-                    color = if (isSelected) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
+                    color = if (isSelected) theme.accentColor else Color.White.copy(alpha = 0.75f),
+                    fontSize = 11.5.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
-        }
-
-        // "+10" More wallpapers tile (as seen in screenshot 3)
-        Box(
-            modifier = Modifier
-                .size(width = 72.dp, height = 56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "+10",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

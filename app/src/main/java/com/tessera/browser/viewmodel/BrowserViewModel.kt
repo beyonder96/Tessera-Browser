@@ -23,7 +23,7 @@ data class BrowserUiState(
     val isDarkMode: Boolean = true,
     val forceDarkPages: Boolean = false,
     val showWallpaper: Boolean = true,
-    val selectedWallpaperId: String = "chocolate",
+    val selectedWallpaperId: String = "nebula",
     val showFavoritesBar: Boolean = false,
     val showCatInara: Boolean = false,
     val tesseraAiEnabled: Boolean = true,
@@ -100,6 +100,16 @@ class BrowserViewModel : ViewModel() {
                 isBarVisible = true
             )
         }
+    }
+
+    fun openAiQuery(query: String) {
+        val trimmed = query.trim()
+        val aiUrl = if (trimmed.isNotBlank()) {
+            "https://duckduckgo.com/?q=${trimmed.replace(" ", "+")}&ia=chat"
+        } else {
+            "https://duckduckgo.com/chat"
+        }
+        openUrl(aiUrl)
     }
 
     fun goHome() {

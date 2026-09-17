@@ -12,28 +12,39 @@ data class WallpaperTheme(
 
 val AvailableWallpapers = listOf(
     WallpaperTheme(
-        id = "chocolate",
-        name = "Seda Chocolate",
-        drawableRes = com.tessera.browser.R.drawable.wallpaper_chocolate_silk,
-        gradientColors = listOf(Color(0xFF241B16), Color(0xFF140F0D)),
-        accentColor = Color(0xFFCCA882)
+        id = "nebula",
+        name = "Nebulosa Cósmica",
+        gradientColors = listOf(Color(0xFF2C1654), Color(0xFF1B0B33), Color(0xFF0C0517)),
+        accentColor = Color(0xFFBA68C8)
     ),
     WallpaperTheme(
-        id = "emerald",
-        name = "Ondas Esmeralda",
-        gradientColors = listOf(Color(0xFF152A20), Color(0xFF0C1712), Color(0xFF080F0C)),
-        accentColor = Color(0xFF4CAF50)
+        id = "aurora",
+        name = "Aurora Boreal",
+        gradientColors = listOf(Color(0xFF0B3328), Color(0xFF09201A), Color(0xFF040F0C)),
+        accentColor = Color(0xFF26A69A)
     ),
     WallpaperTheme(
-        id = "ocean",
-        name = "Dunas Ciano",
-        gradientColors = listOf(Color(0xFF122233), Color(0xFF0B141E), Color(0xFF060C12)),
-        accentColor = Color(0xFF64B5F6)
+        id = "solar",
+        name = "Crepúsculo Solar",
+        gradientColors = listOf(Color(0xFF3B1F0B), Color(0xFF241005), Color(0xFF120803)),
+        accentColor = Color(0xFFFFA726)
     ),
     WallpaperTheme(
-        id = "obsidian",
-        name = "Obsidiana Pura",
-        gradientColors = listOf(Color(0xFF1A1A1E), Color(0xFF101014), Color(0xFF0A0A0C)),
-        accentColor = Color(0xFF9E9E9E)
+        id = "cyberpunk",
+        name = "Cyberpunk Neon",
+        gradientColors = listOf(Color(0xFF1E0A3C), Color(0xFF0D153A), Color(0xFF060B1E)),
+        accentColor = Color(0xFF00E5FF)
+    ),
+    WallpaperTheme(
+        id = "abyssal",
+        name = "Oceano Abissal",
+        gradientColors = listOf(Color(0xFF0B2240), Color(0xFF071426), Color(0xFF030A14)),
+        accentColor = Color(0xFF29B6F6)
+    ),
+    WallpaperTheme(
+        id = "graphite",
+        name = "Grafite Minimalista",
+        gradientColors = listOf(Color(0xFF212529), Color(0xFF16181B), Color(0xFF0D0E10)),
+        accentColor = Color(0xFFB0BEC5)
     )
 )
