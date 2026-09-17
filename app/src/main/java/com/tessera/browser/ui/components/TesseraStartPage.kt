@@ -272,78 +272,49 @@ private fun CentralLupaHero(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        // Tactile Central Lupa Button
-        Box(
-            modifier = Modifier
-                .size(88.dp)
-                .shadow(
-                    elevation = 28.dp,
-                    shape = CircleShape,
-                    ambientColor = accentColor.copy(alpha = 0.4f),
-                    spotColor = accentColor.copy(alpha = 0.5f)
-                )
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x38FFFFFF),
-                            Color(0x18FFFFFF),
-                            Color(0x0CFFFFFF)
-                        )
+    Box(
+        modifier = Modifier
+            .size(60.dp)
+            .shadow(
+                elevation = 20.dp,
+                shape = CircleShape,
+                ambientColor = Color.Black,
+                spotColor = accentColor.copy(alpha = 0.5f)
+            )
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0x35FFFFFF),
+                        Color(0x15FFFFFF),
+                        Color(0x0AFFFFFF)
                     )
                 )
-                .border(
-                    width = 1.5.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.45f),
-                            accentColor.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.08f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Pesquisar",
-                tint = Color.White,
-                modifier = Modifier.size(40.dp)
             )
-        }
-
-        // Subtitle prompt pill
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = 0.07f))
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 18.dp, vertical = 9.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Toque na lupa para pesquisar ou perguntar à IA",
-                    color = Color.White.copy(alpha = 0.78f),
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+            .border(
+                width = 1.5.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.4f),
+                        accentColor.copy(alpha = 0.4f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = "Pesquisar",
+            tint = Color.White,
+            modifier = Modifier.size(28.dp)
+        )
     }
 }
 
