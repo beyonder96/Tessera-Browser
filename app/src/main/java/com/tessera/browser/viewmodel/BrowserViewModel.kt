@@ -265,6 +265,63 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun openFromExternal(rawInput: String) {
+        val trimmed = rawInput.trim()
+        if (trimmed.isBlank()) return
+
+        val formattedUrl = formatInputAsUrl(trimmed)
+
+        // Dismiss any open modals
+        dismissAiActionModal()
+        dismissHistoryModal()
+        dismissTabsModal()
+        dismissQuickSettings()
+
+        _uiState.update { state ->
+            val currentTab = state.tabs.find { it.id == state.activeTabId }
+            if (currentTab != null && currentTab.isHomePage) {
+                // Reutiliza a aba home ativa
+                val updatedTabs = state.tabs.map { tab ->
+                    if (tab.id == state.activeTabId) {
+                        tab.copy(url = formattedUrl, isHomePage = false, title = extractDomain(formattedUrl))
+                    } else tab
+                }
+                state.copy(
+                    isHomePage = false,
+                    currentUrl = formattedUrl,
+                    displayUrl = formattedUrl,
+                    isBarVisible = true,
+                    isReaderModeActive = false,
+                    isReaderModeAvailable = false,
+                    tabs = updatedTabs,
+                    searchSuggestions = emptyList()
+                )
+            } else {
+                // Abre em uma nova aba
+                val newId = UUID.randomUUID().toString()
+                val newTab = BrowserTab(
+                    id = newId,
+                    url = formattedUrl,
+                    title = extractDomain(formattedUrl),
+                    isHomePage = false
+                )
+                state.copy(
+                    tabs = state.tabs + newTab,
+                    activeTabId = newId,
+                    isHomePage = false,
+                    currentUrl = formattedUrl,
+                    displayUrl = formattedUrl,
+                    canGoBack = false,
+                    canGoForward = false,
+                    isBarVisible = true,
+                    isReaderModeActive = false,
+                    isReaderModeAvailable = false,
+                    searchSuggestions = emptyList()
+                )
+            }
+        }
+    }
+
     fun openAiQuery(query: String) {
         val trimmed = query.trim()
         val aiUrl = if (trimmed.isNotBlank()) {

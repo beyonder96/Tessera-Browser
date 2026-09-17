@@ -102,6 +102,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
+    var lastActiveTabId by remember { mutableStateOf<String?>(null) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     val context = LocalContext.current
@@ -153,9 +154,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
     // Synchronize navigation requests from state to WebView safely
     LaunchedEffect(state.currentUrl, state.isHomePage, state.activeTabId) {
-        if (!state.isHomePage && state.currentUrl.isNotBlank() && state.currentUrl != lastLoadedUrl) {
-            lastLoadedUrl = state.currentUrl
-            webViewInstance?.loadUrl(state.currentUrl)
+        if (!state.isHomePage && state.currentUrl.isNotBlank()) {
+            if (state.currentUrl != lastLoadedUrl || state.activeTabId != lastActiveTabId) {
+                lastLoadedUrl = state.currentUrl
+                lastActiveTabId = state.activeTabId
+                webViewInstance?.loadUrl(state.currentUrl)
+            }
         }
     }
 
@@ -314,6 +318,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 ): Boolean {
                                     val urlString = request?.url?.toString() ?: return false
                                     if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
+                                        if (urlString.startsWith("intent://") || urlString.startsWith("intent:")) {
+                                            return try {
+                                                val intent = Intent.parseUri(urlString, Intent.URI_INTENT_SCHEME)
+                                                if (intent != null) {
+                                                    val packageManager = context.packageManager
+                                                    val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                                                    if (resolveInfo != null) {
+                                                        context.startActivity(intent)
+                                                        return true
+                                                    }
+                                                    val fallbackUrl = intent.getStringExtra("browser_fallback_url")
+                                                    if (!fallbackUrl.isNullOrBlank()) {
+                                                        view?.loadUrl(fallbackUrl)
+                                                        return true
+                                                    }
+                                                }
+                                                true
+                                            } catch (e: Exception) {
+                                                true
+                                            }
+                                        }
                                         return try {
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(urlString))
                                             context.startActivity(intent)
@@ -537,6 +562,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
                             loadUrl(state.currentUrl)
                             lastLoadedUrl = state.currentUrl
+                            lastActiveTabId = state.activeTabId
                             webViewInstance = this
                         }
                     },
