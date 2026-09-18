@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.LocationManager
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,16 +18,23 @@ import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
+import android.webkit.WebStorage
+import android.webkit.WebView
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.DownloadItem
+import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
+import com.tessera.browser.data.PageErrorInfo
+import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +45,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -102,6 +112,35 @@ data class HistoryEntry(
     }
 }
 
+enum class ReaderBlockType {
+    H1, H2, H3, PARAGRAPH, BLOCKQUOTE, IMAGE
+}
+
+data class ReaderBlock(
+    val type: ReaderBlockType,
+    val text: String = "",
+    val imageUrl: String? = null,
+    val caption: String? = null
+)
+
+enum class ReaderTheme {
+    LIGHT, SEPIA, DARK, AMOLED
+}
+
+enum class ReaderFontFamily {
+    SERIF, SANS_SERIF, MONOSPACE
+}
+
+data class ReaderArticle(
+    val title: String,
+    val author: String? = null,
+    val publishDate: String? = null,
+    val domain: String = "",
+    val readingTimeMinutes: Int = 1,
+    val blocks: List<ReaderBlock> = emptyList(),
+    val plainText: String = ""
+)
+
 data class BrowserUiState(
     val isHomePage: Boolean = true,
     val currentUrl: String = "https://duckduckgo.com",
@@ -114,6 +153,13 @@ data class BrowserUiState(
     val isIncognitoMode: Boolean = false,
     val isReaderModeActive: Boolean = false,
     val isReaderModeAvailable: Boolean = false,
+    val readerArticle: ReaderArticle? = null,
+    val readerFontSizeSp: Int = 18,
+    val readerTheme: ReaderTheme = ReaderTheme.SEPIA,
+    val readerFontFamily: ReaderFontFamily = ReaderFontFamily.SERIF,
+    val readerShowImages: Boolean = false,
+    val isReaderTtsPlaying: Boolean = false,
+    val isReaderSettingsOpen: Boolean = false,
 
     // Recursos Avançados (Chrome, Opera & Arc)
     val isDesktopMode: Boolean = false,
@@ -143,8 +189,27 @@ data class BrowserUiState(
     // Quick AI Actions Modal
     val showAiActionModal: Boolean = false,
 
+    // Arc Page Summary (IA Gratuita & Efeito Arc)
+    val showArcSummary: Boolean = false,
+    val isGeneratingArcSummary: Boolean = false,
+    val arcSummaryContent: String? = null,
+    val arcSummaryTitle: String = "",
+    val arcSummaryDomain: String = "",
+    val arcSummaryReadTimeSaved: Int = 1,
+    val arcSummaryError: String? = null,
+
     // AdBlocker
     val adBlockEnabled: Boolean = true,
+
+    // Mecanismo de Busca
+    val searchEngine: SearchEngine = SearchEngine.GOOGLE,
+
+    // Notificação Visual de Download
+    val activeDownloadNotice: DownloadNotice? = null,
+
+    // Erro Nativo de Página / Offline
+    val pageError: PageErrorInfo? = null,
+
 
     // Search Autocomplete & Trends
     val searchSuggestions: List<String> = emptyList(),
@@ -186,7 +251,6 @@ data class BrowserUiState(
     val selectedWallpaperId: String = "summer_villa",
     val customWallpaperUri: String? = null,
     val showFavoritesBar: Boolean = true,
-    val showCatInara: Boolean = false,
     val tesseraAiEnabled: Boolean = true,
     val aiToolbarButton: Boolean = true,
     val aiTextHighlightPrompts: Boolean = true,
@@ -240,8 +304,18 @@ data class BrowserUiState(
     )
 ) {
     val activeWallpaper: WallpaperTheme
-        get() = AvailableWallpapers.find { it.id == selectedWallpaperId }
-            ?: AvailableWallpapers.first()
+        get() {
+            if (selectedWallpaperId == "custom" && !customWallpaperUri.isNullOrBlank()) {
+                return WallpaperTheme(
+                    id = "custom",
+                    name = "Minha Foto",
+                    gradientColors = listOf(androidx.compose.ui.graphics.Color(0xFF1E1E24), androidx.compose.ui.graphics.Color(0xFF121214)),
+                    accentColor = androidx.compose.ui.graphics.Color(0xFF00E5FF)
+                )
+            }
+            return AvailableWallpapers.find { it.id == selectedWallpaperId }
+                ?: AvailableWallpapers.first()
+        }
 
     val isCurrentPageBookmarked: Boolean
         get() = speedDialItems.any { it.url.equals(displayUrl, ignoreCase = true) || it.url.equals(currentUrl, ignoreCase = true) }
@@ -255,6 +329,7 @@ class BrowserViewModel : ViewModel() {
     private var appContext: Context? = null
 
     fun openUrl(rawInput: String) {
+        stopReaderTts()
         val trimmed = rawInput.trim()
         if (trimmed.isBlank()) return
 
@@ -272,6 +347,8 @@ class BrowserViewModel : ViewModel() {
                 isBarVisible = true,
                 isReaderModeActive = false,
                 isReaderModeAvailable = false,
+                readerArticle = null,
+                isReaderSettingsOpen = false,
                 tabs = updatedTabs,
                 searchSuggestions = emptyList()
             )
@@ -368,19 +445,21 @@ class BrowserViewModel : ViewModel() {
         _uiState.update { state ->
             val updatedTabs = state.tabs.map { tab ->
                 if (tab.id == state.activeTabId) {
-                    tab.copy(isHomePage = true, url = "https://duckduckgo.com")
+                    tab.copy(isHomePage = true, url = state.searchEngine.homeUrl)
                 } else tab
             }
             state.copy(
                 isHomePage = true,
                 progress = 0f,
                 tabs = updatedTabs,
-                searchSuggestions = emptyList()
+                searchSuggestions = emptyList(),
+                pageError = null
             )
         }
     }
 
     fun onPageStarted(url: String?) {
+        stopReaderTts()
         if (!url.isNullOrBlank() && !_uiState.value.isHomePage) {
             _uiState.update { state ->
                 val updatedTabs = state.tabs.map { tab ->
@@ -391,11 +470,24 @@ class BrowserViewModel : ViewModel() {
                 state.copy(
                     currentUrl = url,
                     displayUrl = url,
-                    tabs = updatedTabs
+                    tabs = updatedTabs,
+                    isReaderModeActive = false,
+                    readerArticle = null,
+                    isReaderSettingsOpen = false,
+                    pageError = null
                 )
             }
         }
     }
+
+    fun setPageError(error: PageErrorInfo) {
+        _uiState.update { it.copy(pageError = error) }
+    }
+
+    fun clearPageError() {
+        _uiState.update { it.copy(pageError = null) }
+    }
+
 
     fun onPageFinished(url: String?, canBack: Boolean, canForward: Boolean = false, title: String? = null) {
         val effectiveUrl = url ?: _uiState.value.currentUrl
@@ -444,7 +536,11 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleReaderMode() {
-        _uiState.update { it.copy(isReaderModeActive = !it.isReaderModeActive) }
+        if (_uiState.value.isReaderModeActive) {
+            closeReaderMode()
+        } else {
+            _uiState.update { it.copy(isReaderModeActive = true) }
+        }
     }
 
     fun setReaderModeAvailable(available: Boolean) {
@@ -452,7 +548,168 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun setReaderModeActive(active: Boolean) {
+        if (!active) {
+            stopReaderTts()
+        }
         _uiState.update { it.copy(isReaderModeActive = active) }
+    }
+
+    fun setReaderArticle(article: ReaderArticle?) {
+        _uiState.update {
+            it.copy(
+                readerArticle = article,
+                isReaderModeActive = article != null
+            )
+        }
+    }
+
+    fun closeReaderMode() {
+        stopReaderTts()
+        _uiState.update {
+            it.copy(
+                isReaderModeActive = false,
+                isReaderSettingsOpen = false
+            )
+        }
+    }
+
+    fun updateReaderFontSize(delta: Int) {
+        _uiState.update {
+            val newSize = (it.readerFontSizeSp + delta).coerceIn(14, 32)
+            it.copy(readerFontSizeSp = newSize)
+        }
+        saveSettings()
+    }
+
+    fun setReaderTheme(theme: ReaderTheme) {
+        _uiState.update { it.copy(readerTheme = theme) }
+        saveSettings()
+    }
+
+    fun setReaderFontFamily(family: ReaderFontFamily) {
+        _uiState.update { it.copy(readerFontFamily = family) }
+        saveSettings()
+    }
+
+    fun toggleReaderShowImages() {
+        _uiState.update { it.copy(readerShowImages = !it.readerShowImages) }
+        saveSettings()
+    }
+
+    fun toggleReaderSettings() {
+        _uiState.update { it.copy(isReaderSettingsOpen = !it.isReaderSettingsOpen) }
+    }
+
+    // TTS (Text to Speech)
+    private var tts: TextToSpeech? = null
+    private var isTtsInitialized: Boolean = false
+
+    private fun initTts(context: Context) {
+        if (tts == null) {
+            tts = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    isTtsInitialized = true
+                    try {
+                        tts?.language = Locale.getDefault()
+                    } catch (e: Exception) {
+                        Log.e("BrowserViewModel", "Erro ao configurar idioma TTS", e)
+                    }
+                }
+            }
+        }
+    }
+
+    fun toggleReaderTts(context: Context) {
+        val article = _uiState.value.readerArticle ?: return
+        if (_uiState.value.isReaderTtsPlaying) {
+            stopReaderTts()
+        } else {
+            startReaderTts(context, article)
+        }
+    }
+
+    fun startReaderTts(context: Context, article: ReaderArticle) {
+        initTts(context)
+        val textToRead = buildString {
+            append(article.title)
+            append(". ")
+            if (!article.author.isNullOrBlank()) {
+                append("Por ").append(article.author).append(". ")
+            }
+            append(article.plainText)
+        }
+        if (textToRead.isBlank()) return
+
+        _uiState.update { it.copy(isReaderTtsPlaying = true) }
+
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                tts?.stop()
+                val chunks = textToRead.chunked(3000)
+                chunks.forEachIndexed { index, chunk ->
+                    val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                    tts?.speak(chunk, queueMode, null, "reader_chunk_$index")
+                }
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        val lastId = "reader_chunk_${chunks.size - 1}"
+                        if (utteranceId == lastId) {
+                            _uiState.update { it.copy(isReaderTtsPlaying = false) }
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        _uiState.update { it.copy(isReaderTtsPlaying = false) }
+                    }
+                })
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro no TTS", e)
+                _uiState.update { it.copy(isReaderTtsPlaying = false) }
+            }
+        }
+    }
+
+    fun stopReaderTts() {
+        try {
+            tts?.stop()
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao parar TTS", e)
+        }
+        _uiState.update { it.copy(isReaderTtsPlaying = false) }
+    }
+
+    fun speakText(context: Context, text: String) {
+        initTts(context)
+        val clean = text.replace("**", "").replace(Regex("^#+\\s*", RegexOption.MULTILINE), "").trim()
+        if (clean.isBlank()) return
+
+        _uiState.update { it.copy(isReaderTtsPlaying = true) }
+
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                tts?.stop()
+                val chunks = clean.chunked(3000)
+                chunks.forEachIndexed { index, chunk ->
+                    val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                    tts?.speak(chunk, queueMode, null, "summary_chunk_$index")
+                }
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        val lastId = "summary_chunk_${chunks.size - 1}"
+                        if (utteranceId == lastId) {
+                            _uiState.update { it.copy(isReaderTtsPlaying = false) }
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        _uiState.update { it.copy(isReaderTtsPlaying = false) }
+                    }
+                })
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro no TTS", e)
+                _uiState.update { it.copy(isReaderTtsPlaying = false) }
+            }
+        }
     }
 
     fun togglePinTab(tabId: String) {
@@ -496,6 +753,44 @@ class BrowserViewModel : ViewModel() {
 
     fun setCustomWallpaperUri(uri: String?) {
         _uiState.update { it.copy(customWallpaperUri = uri, showWallpaper = true) }
+        saveSettings()
+    }
+
+    fun importCustomWallpaper(context: Context, sourceUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(sourceUri) ?: return@launch
+                // Remove previous persistent custom wallpapers to save space
+                context.filesDir.listFiles { _, name -> name.startsWith("custom_wallpaper_") }?.forEach { it.delete() }
+
+                val file = File(context.filesDir, "custom_wallpaper_${System.currentTimeMillis()}.jpg")
+                file.outputStream().use { output ->
+                    inputStream.copyTo(output)
+                }
+                inputStream.close()
+
+                val persistentUriString = Uri.fromFile(file).toString()
+                _uiState.update {
+                    it.copy(
+                        customWallpaperUri = persistentUriString,
+                        selectedWallpaperId = "custom",
+                        showWallpaper = true
+                    )
+                }
+                saveSettings()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao importar papel de parede personalizado", e)
+            }
+        }
+    }
+
+    fun clearCustomWallpaper() {
+        _uiState.update {
+            it.copy(
+                customWallpaperUri = null,
+                selectedWallpaperId = AvailableWallpapers.first().id
+            )
+        }
         saveSettings()
     }
 
@@ -738,9 +1033,16 @@ class BrowserViewModel : ViewModel() {
                 timestamp = System.currentTimeMillis()
             )
 
+            val notice = DownloadNotice(
+                id = downloadId,
+                fileName = fileName,
+                status = DownloadStatus.RUNNING,
+                message = "Iniciando download..."
+            )
+
             _uiState.update { state ->
                 val updated = listOf(item) + state.downloads.filterNot { it.id == downloadId }
-                state.copy(downloads = updated)
+                state.copy(downloads = updated, activeDownloadNotice = notice)
             }
             saveDownloadsToPreferences(context)
             return downloadId
@@ -769,6 +1071,14 @@ class BrowserViewModel : ViewModel() {
 
                 cursor.close()
 
+                val completedItem = _uiState.value.downloads.find { it.id == downloadId }
+                val notice = DownloadNotice(
+                    id = downloadId,
+                    fileName = completedItem?.fileName ?: "Arquivo",
+                    status = status,
+                    message = if (isSuccess) "Download concluído com sucesso!" else "Falha no download"
+                )
+
                 _uiState.update { state ->
                     val updated = state.downloads.map { item ->
                         if (item.id == downloadId) {
@@ -782,7 +1092,7 @@ class BrowserViewModel : ViewModel() {
                             )
                         } else item
                     }
-                    state.copy(downloads = updated)
+                    state.copy(downloads = updated, activeDownloadNotice = notice)
                 }
                 saveDownloadsToPreferences(context)
             }
@@ -876,11 +1186,73 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun clearDownloads(context: Context?) {
-        _uiState.update { it.copy(downloads = emptyList()) }
+        _uiState.update { it.copy(downloads = emptyList(), activeDownloadNotice = null) }
         if (context != null) {
             saveDownloadsToPreferences(context)
         }
     }
+
+    fun dismissDownloadNotice() {
+        _uiState.update { it.copy(activeDownloadNotice = null) }
+    }
+
+    fun setSearchEngine(engine: SearchEngine) {
+        _uiState.update { it.copy(searchEngine = engine) }
+        saveSettings()
+    }
+
+    fun clearBrowsingData(
+        context: Context,
+        webView: WebView?,
+        clearHistory: Boolean = true,
+        clearCookies: Boolean = true,
+        clearCache: Boolean = true,
+        clearStorage: Boolean = true,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                if (clearHistory) {
+                    _uiState.update { it.copy(history = emptyList()) }
+                    saveHistory()
+                    webView?.clearHistory()
+                }
+                if (clearCache) {
+                    webView?.clearCache(true)
+                    withContext(Dispatchers.IO) {
+                        try {
+                            context.cacheDir.deleteRecursively()
+                        } catch (e: Exception) {
+                            Log.w("BrowserViewModel", "Erro ao limpar pasta de cache", e)
+                        }
+                    }
+                }
+                if (clearCookies) {
+                    try {
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.removeAllCookies {
+                            cookieManager.flush()
+                        }
+                    } catch (e: Exception) {
+                        Log.w("BrowserViewModel", "Erro ao limpar cookies", e)
+                    }
+                }
+                if (clearStorage) {
+                    try {
+                        WebStorage.getInstance().deleteAllData()
+                        webView?.clearFormData()
+                    } catch (e: Exception) {
+                        Log.w("BrowserViewModel", "Erro ao limpar WebStorage", e)
+                    }
+                }
+                onComplete()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro geral ao limpar dados de navegação", e)
+                onComplete()
+            }
+        }
+    }
+
 
     private fun loadDownloadsFromPreferences(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -951,13 +1323,26 @@ class BrowserViewModel : ViewModel() {
                 val selectedWallpaper = prefs.getString("selected_wallpaper_id", null)
                 val customWallpaper = prefs.getString("custom_wallpaper_uri", null)
                 val showFavorites = if (prefs.contains("show_favorites_bar")) prefs.getBoolean("show_favorites_bar", true) else null
-                val showCatInara = if (prefs.contains("show_cat_inara")) prefs.getBoolean("show_cat_inara", false) else null
                 val tesseraAi = if (prefs.contains("tessera_ai_enabled")) prefs.getBoolean("tessera_ai_enabled", true) else null
                 val adBlock = if (prefs.contains("ad_block_enabled")) prefs.getBoolean("ad_block_enabled", true) else null
                 val showWeather = if (prefs.contains("show_weather_widget")) prefs.getBoolean("show_weather_widget", true) else null
                 val showQuotes = if (prefs.contains("show_quotes_widget")) prefs.getBoolean("show_quotes_widget", true) else null
                 val cookieBlocker = if (prefs.contains("cookie_blocker_enabled")) prefs.getBoolean("cookie_blocker_enabled", true) else null
                 val isDesktop = if (prefs.contains("is_desktop_mode")) prefs.getBoolean("is_desktop_mode", false) else null
+                val searchEngineId = prefs.getString("search_engine_id", null)
+                val searchEngine = if (searchEngineId != null) SearchEngine.fromId(searchEngineId) else null
+
+                // Reader Mode Preferences
+                val readerFontSize = if (prefs.contains("reader_font_size")) prefs.getInt("reader_font_size", 18) else null
+                val readerThemeName = prefs.getString("reader_theme", null)
+                val readerTheme = if (readerThemeName != null) {
+                    try { ReaderTheme.valueOf(readerThemeName) } catch (e: Exception) { null }
+                } else null
+                val readerFontName = prefs.getString("reader_font_family", null)
+                val readerFont = if (readerFontName != null) {
+                    try { ReaderFontFamily.valueOf(readerFontName) } catch (e: Exception) { null }
+                } else null
+                val readerShowImages = if (prefs.contains("reader_show_images")) prefs.getBoolean("reader_show_images", false) else null
 
                 _uiState.update { current ->
                     current.copy(
@@ -969,13 +1354,17 @@ class BrowserViewModel : ViewModel() {
                         selectedWallpaperId = selectedWallpaper ?: current.selectedWallpaperId,
                         customWallpaperUri = customWallpaper ?: current.customWallpaperUri,
                         showFavoritesBar = showFavorites ?: current.showFavoritesBar,
-                        showCatInara = showCatInara ?: current.showCatInara,
                         tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
                         adBlockEnabled = adBlock ?: current.adBlockEnabled,
                         cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
                         isDesktopMode = isDesktop ?: current.isDesktopMode,
                         showWeatherWidget = showWeather ?: current.showWeatherWidget,
-                        showQuotesWidget = showQuotes ?: current.showQuotesWidget
+                        showQuotesWidget = showQuotes ?: current.showQuotesWidget,
+                        searchEngine = searchEngine ?: current.searchEngine,
+                        readerFontSizeSp = readerFontSize ?: current.readerFontSizeSp,
+                        readerTheme = readerTheme ?: current.readerTheme,
+                        readerFontFamily = readerFont ?: current.readerFontFamily,
+                        readerShowImages = readerShowImages ?: current.readerShowImages
                     )
                 }
             } catch (e: Exception) {
@@ -1029,14 +1418,19 @@ class BrowserViewModel : ViewModel() {
                     .putString("selected_wallpaper_id", s.selectedWallpaperId)
                     .putString("custom_wallpaper_uri", s.customWallpaperUri)
                     .putBoolean("show_favorites_bar", s.showFavoritesBar)
-                    .putBoolean("show_cat_inara", s.showCatInara)
                     .putBoolean("tessera_ai_enabled", s.tesseraAiEnabled)
                     .putBoolean("ad_block_enabled", s.adBlockEnabled)
                     .putBoolean("cookie_blocker_enabled", s.cookieBlockerEnabled)
                     .putBoolean("is_desktop_mode", s.isDesktopMode)
                     .putBoolean("show_weather_widget", s.showWeatherWidget)
                     .putBoolean("show_quotes_widget", s.showQuotesWidget)
+                    .putString("search_engine_id", s.searchEngine.id)
+                    .putInt("reader_font_size", s.readerFontSizeSp)
+                    .putString("reader_theme", s.readerTheme.name)
+                    .putString("reader_font_family", s.readerFontFamily.name)
+                    .putBoolean("reader_show_images", s.readerShowImages)
                     .apply()
+
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao salvar configurações", e)
             }
@@ -1117,11 +1511,133 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun browseForMe(query: String) {
-        val trimmed = query.trim()
-        if (trimmed.isBlank()) return
-        val prompt = "Navegue na web e sintetize com tópicos objetivos, respostas diretas e fontes: $trimmed"
-        val aiUrl = "https://duck.ai/?q=${URLEncoder.encode(prompt, "UTF-8")}"
-        openUrl(aiUrl)
+        // Deprecated - Navegue por mim removido da barra
+    }
+
+    // ARC PAGE SUMMARY (IA GRATUITA & EFEITO VISUAL ARC)
+    private var arcSummaryJob: Job? = null
+    private var lastSummaryTitle: String = ""
+    private var lastSummaryDomain: String = ""
+    private var lastSummaryContent: String = ""
+
+    fun requestArcSummary(title: String, domain: String, content: String) {
+        lastSummaryTitle = title
+        lastSummaryDomain = domain
+        lastSummaryContent = content
+
+        val wordCount = content.split("\\s+".toRegex()).size
+        val savedMinutes = maxOf(1, wordCount / 180)
+
+        _uiState.update {
+            it.copy(
+                showArcSummary = true,
+                isGeneratingArcSummary = true,
+                arcSummaryTitle = title.ifBlank { "Página Atual" },
+                arcSummaryDomain = domain,
+                arcSummaryReadTimeSaved = savedMinutes,
+                arcSummaryContent = null,
+                arcSummaryError = null,
+                showAiActionModal = false
+            )
+        }
+
+        arcSummaryJob?.cancel()
+        arcSummaryJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val cleanContent = if (content.length > 6000) {
+                    content.take(6000) + "..."
+                } else {
+                    content
+                }
+
+                val systemPrompt = "Você é a inteligência artificial do navegador Tessera estilo Arc Search. Resuma a página com alta precisão, elegância e foco no essencial em Português do Brasil.\n" +
+                        "Estrutura obrigatória:\n" +
+                        "1. Um parágrafo curto de Visão Geral (2 linhas).\n" +
+                        "2. De 3 a 5 pontos-chave principais, cada um iniciado por '-' e um emoji adequado (ex: '- 💡 Ponto importante...').\n" +
+                        "3. Uma conclusão curta e objetiva (1 a 2 linhas).\n" +
+                        "Evite enrolação. Use Markdown limpo."
+
+                val userPrompt = "Título: $title\nDomínio: $domain\n\nConteúdo da página:\n$cleanContent"
+
+                val messagesArr = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", systemPrompt)
+                    })
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", userPrompt)
+                    })
+                }
+
+                val reqJson = JSONObject().apply {
+                    put("messages", messagesArr)
+                    put("model", "openai")
+                    put("seed", 42)
+                }
+
+                val url = URL("https://text.pollinations.ai/")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 12000
+                    readTimeout = 25000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                    setRequestProperty("User-Agent", "TesseraBrowser/1.3.0")
+                }
+
+                val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
+                writer.write(reqJson.toString())
+                writer.flush()
+                writer.close()
+
+                val respCode = conn.responseCode
+                if (respCode in 200..299) {
+                    val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
+                    val response = reader.readText()
+                    reader.close()
+
+                    if (response.isNotBlank()) {
+                        _uiState.update {
+                            it.copy(
+                                isGeneratingArcSummary = false,
+                                arcSummaryContent = response.trim(),
+                                arcSummaryError = null
+                            )
+                        }
+                    } else {
+                        throw Exception("Resposta vazia da IA")
+                    }
+                } else {
+                    throw Exception("Erro HTTP $respCode")
+                }
+            } catch (e: Exception) {
+                Log.e("TesseraBrowser", "Falha ao gerar resumo Arc com IA", e)
+                _uiState.update {
+                    it.copy(
+                        isGeneratingArcSummary = false,
+                        arcSummaryError = "Não foi possível conectar ao assistente de IA. Verifique sua conexão e tente novamente."
+                    )
+                }
+            }
+        }
+    }
+
+    fun retryArcSummary() {
+        if (lastSummaryContent.isNotBlank()) {
+            requestArcSummary(lastSummaryTitle, lastSummaryDomain, lastSummaryContent)
+        }
+    }
+
+    fun dismissArcSummary() {
+        arcSummaryJob?.cancel()
+        stopReaderTts()
+        _uiState.update {
+            it.copy(
+                showArcSummary = false,
+                isGeneratingArcSummary = false
+            )
+        }
     }
 
     // QUICK AI ACTIONS MODAL
@@ -1145,8 +1661,8 @@ class BrowserViewModel : ViewModel() {
         suggestionJob = viewModelScope.launch(Dispatchers.IO) {
             delay(150) // Small debounce
             try {
-                val encoded = URLEncoder.encode(trimmed, "UTF-8")
-                val url = URL("https://duckduckgo.com/ac/?q=$encoded&type=list")
+                val suggestUrl = _uiState.value.searchEngine.buildSuggestUrl(trimmed)
+                val url = URL(suggestUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.connectTimeout = 3000
                 conn.readTimeout = 3000
@@ -1206,11 +1722,6 @@ class BrowserViewModel : ViewModel() {
 
     fun setShowFavoritesBar(enabled: Boolean) {
         _uiState.update { it.copy(showFavoritesBar = enabled) }
-        saveSettings()
-    }
-
-    fun setShowCatInara(enabled: Boolean) {
-        _uiState.update { it.copy(showCatInara = enabled) }
         saveSettings()
     }
 
@@ -1581,7 +2092,19 @@ class BrowserViewModel : ViewModel() {
         return when {
             rawInput.startsWith("http://") || rawInput.startsWith("https://") -> rawInput
             rawInput.contains(".") && !rawInput.contains(" ") -> "https://$rawInput"
-            else -> "https://duckduckgo.com/?q=${rawInput.replace(" ", "+")}"
+            else -> _uiState.value.searchEngine.buildSearchUrl(rawInput)
         }
+    }
+
+
+    override fun onCleared() {
+        super.onCleared()
+        stopReaderTts()
+        try {
+            tts?.shutdown()
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao finalizar TTS", e)
+        }
+        tts = null
     }
 }

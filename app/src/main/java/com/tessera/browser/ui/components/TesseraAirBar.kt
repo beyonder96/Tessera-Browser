@@ -97,7 +97,7 @@ fun TesseraAirBar(
     onSearch: (String) -> Unit,
     onQueryChange: (String) -> Unit = {},
     onOpenAi: (String) -> Unit = {},
-    onBrowseForMe: (String) -> Unit = onOpenAi,
+    onBrowseForMe: (String) -> Unit = {},
     onOpenAiAction: () -> Unit,
     onToggleBookmark: () -> Unit,
     onToggleIncognito: () -> Unit = {},
@@ -327,37 +327,6 @@ fun TesseraAirBar(
                                         tint = mutedColor,
                                         modifier = Modifier.size(17.dp)
                                     )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(Color(0xFF00E5FF).copy(alpha = 0.18f))
-                                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                                        .clickable {
-                                            isEditing = false
-                                            onBrowseForMe(queryText.trim())
-                                        }
-                                        .padding(horizontal = 9.dp, vertical = 5.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.AutoAwesome,
-                                            contentDescription = "Navegue por Mim",
-                                            tint = Color(0xFF00E5FF),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Text(
-                                            text = "Navegue por Mim",
-                                            color = if (isDarkMode) Color.White else Color(0xFF00838F),
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
                                 }
 
                                 Box(

@@ -14,6 +14,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
 import android.webkit.CookieManager
@@ -30,6 +31,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -41,7 +43,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,15 +79,26 @@ import android.print.PrintManager
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.tessera.browser.ui.components.AiActionsModal
+import com.tessera.browser.ui.components.ArcSummarySheet
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
+import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
 import com.tessera.browser.viewmodel.BrowserViewModel
+import com.tessera.browser.viewmodel.ReaderArticle
+import com.tessera.browser.viewmodel.ReaderBlock
+import com.tessera.browser.viewmodel.ReaderBlockType
+import android.webkit.WebResourceError
+import com.tessera.browser.data.PageErrorInfo
+import com.tessera.browser.ui.components.DownloadVisualBanner
+import com.tessera.browser.ui.components.TesseraOfflineErrorView
 import java.io.ByteArrayInputStream
+import org.json.JSONArray
+import org.json.JSONObject
 
 private const val MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
 private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -93,13 +108,295 @@ private val AdBlockHosts = setOf(
     "pagead2.googlesyndication.com", "adservice.google.com", "admob.com",
     "taboola.com", "outbrain.com", "popads.net", "adnxs.com", "criteo.com",
     "amazon-adsystem.com", "scorecardresearch.com", "quantserve.com",
-    "zedo.com", "advertising.com", "rubiconproject.com", "pubmatic.com"
+    "zedo.com", "advertising.com", "rubiconproject.com", "pubmatic.com",
+    "googletagservices.com", "adcolony.com", "appsflyer.com", "branch.io",
+    "chartbeat.com", "smartadserver.com", "casalemedia.com", "criteo.net",
+    "yieldmo.com", "adroll.com", "inmobi.com", "unityads.unity3d.com"
 )
 
-class TesseraWebBridge(private val onReaderExit: () -> Unit) {
+private val COSMETIC_ADBLOCK_SCRIPT = """
+    (function() {
+        var selectors = [
+            'ins.adsbygoogle', '.adsbygoogle',
+            'div[id^="google_ads"]', 'div[id^="div-gpt-ad"]',
+            '.ad-container', '.ad-box', '.ad-wrapper', '.ad-banner',
+            '.advertisement', '.advertising', '.ad-slot', '.ad_unit',
+            '[class*="sponsored-post"]', '[data-ad-unit]', '[data-ad-client]',
+            '.taboola', '.outbrain', '.trc_related_container',
+            'iframe[src*="doubleclick"]', 'iframe[src*="googleads"]',
+            'iframe[src*="amazon-adsystem"]', 'iframe[id*="google_ads"]'
+        ];
+        var style = document.getElementById('tessera-cosmetic-adblock');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'tessera-cosmetic-adblock';
+            style.textContent = selectors.join(', ') + ' { display: none !important; height: 0 !important; min-height: 0 !important; visibility: hidden !important; margin: 0 !important; padding: 0 !important; }';
+            (document.head || document.documentElement).appendChild(style);
+        }
+        selectors.forEach(function(sel) {
+            try {
+                var els = document.querySelectorAll(sel);
+                for (var i = 0; i < els.length; i++) {
+                    els[i].style.setProperty('display', 'none', 'important');
+                    els[i].style.setProperty('height', '0px', 'important');
+                    els[i].style.setProperty('visibility', 'hidden', 'important');
+                }
+            } catch (e) {}
+        });
+    })();
+""".trimIndent()
+
+
+private val READER_EXTRACTION_SCRIPT = """
+    (function() {
+        try {
+            var domain = (window.location.hostname || '').replace('www.', '');
+
+            var title = '';
+            var metaOgTitle = document.querySelector('meta[property="og:title"]');
+            var metaTwitterTitle = document.querySelector('meta[name="twitter:title"]');
+            var h1 = document.querySelector('h1');
+            if (metaOgTitle && metaOgTitle.content) {
+                title = metaOgTitle.content.trim();
+            } else if (metaTwitterTitle && metaTwitterTitle.content) {
+                title = metaTwitterTitle.content.trim();
+            } else if (h1 && (h1.innerText || '').trim().length > 5) {
+                title = h1.innerText.trim();
+            } else {
+                title = document.title || '';
+            }
+
+            var author = '';
+            var authorMeta = document.querySelector('meta[name="author"], meta[property="article:author"], meta[name="byl"]');
+            var authorEl = document.querySelector('[rel="author"], .byline, .author, .c-byline__item, .author-name, .article__author');
+            if (authorMeta && authorMeta.content) {
+                author = authorMeta.content.trim();
+            } else if (authorEl && (authorEl.innerText || '').trim()) {
+                author = authorEl.innerText.trim();
+            }
+
+            var dateStr = '';
+            var timeMeta = document.querySelector('meta[property="article:published_time"], meta[name="pubdate"], meta[name="date"]');
+            var timeEl = document.querySelector('time, [property="article:published_time"], .date, .published, .datetime');
+            if (timeMeta && timeMeta.content) {
+                dateStr = timeMeta.content.trim();
+            } else if (timeEl) {
+                dateStr = (timeEl.getAttribute('datetime') || timeEl.innerText || '').trim();
+            }
+            if (dateStr.length > 35) dateStr = dateStr.substring(0, 35);
+
+            var clone = document.body.cloneNode(true);
+
+            var unwantedSelectors = [
+                'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'nav', 'footer', 'header',
+                'form', 'button', 'input', 'select', 'textarea',
+                '.ad', '.ads', '.advertisement', '[id*="google_ads"]', '[class*="google_ads"]',
+                '[id*="banner"]', '[class*="banner"]', '.sidebar', '.widget',
+                '.share', '.social', '.share-buttons', '#comments', '.comments',
+                '.cookie-banner', '.cookie-notice', '.cookie-consent',
+                '.modal', '.popup', '[role="navigation"]', '[role="banner"]',
+                '[role="complementary"]', '[role="dialog"]', '[aria-hidden="true"]'
+            ];
+            var badNodes = clone.querySelectorAll(unwantedSelectors.join(','));
+            for (var b = 0; b < badNodes.length; b++) {
+                badNodes[b].remove();
+            }
+
+            var candidateSelectors = [
+                'article', '[itemprop="articleBody"]', 'main article', '.article-body',
+                '.post-content', '.entry-content', '.story-body', '.content-article',
+                '#article-body', '#story', '.noticia-texto', '[role="main"] article',
+                'main', '[role="main"]', '.main-content', '#main-content', '#content'
+            ];
+
+            var bestContainer = null;
+            var maxScore = 0;
+
+            for (var c = 0; c < candidateSelectors.length; c++) {
+                var el = clone.querySelector(candidateSelectors[c]);
+                if (el) {
+                    var pCount = el.querySelectorAll('p').length;
+                    var textLen = (el.innerText || '').trim().length;
+                    var score = pCount * 100 + textLen;
+                    if (score > maxScore && textLen > 150) {
+                        maxScore = score;
+                        bestContainer = el;
+                    }
+                }
+            }
+
+            if (!bestContainer) {
+                bestContainer = clone;
+            }
+
+            var blocks = [];
+            var plainTextParts = [];
+            var elements = bestContainer.querySelectorAll('h1, h2, h3, h4, p, blockquote, li, img');
+            var seenTexts = new Set();
+
+            for (var i = 0; i < elements.length; i++) {
+                var node = elements[i];
+                var tag = node.tagName.toLowerCase();
+
+                if (tag === 'img') {
+                    var src = node.getAttribute('src') || node.getAttribute('data-src') || node.getAttribute('data-lazy-src') || '';
+                    if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar') && !src.includes('pixel')) {
+                        var alt = node.getAttribute('alt') || '';
+                        blocks.push({
+                            type: 'IMAGE',
+                            text: '',
+                            imageUrl: src,
+                            caption: alt
+                        });
+                    }
+                    continue;
+                }
+
+                var text = (node.innerText || '').trim();
+                if (text.length < 15) continue;
+                if (seenTexts.has(text)) continue;
+                seenTexts.add(text);
+
+                if (tag === 'h1' && blocks.length > 0) {
+                    blocks.push({ type: 'H1', text: text });
+                    plainTextParts.push(text);
+                } else if (tag === 'h2') {
+                    blocks.push({ type: 'H2', text: text });
+                    plainTextParts.push(text);
+                } else if (tag === 'h3' || tag === 'h4') {
+                    blocks.push({ type: 'H3', text: text });
+                    plainTextParts.push(text);
+                } else if (tag === 'blockquote') {
+                    blocks.push({ type: 'BLOCKQUOTE', text: text });
+                    plainTextParts.push(text);
+                } else {
+                    blocks.push({ type: 'PARAGRAPH', text: text });
+                    plainTextParts.push(text);
+                }
+            }
+
+            if (blocks.length < 2) {
+                var paragraphs = clone.querySelectorAll('p, div');
+                for (var p = 0; p < paragraphs.length; p++) {
+                    var pel = paragraphs[p];
+                    if (pel.querySelectorAll('p').length > 0) continue;
+                    var pText = (pel.innerText || '').trim();
+                    if (pText.length > 40 && !seenTexts.has(pText)) {
+                        seenTexts.add(pText);
+                        blocks.push({ type: 'PARAGRAPH', text: pText });
+                        plainTextParts.push(pText);
+                    }
+                }
+            }
+
+            var fullText = plainTextParts.join('\n\n');
+            var words = (fullText.match(/\S+/g) || []).length;
+            var readTime = Math.max(1, Math.round(words / 200));
+
+            var articleData = {
+                title: title,
+                author: author,
+                publishDate: dateStr,
+                domain: domain,
+                readingTimeMinutes: readTime,
+                blocks: blocks,
+                plainText: fullText
+            };
+
+            if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
+                window.TesseraBridge.onArticleExtracted(JSON.stringify(articleData));
+            }
+        } catch(err) {
+            if (window.TesseraBridge && window.TesseraBridge.onExtractionFailed) {
+                window.TesseraBridge.onExtractionFailed();
+            }
+        }
+    })();
+""".trimIndent()
+
+private val SUMMARY_EXTRACTION_SCRIPT = """
+    (function() {
+        try {
+            var domain = (window.location.hostname || '').replace('www.', '');
+            var metaOgTitle = document.querySelector('meta[property="og:title"]');
+            var metaTwitter = document.querySelector('meta[name="twitter:title"]');
+            var h1 = document.querySelector('h1');
+            var title = (metaOgTitle && metaOgTitle.content) || 
+                        (metaTwitter && metaTwitter.content) || 
+                        (h1 && h1.innerText) || 
+                        document.title || '';
+
+            var clone = document.body.cloneNode(true);
+            var unwanted = clone.querySelectorAll('script, style, noscript, iframe, svg, canvas, nav, footer, header, form, button, input, .ad, .ads, [id*="google_ads"], [class*="google_ads"], .sidebar, .widget, .comments, #comments, .cookie-banner, .cookie-notice');
+            for (var i = 0; i < unwanted.length; i++) {
+                unwanted[i].remove();
+            }
+
+            var candidateSelectors = [
+                'article', '[itemprop="articleBody"]', 'main article', '.article-body',
+                '.post-content', '.entry-content', '.story-body', '.content-article',
+                '#article-body', '#story', '.noticia-texto', 'main', '#content'
+            ];
+
+            var best = null;
+            for (var c = 0; c < candidateSelectors.length; c++) {
+                var el = clone.querySelector(candidateSelectors[c]);
+                if (el && (el.innerText || '').trim().length > 180) {
+                    best = el;
+                    break;
+                }
+            }
+            if (!best) best = clone;
+
+            var text = (best.innerText || clone.innerText || '').trim();
+            text = text.replace(/\n\s*\n/g, '\n\n');
+            if (text.length > 7000) text = text.substring(0, 7000);
+
+            var payload = {
+                title: title.trim(),
+                domain: domain,
+                content: text
+            };
+
+            if (window.TesseraBridge && window.TesseraBridge.onSummaryExtracted) {
+                window.TesseraBridge.onSummaryExtracted(JSON.stringify(payload));
+            }
+        } catch(e) {
+            if (window.TesseraBridge && window.TesseraBridge.onSummaryExtracted) {
+                window.TesseraBridge.onSummaryExtracted(JSON.stringify({
+                    title: document.title || '',
+                    domain: (window.location.hostname || '').replace('www.', ''),
+                    content: (document.body.innerText || '').substring(0, 5000)
+                }));
+            }
+        }
+    })();
+""".trimIndent()
+
+class TesseraWebBridge(
+    private val onReaderExit: () -> Unit,
+    private val onArticleExtracted: (String) -> Unit,
+    private val onExtractionFailed: () -> Unit,
+    private val onSummaryExtracted: (String) -> Unit = {}
+) {
     @JavascriptInterface
     fun onReaderModeExited() {
         onReaderExit()
+    }
+
+    @JavascriptInterface
+    fun onArticleExtracted(json: String) {
+        onArticleExtracted(json)
+    }
+
+    @JavascriptInterface
+    fun onExtractionFailed() {
+        onExtractionFailed()
+    }
+
+    @JavascriptInterface
+    fun onSummaryExtracted(json: String) {
+        onSummaryExtracted(json)
     }
 }
 
@@ -192,6 +489,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         fileUploadCallback = null
     }
 
+    val wallpaperPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importCustomWallpaper(context, uri)
+        }
+    }
+
     var isAirBarExpanded by remember { mutableStateOf(false) }
     var isSearchEditing by remember { mutableStateOf(false) }
 
@@ -207,8 +512,11 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
-        if (isSearchEditing) {
+    BackHandler(enabled = state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
+        if (state.pageError != null) {
+            viewModel.clearPageError()
+            viewModel.goHome()
+        } else if (isSearchEditing) {
             isSearchEditing = false
         } else if (state.showFindInPage) {
             webViewInstance?.clearMatches()
@@ -237,6 +545,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
+
     // Scroll detector to show/hide AirBar when browsing
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -264,7 +573,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 activeWallpaper = state.activeWallpaper,
                 showWallpaper = state.showWallpaper,
                 customWallpaperUri = state.customWallpaperUri,
-                showCatInara = state.showCatInara,
                 isDarkMode = state.isDarkMode,
                 favorites = state.speedDialItems,
                 searchSuggestions = state.searchSuggestions,
@@ -345,7 +653,84 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
 
                             addJavascriptInterface(
-                                TesseraWebBridge { viewModel.setReaderModeActive(false) },
+                                TesseraWebBridge(
+                                    onReaderExit = {
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            viewModel.closeReaderMode()
+                                        }
+                                    },
+                                    onArticleExtracted = { jsonStr ->
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            try {
+                                                val json = JSONObject(jsonStr)
+                                                val title = json.optString("title", "Sem título")
+                                                val author = json.optString("author", "").takeIf { it.isNotBlank() }
+                                                val date = json.optString("publishDate", "").takeIf { it.isNotBlank() }
+                                                val domain = json.optString("domain", "")
+                                                val readTime = json.optInt("readingTimeMinutes", 1)
+                                                val plainText = json.optString("plainText", "")
+
+                                                val blocksArr = json.optJSONArray("blocks") ?: JSONArray()
+                                                val blocks = mutableListOf<ReaderBlock>()
+                                                for (i in 0 until blocksArr.length()) {
+                                                    val bObj = blocksArr.getJSONObject(i)
+                                                    val typeStr = bObj.optString("type", "PARAGRAPH")
+                                                    val type = try { ReaderBlockType.valueOf(typeStr) } catch (e: Exception) { ReaderBlockType.PARAGRAPH }
+                                                    val text = bObj.optString("text", "")
+                                                    val imgUrl = bObj.optString("imageUrl", "").takeIf { it.isNotBlank() }
+                                                    val caption = bObj.optString("caption", "").takeIf { it.isNotBlank() }
+                                                    blocks.add(ReaderBlock(type, text, imgUrl, caption))
+                                                }
+
+                                                if (blocks.isEmpty() && plainText.isBlank()) {
+                                                    Toast.makeText(context, "Não foi possível extrair texto legível desta página.", Toast.LENGTH_SHORT).show()
+                                                    viewModel.closeReaderMode()
+                                                } else {
+                                                    val article = ReaderArticle(
+                                                        title = title,
+                                                        author = author,
+                                                        publishDate = date,
+                                                        domain = domain,
+                                                        readingTimeMinutes = readTime,
+                                                        blocks = blocks,
+                                                        plainText = plainText
+                                                    )
+                                                    viewModel.setReaderArticle(article)
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("TesseraBrowser", "Erro ao processar dados do leitor", e)
+                                                Toast.makeText(context, "Falha ao processar conteúdo da página.", Toast.LENGTH_SHORT).show()
+                                                viewModel.closeReaderMode()
+                                            }
+                                        }
+                                    },
+                                    onExtractionFailed = {
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            Toast.makeText(context, "Não foi possível ativar o modo de leitura nesta página.", Toast.LENGTH_SHORT).show()
+                                            viewModel.closeReaderMode()
+                                        }
+                                    },
+                                    onSummaryExtracted = { jsonStr ->
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            try {
+                                                val json = JSONObject(jsonStr)
+                                                val title = json.optString("title", webViewInstance?.title ?: "Página Atual")
+                                                val domain = json.optString("domain", "")
+                                                val content = json.optString("content", "")
+                                                if (content.isNotBlank()) {
+                                                    viewModel.requestArcSummary(title, domain, content)
+                                                } else {
+                                                    Toast.makeText(context, "Conteúdo insuficiente para resumir.", Toast.LENGTH_SHORT).show()
+                                                    viewModel.dismissArcSummary()
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("TesseraBrowser", "Erro ao processar extração de resumo", e)
+                                                Toast.makeText(context, "Falha ao extrair texto da página.", Toast.LENGTH_SHORT).show()
+                                                viewModel.dismissArcSummary()
+                                            }
+                                        }
+                                    }
+                                ),
                                 "TesseraBridge"
                             )
 
@@ -445,6 +830,28 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     return super.shouldInterceptRequest(view, request)
                                 }
 
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?
+                                ) {
+                                    super.onReceivedError(view, request, error)
+                                    if (request?.isForMainFrame == true) {
+                                        val failingUrl = request.url?.toString() ?: ""
+                                        val errorCode = error?.errorCode ?: 0
+                                        val description = error?.description?.toString() ?: "Falha ao carregar a página"
+                                        val isOffline = errorCode == ERROR_HOST_LOOKUP || errorCode == ERROR_CONNECT || errorCode == ERROR_TIMEOUT
+                                        viewModel.setPageError(
+                                            PageErrorInfo(
+                                                url = failingUrl,
+                                                errorCode = errorCode,
+                                                description = description,
+                                                isOffline = isOffline
+                                            )
+                                        )
+                                    }
+                                }
+
                                 override fun onPageStarted(
                                     view: WebView?,
                                     url: String?,
@@ -464,6 +871,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     if (!url.isNullOrBlank()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
+
+                                        // Injeção de AdBlock Cosmético (Ocultação de espaços vazios)
+                                        if (state.adBlockEnabled) {
+                                            view?.evaluateJavascript(COSMETIC_ADBLOCK_SCRIPT, null)
+                                        }
+
 
                                         // Cookie banner blocker injection (Opera-style)
                                         if (state.cookieBlockerEnabled) {
@@ -630,7 +1043,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             // File Downloads Handler
                             setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
                                 try {
-                                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
                                     val downloadId = viewModel.enqueueDownload(
                                         context = ctx,
                                         url = url,
@@ -638,16 +1050,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         contentDisposition = contentDisposition,
                                         mimeType = mimetype
                                     )
-                                    if (downloadId != -1L) {
-                                        Toast.makeText(ctx, "Iniciando download: $fileName", Toast.LENGTH_SHORT).show()
-                                        viewModel.openDownloadsModal()
-                                    } else {
+                                    if (downloadId == -1L) {
                                         Toast.makeText(ctx, "Falha ao iniciar download", Toast.LENGTH_SHORT).show()
                                     }
                                 } catch (e: Exception) {
                                     Toast.makeText(ctx, "Falha ao iniciar download", Toast.LENGTH_SHORT).show()
                                 }
                             }
+
 
                             loadUrl(state.currentUrl)
                             lastLoadedUrl = state.currentUrl
@@ -697,215 +1107,124 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             )
         }
 
-        // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
-        AnimatedVisibility(
-            visible = state.isBarVisible,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(280)
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(280)
-            ),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-        ) {
-            TesseraAirBar(
-                progress = state.progress,
-                displayUrl = if (state.isHomePage) "" else state.displayUrl,
-                canGoBack = if (state.isHomePage) false else state.canGoBack,
-                canGoForward = if (state.isHomePage) false else state.canGoForward,
-                tabCount = state.tabs.size,
-                isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
-                isIncognito = state.isIncognitoMode,
+        // Native Offline / Network Error View
+        if (state.pageError != null && !state.isHomePage) {
+            TesseraOfflineErrorView(
+                errorInfo = state.pageError!!,
                 isDarkMode = state.isDarkMode,
-                isReaderModeActive = state.isReaderModeActive,
-                isReaderModeAvailable = state.isReaderModeAvailable,
-                favorites = state.speedDialItems,
-                searchSuggestions = state.searchSuggestions,
-                onBack = { webViewInstance?.goBack() },
-                onForward = { webViewInstance?.goForward() },
-                onHome = { viewModel.goHome() },
-                onReload = { webViewInstance?.reload() },
-                onSearch = { query -> viewModel.openUrl(query) },
-                onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
-                onOpenAi = { query -> viewModel.openAiQuery(query) },
-                onBrowseForMe = { query -> viewModel.browseForMe(query) },
-                isEditingExternal = isSearchEditing,
-                onEditingChange = { isSearchEditing = it },
-                onFastAction = {
-                    if (state.isHomePage) {
-                        viewModel.openAiQuery("")
-                    } else {
-                        webViewInstance?.reload()
-                    }
+                onRetry = {
+                    viewModel.clearPageError()
+                    webViewInstance?.reload()
                 },
-                onOpenAiAction = { viewModel.toggleAiActionModal() },
-                onToggleBookmark = {
-                    if (state.isHomePage) {
-                        viewModel.toggleHistoryModal()
-                    } else {
-                        viewModel.toggleBookmark(
-                            title = webViewInstance?.title ?: "",
-                            url = state.displayUrl
-                        )
-                    }
+                onGoHome = {
+                    viewModel.goHome()
                 },
-                onToggleIncognito = { viewModel.toggleIncognitoMode() },
-                onToggleReaderMode = {
-                    val willBeActive = !state.isReaderModeActive
-                    viewModel.toggleReaderMode()
-                    if (willBeActive) {
-                        val isDark = state.isDarkMode
-                        val js = """
-                            (function() {
-                                var existing = document.getElementById('tessera-immersive-reader');
-                                if (existing) existing.remove();
-
-                                var domain = (window.location.hostname || '').replace('www.', '');
-                                var titleEl = document.querySelector('h1, [property="og:title"], .article-title, .entry-title');
-                                var title = titleEl ? (titleEl.getAttribute('content') || titleEl.innerText || document.title) : document.title;
-
-                                var authorEl = document.querySelector('[rel="author"], .byline, .author, meta[name="author"], meta[property="article:author"]');
-                                var author = authorEl ? (authorEl.getAttribute('content') || authorEl.innerText || '').trim() : '';
-
-                                var timeEl = document.querySelector('time, [property="article:published_time"], .date, .published');
-                                var dateStr = timeEl ? (timeEl.getAttribute('datetime') || timeEl.innerText || '').trim() : '';
-                                if (dateStr.length > 35) dateStr = dateStr.substring(0, 35);
-
-                                var candidate = document.querySelector('article, [itemprop="articleBody"], main article, .article-body, .post-content, .entry-content, [role="main"] article, [role="main"]');
-                                var paragraphs = [];
-                                if (candidate) {
-                                    var nodes = candidate.querySelectorAll('h1, h2, h3, h4, p, blockquote, ul, ol, img');
-                                    for (var i = 0; i < nodes.length; i++) {
-                                        var n = nodes[i];
-                                        if (n.closest('.ad, .ads, .sidebar, .comments, #comments, nav, header, footer, .share, .social')) continue;
-                                        paragraphs.push(n.outerHTML);
-                                    }
-                                }
-                                if (paragraphs.length < 2) {
-                                    var allP = document.querySelectorAll('p');
-                                    for (var i = 0; i < allP.length; i++) {
-                                        var p = allP[i];
-                                        if ((p.innerText || '').trim().length > 35 && !p.closest('.ad, .comments, nav, footer, aside, header')) {
-                                            paragraphs.push(p.outerHTML);
-                                        }
-                                    }
-                                }
-
-                                var contentHtml = paragraphs.join('');
-                                var words = (contentHtml.replace(/<[^>]*>/g, ' ').match(/\S+/g) || []).length;
-                                var minutes = Math.max(1, Math.round(words / 200));
-
-                                var isDarkTheme = $isDark;
-                                var bg = isDarkTheme ? '#141414' : '#FBF9F5';
-                                var text = isDarkTheme ? '#E2E2E2' : '#222222';
-                                var sub = isDarkTheme ? '#9E9E9E' : '#666666';
-                                var toolbarBg = isDarkTheme ? 'rgba(26, 26, 28, 0.94)' : 'rgba(255, 255, 255, 0.94)';
-
-                                var reader = document.createElement('div');
-                                reader.id = 'tessera-immersive-reader';
-                                reader.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:' + bg + '!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;margin:0!important;padding:0!important;';
-
-                                var bylineHtml = '';
-                                if (author || dateStr) {
-                                    bylineHtml = '<div style="font-size:14px;color:' + sub + ';margin-bottom:24px;font-family:-apple-system,sans-serif;">' +
-                                        (author ? 'Por <b>' + author + '</b> ' : '') +
-                                        (dateStr ? '• ' + dateStr : '') + '</div>';
-                                }
-
-                                reader.innerHTML = '' +
-                                    '<div id="tir-toolbar" style="position:sticky;top:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:' + toolbarBg + ';backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid ' + (isDarkTheme ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)') + ';font-family:-apple-system,sans-serif;">' +
-                                    '  <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:' + sub + ';">' +
-                                    '    <span style="font-weight:700;color:' + text + ';">' + domain + '</span>' +
-                                    '    <span>•</span>' +
-                                    '    <span>' + minutes + ' min de leitura</span>' +
-                                    '  </div>' +
-                                    '  <div style="display:flex;align-items:center;gap:8px;">' +
-                                    '    <button id="tir-font-dec" style="background:none;border:1px solid ' + sub + ';color:' + text + ';border-radius:6px;padding:3px 7px;font-size:12px;font-weight:bold;cursor:pointer;">A-</button>' +
-                                    '    <button id="tir-font-inc" style="background:none;border:1px solid ' + sub + ';color:' + text + ';border-radius:6px;padding:3px 7px;font-size:13px;font-weight:bold;cursor:pointer;">A+</button>' +
-                                    '    <span id="tir-theme-light" style="width:20px;height:20px;border-radius:50%;background:#FFFFFF;border:1px solid #CCC;cursor:pointer;display:inline-block;"></span>' +
-                                    '    <span id="tir-theme-sepia" style="width:20px;height:20px;border-radius:50%;background:#F8F1E3;border:1px solid #D6C7A8;cursor:pointer;display:inline-block;"></span>' +
-                                    '    <span id="tir-theme-dark" style="width:20px;height:20px;border-radius:50%;background:#141414;border:1px solid #555;cursor:pointer;display:inline-block;"></span>' +
-                                    '    <button id="tir-exit" style="background:' + (isDarkTheme ? '#333333' : '#E8E8E8') + ';border:none;color:' + text + ';border-radius:14px;padding:5px 12px;margin-left:6px;font-size:12.5px;font-weight:600;cursor:pointer;">✕ Sair</button>' +
-                                    '  </div>' +
-                                    '</div>' +
-                                    '<div id="tir-article-container" style="max-width:680px;margin:0 auto;padding:28px 20px 90px;font-family:Georgia,Cambria,\'Times New Roman\',serif;font-size:19px;line-height:1.8;color:' + text + ';letter-spacing:0.01em;">' +
-                                    '  <h1 id="tir-title" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:28px;line-height:1.25;font-weight:800;margin-bottom:12px;color:' + text + ';">' + title + '</h1>' +
-                                    bylineHtml +
-                                    '  <div id="tir-content">' + contentHtml + '</div>' +
-                                    '</div>' +
-                                    '<style>' +
-                                    '#tir-content img { max-width:100%!important; height:auto!important; border-radius:10px!important; margin:18px 0!important; display:block!important; }' +
-                                    '#tir-content p { margin-bottom:1.55em!important; }' +
-                                    '#tir-content h2, #tir-content h3 { margin-top:1.6em!important; margin-bottom:0.6em!important; font-family:-apple-system,sans-serif!important; line-height:1.35!important; }' +
-                                    '#tir-content blockquote { border-left:4px solid #64B5F6!important; margin:1.6em 0!important; padding-left:16px!important; font-style:italic!important; opacity:0.9!important; }' +
-                                    '#tir-content a { color:#64B5F6!important; text-decoration:underline!important; }' +
-                                    '</style>';
-
-                                document.body.appendChild(reader);
-                                document.documentElement.style.overflow = 'hidden';
-
-                                var currentFontSize = 19;
-                                var container = document.getElementById('tir-article-container');
-                                document.getElementById('tir-font-inc').onclick = function() {
-                                    if (currentFontSize < 28) {
-                                        currentFontSize += 2;
-                                        container.style.fontSize = currentFontSize + 'px';
-                                    }
-                                };
-                                document.getElementById('tir-font-dec').onclick = function() {
-                                    if (currentFontSize > 14) {
-                                        currentFontSize -= 2;
-                                        container.style.fontSize = currentFontSize + 'px';
-                                    }
-                                };
-                                function applyTheme(newBg, newText, newSub, newTb) {
-                                    reader.style.backgroundColor = newBg;
-                                    container.style.color = newText;
-                                    var t = document.getElementById('tir-title');
-                                    if (t) t.style.color = newText;
-                                    var tb = document.getElementById('tir-toolbar');
-                                    if (tb) {
-                                        tb.style.backgroundColor = newTb;
-                                        tb.style.borderColor = (newBg === '#141414') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
-                                    }
-                                }
-                                document.getElementById('tir-theme-light').onclick = function() {
-                                    applyTheme('#FFFFFF', '#1A1A1A', '#666666', 'rgba(255,255,255,0.96)');
-                                };
-                                document.getElementById('tir-theme-sepia').onclick = function() {
-                                    applyTheme('#F8F1E3', '#2C2218', '#736151', 'rgba(248,241,227,0.96)');
-                                };
-                                document.getElementById('tir-theme-dark').onclick = function() {
-                                    applyTheme('#141414', '#E2E2E2', '#9E9E9E', 'rgba(26,26,28,0.96)');
-                                };
-                                document.getElementById('tir-exit').onclick = function() {
-                                    reader.remove();
-                                    document.documentElement.style.overflow = '';
-                                    if (window.TesseraBridge && window.TesseraBridge.onReaderModeExited) {
-                                        window.TesseraBridge.onReaderModeExited();
-                                    }
-                                };
-                            })();
-                        """.trimIndent()
-                        webViewInstance?.evaluateJavascript(js, null)
-                    } else {
-                        webViewInstance?.evaluateJavascript(
-                            "(function() { var el = document.getElementById('tessera-immersive-reader'); if (el) el.remove(); document.documentElement.style.overflow = ''; })()",
-                            null
-                        )
-                    }
-                },
-                onOpenTabs = { viewModel.toggleTabsModal() },
-                onOpenHistory = { viewModel.toggleHistoryModal() },
-                onOpenSettings = { viewModel.toggleQuickSettings() },
-                onOpenFavorite = { url -> viewModel.openUrl(url) },
-                accentColor = state.activeWallpaper.accentColor
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .displayCutoutPadding()
             )
         }
+
+        // Floating Bottom Container (Download Banner + AirBar)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Visual Download Notification Banner
+            DownloadVisualBanner(
+                notice = state.activeDownloadNotice,
+                isDarkMode = state.isDarkMode,
+                onOpenFile = {
+                    val noticeId = state.activeDownloadNotice?.id
+                    val item = state.downloads.find { it.id == noticeId }
+                    if (item != null) {
+                        viewModel.openDownloadedFile(context, item)
+                    } else {
+                        viewModel.openDownloadsModal()
+                    }
+                    viewModel.dismissDownloadNotice()
+                },
+                onViewDownloads = {
+                    viewModel.openDownloadsModal()
+                    viewModel.dismissDownloadNotice()
+                },
+                onDismiss = { viewModel.dismissDownloadNotice() }
+            )
+
+            // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
+            AnimatedVisibility(
+                visible = state.isBarVisible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(280)
+                ),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(280)
+                )
+            ) {
+                TesseraAirBar(
+                    progress = state.progress,
+                    displayUrl = if (state.isHomePage) "" else state.displayUrl,
+                    canGoBack = if (state.isHomePage) false else state.canGoBack,
+                    canGoForward = if (state.isHomePage) false else state.canGoForward,
+                    tabCount = state.tabs.size,
+                    isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
+                    isIncognito = state.isIncognitoMode,
+                    isDarkMode = state.isDarkMode,
+                    isReaderModeActive = state.isReaderModeActive,
+                    isReaderModeAvailable = state.isReaderModeAvailable,
+                    favorites = state.speedDialItems,
+                    searchSuggestions = state.searchSuggestions,
+                    onBack = { webViewInstance?.goBack() },
+                    onForward = { webViewInstance?.goForward() },
+                    onHome = { viewModel.goHome() },
+                    onReload = { webViewInstance?.reload() },
+                    onSearch = { query -> viewModel.openUrl(query) },
+                    onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
+                    onOpenAi = { query -> viewModel.openAiQuery(query) },
+                    onBrowseForMe = { query -> viewModel.browseForMe(query) },
+                    isEditingExternal = isSearchEditing,
+                    onEditingChange = { isSearchEditing = it },
+                    onFastAction = {
+                        if (state.isHomePage) {
+                            viewModel.openAiQuery("")
+                        } else {
+                            webViewInstance?.reload()
+                        }
+                    },
+                    onOpenAiAction = { viewModel.toggleAiActionModal() },
+                    onToggleBookmark = {
+                        if (state.isHomePage) {
+                            viewModel.toggleHistoryModal()
+                        } else {
+                            viewModel.toggleBookmark(
+                                title = webViewInstance?.title ?: "",
+                                url = state.displayUrl
+                            )
+                        }
+                    },
+                    onToggleIncognito = { viewModel.toggleIncognitoMode() },
+                    onToggleReaderMode = {
+                        if (state.isReaderModeActive) {
+                            viewModel.toggleReaderMode()
+                        } else {
+                            Toast.makeText(context, "Ativando modo leitura...", Toast.LENGTH_SHORT).show()
+                            webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
+                        }
+                    },
+                    onOpenTabs = { viewModel.toggleTabsModal() },
+                    onOpenHistory = { viewModel.toggleHistoryModal() },
+                    onOpenSettings = { viewModel.toggleQuickSettings() },
+                    onOpenFavorite = { url -> viewModel.openUrl(url) },
+                    accentColor = state.activeWallpaper.accentColor
+                )
+            }
+        }
+
 
         // TABS MODAL OVERLAY
         if (state.showTabsModal) {
@@ -1012,8 +1331,57 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         ) {
             AiActionsModal(
                 pageUrl = state.displayUrl,
-                onAction = { action -> viewModel.openAiAction(action) },
+                onAction = { action ->
+                    if (action == "summarize") {
+                        viewModel.dismissAiActionModal()
+                        if (state.isHomePage) {
+                            Toast.makeText(context, "Abra um site ou artigo para gerar um resumo com IA!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val currentTitle = webViewInstance?.title ?: ""
+                            val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                            viewModel.requestArcSummary(currentTitle, currentDomain, "Extraindo conteúdo da página...")
+                            webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                        }
+                    } else {
+                        viewModel.openAiAction(action)
+                    }
+                },
                 onDismiss = { viewModel.dismissAiActionModal() }
+            )
+        }
+
+        // ARC PAGE SUMMARY OVERLAY & SHEET
+        AnimatedVisibility(
+            visible = state.showArcSummary,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(350)
+            ),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(280)
+            ),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            ArcSummarySheet(
+                isVisible = state.showArcSummary,
+                isGenerating = state.isGeneratingArcSummary,
+                summaryText = state.arcSummaryContent,
+                pageTitle = state.arcSummaryTitle,
+                pageDomain = state.arcSummaryDomain,
+                readingTimeSavedMinutes = state.arcSummaryReadTimeSaved,
+                error = state.arcSummaryError,
+                isDarkMode = state.isDarkMode,
+                isSpeaking = state.isReaderTtsPlaying,
+                onSpeakSummary = { text -> viewModel.speakText(context, text) },
+                onStopSpeaking = { viewModel.stopReaderTts() },
+                onRetry = {
+                    val currentTitle = webViewInstance?.title ?: ""
+                    val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                    viewModel.requestArcSummary(currentTitle, currentDomain, "Recarregando...")
+                    webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                },
+                onDismiss = { viewModel.dismissArcSummary() }
             )
         }
 
@@ -1056,8 +1424,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 forceDarkPages = state.forceDarkPages,
                 showWallpaper = state.showWallpaper,
                 selectedWallpaperId = state.selectedWallpaperId,
+                customWallpaperUri = state.customWallpaperUri,
                 showFavoritesBar = state.showFavoritesBar,
-                showCatInara = state.showCatInara,
                 tesseraAiEnabled = state.tesseraAiEnabled,
                 aiToolbarButton = state.aiToolbarButton,
                 aiTextHighlightPrompts = state.aiTextHighlightPrompts,
@@ -1069,12 +1437,30 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 isWebPageActive = !state.isHomePage,
                 showWeatherWidget = state.showWeatherWidget,
                 showQuotesWidget = state.showQuotesWidget,
+                selectedSearchEngine = state.searchEngine,
+                onSearchEngineSelected = { viewModel.setSearchEngine(it) },
+                onClearBrowsingData = { clearHistory, clearCookies, clearCache ->
+                    viewModel.clearBrowsingData(
+                        context = context,
+                        webView = webViewInstance,
+                        clearHistory = clearHistory,
+                        clearCookies = clearCookies,
+                        clearCache = clearCache
+                    ) {
+                        Toast.makeText(context, "Dados de navegação limpos com sucesso!", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
+
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
                 onSelectWallpaper = { viewModel.selectWallpaper(it) },
+                onUploadWallpaper = {
+                    wallpaperPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
                 onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
-                onShowCatInaraChanged = { viewModel.setShowCatInara(it) },
                 onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
                 onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
                 onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
@@ -1114,6 +1500,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenDownloads = {
                     viewModel.dismissQuickSettings()
                     viewModel.openDownloadsModal()
+                },
+                onOpenReaderMode = {
+                    Toast.makeText(context, "Convertendo página em texto...", Toast.LENGTH_SHORT).show()
+                    webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
                 },
                 onDismiss = { viewModel.dismissQuickSettings() }
             )
@@ -1199,6 +1589,26 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+            )
+        }
+
+        // NATIVE IMMERSIVE TEXT-ONLY READER SCREEN
+        if (state.isReaderModeActive && state.readerArticle != null) {
+            TesseraReaderScreen(
+                article = state.readerArticle!!,
+                fontSizeSp = state.readerFontSizeSp,
+                theme = state.readerTheme,
+                fontFamily = state.readerFontFamily,
+                showImages = state.readerShowImages,
+                isTtsPlaying = state.isReaderTtsPlaying,
+                isSettingsOpen = state.isReaderSettingsOpen,
+                onClose = { viewModel.closeReaderMode() },
+                onToggleSettings = { viewModel.toggleReaderSettings() },
+                onUpdateFontSize = { delta -> viewModel.updateReaderFontSize(delta) },
+                onSelectTheme = { theme -> viewModel.setReaderTheme(theme) },
+                onSelectFontFamily = { family -> viewModel.setReaderFontFamily(family) },
+                onToggleShowImages = { viewModel.toggleReaderShowImages() },
+                onToggleTts = { viewModel.toggleReaderTts(context) }
             )
         }
     }

@@ -101,11 +101,13 @@ fun AiActionsModal(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Action 1: Resumo da Página
+        // Action 1: Resumo da Página Estilo Arc
         AiActionCard(
-            icon = Icons.AutoMirrored.Rounded.ShortText,
+            icon = Icons.Rounded.AutoAwesome,
             title = "Resumir Página Atual",
-            description = "Gera um resumo conciso com os pontos mais importantes do conteúdo.",
+            description = "Síntese instantânea com IA gratuita, tópicos-chave e efeito visual do Arc.",
+            badge = "Efeito Arc ✨",
+            isFeatured = true,
             onClick = { onAction("summarize") }
         )
 
@@ -115,7 +117,7 @@ fun AiActionsModal(
         AiActionCard(
             icon = Icons.Rounded.Lightbulb,
             title = "Explicar Conteúdo",
-            description = "Explica o tema do site em linguagem simples e fácil de entender.",
+            description = "Explica o tema do site em linguagem simples e didática.",
             onClick = { onAction("explain") }
         )
 
@@ -124,8 +126,8 @@ fun AiActionsModal(
         // Action 3: Chat Livre
         AiActionCard(
             icon = Icons.AutoMirrored.Rounded.Chat,
-            title = "Abrir Chat com IA",
-            description = "Faça qualquer pergunta diretamente no assistente gratuito.",
+            title = "Perguntas Livres com IA",
+            description = "Faça qualquer pergunta diretamente ao assistente gratuito.",
             onClick = { onAction("chat") }
         )
 
@@ -138,47 +140,102 @@ private fun AiActionCard(
     icon: ImageVector,
     title: String,
     description: String,
+    badge: String? = null,
+    isFeatured: Boolean = false,
     onClick: () -> Unit
 ) {
     val cardShape = RoundedCornerShape(18.dp)
+
+    val borderBrush = if (isFeatured) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF00E5FF),
+                Color(0xFF7C4DFF),
+                Color(0xFFFF4081)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))
+        )
+    }
+
+    val bgModifier = if (isFeatured) {
+        Modifier.background(
+            Brush.linearGradient(
+                listOf(
+                    Color(0xFF00E5FF).copy(alpha = 0.08f),
+                    Color(0xFF7C4DFF).copy(alpha = 0.12f)
+                )
+            )
+        )
+    } else {
+        Modifier.background(Color.White.copy(alpha = 0.06f))
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(cardShape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), cardShape)
+            .then(bgModifier)
+            .border(if (isFeatured) 1.5.dp else 1.dp, borderBrush, cardShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(
-                    Brush.horizontalGradient(
-                        listOf(Color(0xFF00E5FF).copy(alpha = 0.2f), Color(0xFF7C4DFF).copy(alpha = 0.3f))
-                    )
+                    if (isFeatured) {
+                        Brush.linearGradient(
+                            listOf(Color(0xFF00E5FF), Color(0xFF7C4DFF))
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF00E5FF).copy(alpha = 0.2f), Color(0xFF7C4DFF).copy(alpha = 0.3f))
+                        )
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFF00E5FF),
+                tint = if (isFeatured) Color.White else Color(0xFF00E5FF),
                 modifier = Modifier.size(22.dp)
             )
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = Color.White.copy(alpha = 0.95f),
-                fontSize = 14.5.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White.copy(alpha = 0.95f),
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (badge != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF00E5FF).copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = badge,
+                            color = Color(0xFF00E5FF),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             Text(
                 text = description,
                 color = Color.White.copy(alpha = 0.65f),

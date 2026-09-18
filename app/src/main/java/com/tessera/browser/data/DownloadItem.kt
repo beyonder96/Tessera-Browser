@@ -116,3 +116,12 @@ fun formatDownloadSize(bytes: Long): String {
         else -> "$bytes B"
     }
 }
+
+data class DownloadNotice(
+    val id: Long,
+    val fileName: String,
+    val status: DownloadStatus,
+    val message: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+

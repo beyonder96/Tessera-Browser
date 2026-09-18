@@ -21,7 +21,6 @@ Um navegador Android minimalista, imersivo e elegante focado em produtividade e 
   * Galeria horizontal de papéis de parede selecionáveis (Seda Chocolate, Ondas Esmeralda, Dunas Ciano e Obsidiana Pura).
   * Barra de favoritos e barra lateral configuráveis.
   * Opções dedicadas para **Tessera AI**.
-  * Easter egg do mascote: *Mostrar Inara 🐾*.
 * **Design & Layout:**
   * Suporte completo a **Edge-to-Edge** com barras do sistema transparentes.
   * Microinterações fluidas e responsivas sem bloquear a UI thread.

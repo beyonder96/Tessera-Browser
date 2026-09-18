@@ -20,46 +20,39 @@ val AvailableWallpapers = listOf(
         accentColor = Color(0xFF0288D1)
     ),
     WallpaperTheme(
-        id = "chocolate_silk",
-        name = "Seda Chocolate",
-        drawableRes = R.drawable.wallpaper_chocolate_silk,
-        gradientColors = listOf(Color(0xFF4E342E), Color(0xFF271A16), Color(0xFF120C0A)),
-        accentColor = Color(0xFFFFB74D)
-    ),
-    WallpaperTheme(
-        id = "nebula",
-        name = "Nebulosa Cósmica",
-        gradientColors = listOf(Color(0xFF2C1654), Color(0xFF1B0B33), Color(0xFF0C0517)),
-        accentColor = Color(0xFFBA68C8)
-    ),
-    WallpaperTheme(
-        id = "aurora",
-        name = "Aurora Boreal",
-        gradientColors = listOf(Color(0xFF0B3328), Color(0xFF09201A), Color(0xFF040F0C)),
-        accentColor = Color(0xFF26A69A)
-    ),
-    WallpaperTheme(
-        id = "solar",
-        name = "Crepúsculo Solar",
-        gradientColors = listOf(Color(0xFF3B1F0B), Color(0xFF241005), Color(0xFF120803)),
-        accentColor = Color(0xFFFFA726)
-    ),
-    WallpaperTheme(
-        id = "cyberpunk",
-        name = "Cyberpunk Neon",
-        gradientColors = listOf(Color(0xFF1E0A3C), Color(0xFF0D153A), Color(0xFF060B1E)),
+        id = "neon_horizon",
+        name = "Neon Horizon",
+        gradientColors = listOf(Color(0xFF240046), Color(0xFF3C096C), Color(0xFF5A189A), Color(0xFF7B2CBF)),
         accentColor = Color(0xFF00E5FF)
     ),
     WallpaperTheme(
-        id = "abyssal",
-        name = "Oceano Abissal",
-        gradientColors = listOf(Color(0xFF0B2240), Color(0xFF071426), Color(0xFF030A14)),
-        accentColor = Color(0xFF29B6F6)
+        id = "emerald_forest",
+        name = "Floresta Esmeralda",
+        gradientColors = listOf(Color(0xFF0B2E24), Color(0xFF144D3E), Color(0xFF1C6B56), Color(0xFF071F18)),
+        accentColor = Color(0xFF00E676)
     ),
     WallpaperTheme(
-        id = "graphite",
-        name = "Grafite Minimalista",
-        gradientColors = listOf(Color(0xFF212529), Color(0xFF16181B), Color(0xFF0D0E10)),
-        accentColor = Color(0xFFB0BEC5)
+        id = "violet_galaxy",
+        name = "Galáxia Violeta",
+        gradientColors = listOf(Color(0xFF180A2E), Color(0xFF2D1254), Color(0xFF4A1E8A), Color(0xFF120524)),
+        accentColor = Color(0xFFB388FF)
+    ),
+    WallpaperTheme(
+        id = "sunset_dunes",
+        name = "Duna Dourada",
+        gradientColors = listOf(Color(0xFF3E1E14), Color(0xFF5D2E1F), Color(0xFF7E3F2B), Color(0xFF2A120B)),
+        accentColor = Color(0xFFFFB74D)
+    ),
+    WallpaperTheme(
+        id = "deep_ocean",
+        name = "Oceano Profundo",
+        gradientColors = listOf(Color(0xFF071E3D), Color(0xFF0B2E5C), Color(0xFF134582), Color(0xFF030E1F)),
+        accentColor = Color(0xFF40C4FF)
+    ),
+    WallpaperTheme(
+        id = "amoled_black",
+        name = "Black AMOLED",
+        gradientColors = listOf(Color(0xFF000000), Color(0xFF0A0A0C), Color(0xFF121216), Color(0xFF000000)),
+        accentColor = Color(0xFFE0E0E0)
     )
 )

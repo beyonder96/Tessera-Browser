@@ -45,7 +45,6 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NorthWest
-import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
@@ -88,7 +87,6 @@ fun TesseraStartPage(
     activeWallpaper: WallpaperTheme,
     showWallpaper: Boolean,
     customWallpaperUri: String? = null,
-    showCatInara: Boolean,
     isDarkMode: Boolean,
     favorites: List<SpeedDialItem>,
     searchSuggestions: List<String> = emptyList(),
@@ -118,7 +116,7 @@ fun TesseraStartPage(
                     }
                     .blur(radius = 10.dp)
             ) {
-                if (!customWallpaperUri.isNullOrBlank()) {
+                if (activeWallpaper.id == "custom" && !customWallpaperUri.isNullOrBlank()) {
                     SubcomposeAsyncImage(
                         model = customWallpaperUri,
                         contentDescription = null,
@@ -202,16 +200,6 @@ fun TesseraStartPage(
             CentralBrandHero(
                 accentColor = activeWallpaper.accentColor,
                 onClick = onSearchClick
-            )
-        }
-
-        // Easter Egg: Inara the Cat
-        if (showCatInara) {
-            InaraCatBadge(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 190.dp)
             )
         }
 
@@ -414,32 +402,6 @@ private fun InitialBadge(
             color = Color.White,
             fontSize = (size.value * 0.45f).sp,
             fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun InaraCatBadge(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0x33CCA882))
-            .border(1.dp, Color(0x66CCA882), RoundedCornerShape(20.dp))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Pets,
-            contentDescription = null,
-            tint = Color(0xFFCCA882),
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text = "Inara: Ronronando e cuidando do seu browser 🐾",
-            color = Color(0xFFCCA882),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
         )
     }
 }
