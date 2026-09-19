@@ -27,6 +27,9 @@ import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
 import com.tessera.browser.data.PageErrorInfo
+import com.tessera.browser.data.TabGroup
+import com.tessera.browser.data.SiteSettings
+import com.tessera.browser.data.TranslationState
 import com.tessera.browser.data.SafeBrowsingThreatInfo
 import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SearchEngine
@@ -88,7 +91,8 @@ data class BrowserTab(
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
     val isPinned: Boolean = false,
-    val lastAccessedTimestamp: Long = System.currentTimeMillis()
+    val lastAccessedTimestamp: Long = System.currentTimeMillis(),
+    val groupId: String? = null
 )
 
 data class HistoryEntry(
@@ -175,12 +179,22 @@ data class BrowserUiState(
     val peekTitle: String? = null,
     val showPeekModal: Boolean = false,
 
-    // Multi-tabs
+    // Multi-tabs & Grupos
     val tabs: List<BrowserTab> = listOf(
         BrowserTab(id = "default-tab", url = "https://duckduckgo.com", title = "Início", isHomePage = true)
     ),
     val activeTabId: String = "default-tab",
     val showTabsModal: Boolean = false,
+    val tabGroups: List<TabGroup> = emptyList(),
+    val selectedTabGroupId: String? = null,
+
+    // Google Tradutor em Tempo Real (Inline DOM)
+    val translationState: TranslationState = TranslationState(),
+
+    // Permissões de Sites Granulares (Site Settings)
+    val showSiteSettingsModal: Boolean = false,
+    val siteSettingsOrigin: String = "",
+    val siteSettings: Map<String, SiteSettings> = emptyMap(),
 
     // History, Bookmarks & Downloads
     val history: List<HistoryEntry> = emptyList(),
@@ -483,7 +497,12 @@ class BrowserViewModel : ViewModel() {
                     isReaderModeActive = false,
                     readerArticle = null,
                     isReaderSettingsOpen = false,
-                    pageError = null
+                    pageError = null,
+                    translationState = state.translationState.copy(
+                        isBannerVisible = false,
+                        isTranslating = false,
+                        isTranslated = false
+                    )
                 )
             }
         }
@@ -923,6 +942,266 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissTabsModal() {
         _uiState.update { it.copy(showTabsModal = false) }
+    }
+
+    // TAB GROUPS SUBSYSTEM
+    fun createTabGroup(title: String, colorArgb: Long, tabIds: List<String> = emptyList()) {
+        val newGroup = TabGroup(
+            id = UUID.randomUUID().toString(),
+            title = title.ifBlank { "Grupo" },
+            colorArgb = colorArgb
+        )
+        _uiState.update { state ->
+            val updatedTabs = if (tabIds.isNotEmpty()) {
+                state.tabs.map { if (it.id in tabIds) it.copy(groupId = newGroup.id) else it }
+            } else state.tabs
+            state.copy(
+                tabGroups = state.tabGroups + newGroup,
+                tabs = updatedTabs,
+                selectedTabGroupId = newGroup.id
+            )
+        }
+        saveTabGroups()
+    }
+
+    fun updateTabGroup(group: TabGroup) {
+        _uiState.update { state ->
+            state.copy(tabGroups = state.tabGroups.map { if (it.id == group.id) group else it })
+        }
+        saveTabGroups()
+    }
+
+    fun deleteTabGroup(groupId: String, closeTabs: Boolean = false) {
+        _uiState.update { state ->
+            val updatedTabs = if (closeTabs) {
+                state.tabs.filterNot { it.groupId == groupId }
+            } else {
+                state.tabs.map { if (it.groupId == groupId) it.copy(groupId = null) else it }
+            }
+            val remainingTabs = if (updatedTabs.isEmpty()) {
+                val newId = UUID.randomUUID().toString()
+                listOf(BrowserTab(id = newId, isHomePage = true))
+            } else updatedTabs
+
+            val activeTabStillExists = remainingTabs.any { it.id == state.activeTabId }
+            val nextActiveTab = if (activeTabStillExists) state.activeTabId else remainingTabs.last().id
+            val nextActiveTabObj = remainingTabs.find { it.id == nextActiveTab } ?: remainingTabs.last()
+
+            state.copy(
+                tabGroups = state.tabGroups.filterNot { it.id == groupId },
+                tabs = remainingTabs,
+                activeTabId = nextActiveTab,
+                isHomePage = nextActiveTabObj.isHomePage,
+                currentUrl = nextActiveTabObj.url,
+                displayUrl = if (nextActiveTabObj.isHomePage) "" else nextActiveTabObj.url,
+                selectedTabGroupId = if (state.selectedTabGroupId == groupId) null else state.selectedTabGroupId
+            )
+        }
+        saveTabGroups()
+    }
+
+    fun addTabToGroup(tabId: String, groupId: String) {
+        _uiState.update { state ->
+            state.copy(
+                tabs = state.tabs.map { if (it.id == tabId) it.copy(groupId = groupId) else it }
+            )
+        }
+        saveTabGroups()
+    }
+
+    fun removeTabFromGroup(tabId: String) {
+        _uiState.update { state ->
+            state.copy(
+                tabs = state.tabs.map { if (it.id == tabId) it.copy(groupId = null) else it }
+            )
+        }
+        saveTabGroups()
+    }
+
+    fun toggleGroupCollapsed(groupId: String) {
+        _uiState.update { state ->
+            state.copy(
+                tabGroups = state.tabGroups.map {
+                    if (it.id == groupId) it.copy(isCollapsed = !it.isCollapsed) else it
+                }
+            )
+        }
+        saveTabGroups()
+    }
+
+    fun setSelectedTabGroupId(groupId: String?) {
+        _uiState.update { it.copy(selectedTabGroupId = groupId) }
+    }
+
+    // SITE SETTINGS & PERMISSIONS SUBSYSTEM
+    private fun extractOrigin(raw: String): String {
+        return try {
+            val parsed = Uri.parse(if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "https://$raw")
+            val host = parsed.host ?: raw
+            if (host.startsWith("www.")) host.substring(4) else host
+        } catch (e: Exception) {
+            raw.replace("https://", "").replace("http://", "").split("/").firstOrNull()?.let {
+                if (it.startsWith("www.")) it.substring(4) else it
+            } ?: raw
+        }
+    }
+
+    fun openSiteSettings(origin: String) {
+        val cleanOrigin = extractOrigin(origin)
+        val current = _uiState.value.siteSettings[cleanOrigin] ?: SiteSettings(origin = cleanOrigin)
+        val updatedMap = _uiState.value.siteSettings.toMutableMap()
+        updatedMap[cleanOrigin] = current
+        _uiState.update {
+            it.copy(
+                showSiteSettingsModal = true,
+                siteSettingsOrigin = cleanOrigin,
+                siteSettings = updatedMap
+            )
+        }
+    }
+
+    fun dismissSiteSettings() {
+        _uiState.update { it.copy(showSiteSettingsModal = false) }
+    }
+
+    fun getSiteSettings(origin: String): SiteSettings {
+        val clean = extractOrigin(origin)
+        return _uiState.value.siteSettings[clean] ?: SiteSettings(origin = clean)
+    }
+
+    fun updateSitePermission(origin: String, update: (SiteSettings) -> SiteSettings) {
+        val clean = extractOrigin(origin)
+        val current = _uiState.value.siteSettings[clean] ?: SiteSettings(origin = clean)
+        val newSettings = update(current).copy(lastModified = System.currentTimeMillis())
+        _uiState.update { state ->
+            val updated = state.siteSettings.toMutableMap()
+            updated[clean] = newSettings
+            state.copy(siteSettings = updated)
+        }
+        saveSiteSettings()
+    }
+
+    fun clearSiteData(
+        context: Context,
+        origin: String,
+        webView: WebView?,
+        onComplete: () -> Unit = {}
+    ) {
+        val clean = extractOrigin(origin)
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                // 1. Delete WebStorage for this origin
+                try {
+                    WebStorage.getInstance().deleteOrigin(origin)
+                    WebStorage.getInstance().deleteOrigin(clean)
+                    if (!origin.startsWith("http")) {
+                        WebStorage.getInstance().deleteOrigin("https://$clean")
+                        WebStorage.getInstance().deleteOrigin("http://$clean")
+                    }
+                } catch (e: Exception) {
+                    Log.w("BrowserViewModel", "Erro ao deletar origin WebStorage", e)
+                }
+
+                // 2. Clear cookies for this host/origin
+                try {
+                    val cookieManager = CookieManager.getInstance()
+                    val cookieString = cookieManager.getCookie(origin) ?: cookieManager.getCookie(clean)
+                    if (!cookieString.isNullOrBlank()) {
+                        val cookies = cookieString.split(";")
+                        for (cookie in cookies) {
+                            val parts = cookie.split("=")
+                            if (parts.isNotEmpty()) {
+                                val name = parts[0].trim()
+                                cookieManager.setCookie(origin, "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+                                cookieManager.setCookie(clean, "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+                            }
+                        }
+                        cookieManager.flush()
+                    }
+                } catch (e: Exception) {
+                    Log.w("BrowserViewModel", "Erro ao limpar cookies do site", e)
+                }
+
+                // 3. Clear permission state for origin
+                _uiState.update { state ->
+                    val resetSettings = SiteSettings(origin = clean)
+                    val updated = state.siteSettings.toMutableMap()
+                    updated[clean] = resetSettings
+                    state.copy(siteSettings = updated)
+                }
+                saveSiteSettings()
+
+                // 4. Reload if current page matches this origin
+                if (extractOrigin(_uiState.value.currentUrl) == clean) {
+                    webView?.reload()
+                }
+
+                Toast.makeText(context, "Dados de $clean limpos com sucesso", Toast.LENGTH_SHORT).show()
+                onComplete()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao limpar dados do site $clean", e)
+                onComplete()
+            }
+        }
+    }
+
+    // GOOGLE REAL-TIME DOM TRANSLATION SUBSYSTEM
+    fun onPageLanguageDetected(lang: String, url: String) {
+        val cleanLang = lang.trim().lowercase()
+        if (cleanLang.isBlank() || cleanLang.startsWith("pt") || !url.startsWith("http")) {
+            if (_uiState.value.translationState.isBannerVisible && !_uiState.value.translationState.isTranslated) {
+                _uiState.update { it.copy(translationState = it.translationState.copy(isBannerVisible = false)) }
+            }
+            return
+        }
+
+        val langName = TranslationState.getLanguageDisplayName(cleanLang)
+        _uiState.update { state ->
+            state.copy(
+                translationState = state.translationState.copy(
+                    isBannerVisible = true,
+                    detectedLanguageCode = cleanLang,
+                    detectedLanguageName = langName,
+                    targetLanguageCode = "pt",
+                    targetLanguageName = "Português",
+                    isTranslating = false,
+                    isTranslated = false
+                )
+            )
+        }
+    }
+
+    fun showTranslationBanner(force: Boolean = true) {
+        _uiState.update { state ->
+            val detected = state.translationState.detectedLanguageCode.ifBlank { "en" }
+            val detectedName = TranslationState.getLanguageDisplayName(detected)
+            state.copy(
+                translationState = state.translationState.copy(
+                    isBannerVisible = true,
+                    detectedLanguageCode = detected,
+                    detectedLanguageName = detectedName,
+                    targetLanguageCode = "pt",
+                    targetLanguageName = "Português"
+                )
+            )
+        }
+    }
+
+    fun dismissTranslationBanner() {
+        _uiState.update { state ->
+            state.copy(translationState = state.translationState.copy(isBannerVisible = false))
+        }
+    }
+
+    fun setTranslationProgress(isTranslating: Boolean, isTranslated: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                translationState = state.translationState.copy(
+                    isTranslating = isTranslating,
+                    isTranslated = isTranslated
+                )
+            )
+        }
     }
 
     // HISTORY & BOOKMARKS MANAGEMENT
@@ -1476,11 +1755,36 @@ class BrowserViewModel : ViewModel() {
                     list
                 } else null
 
+                // Tab Groups
+                val groupsJson = prefs.getString("tab_groups_list", null)
+                val loadedGroups = if (!groupsJson.isNullOrBlank()) {
+                    val arr = JSONArray(groupsJson)
+                    val list = mutableListOf<TabGroup>()
+                    for (i in 0 until arr.length()) {
+                        list.add(TabGroup.fromJson(arr.getJSONObject(i)))
+                    }
+                    list
+                } else null
+
+                // Site Settings
+                val siteSettingsJson = prefs.getString("site_settings_list", null)
+                val loadedSiteSettings = if (!siteSettingsJson.isNullOrBlank()) {
+                    val arr = JSONArray(siteSettingsJson)
+                    val map = mutableMapOf<String, SiteSettings>()
+                    for (i in 0 until arr.length()) {
+                        val s = SiteSettings.fromJson(arr.getJSONObject(i))
+                        map[s.origin] = s
+                    }
+                    map
+                } else null
+
                 _uiState.update { current ->
                     current.copy(
                         speedDialItems = loadedBookmarks ?: current.speedDialItems,
                         history = loadedHistory ?: current.history,
                         savedPages = loadedSavedPages ?: current.savedPages,
+                        tabGroups = loadedGroups ?: current.tabGroups,
+                        siteSettings = loadedSiteSettings ?: current.siteSettings,
                         isDarkMode = isDark ?: current.isDarkMode,
                         forceDarkPages = forceDark ?: current.forceDarkPages,
                         showWallpaper = showWallpaper ?: current.showWallpaper,
@@ -1502,6 +1806,38 @@ class BrowserViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao carregar preferências", e)
+            }
+        }
+    }
+
+    private fun saveTabGroups() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.tabGroups.forEach { group ->
+                    arr.put(group.toJson())
+                }
+                prefs.edit().putString("tab_groups_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar grupos de abas", e)
+            }
+        }
+    }
+
+    private fun saveSiteSettings() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.siteSettings.values.forEach { settings ->
+                    arr.put(settings.toJson())
+                }
+                prefs.edit().putString("site_settings_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar permissões de sites", e)
             }
         }
     }

@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -62,6 +63,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,19 +91,24 @@ import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
 import com.tessera.browser.ui.components.SafeBrowsingWarningView
+import com.tessera.browser.ui.components.SiteSettingsModal
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
+import com.tessera.browser.ui.components.TranslateBar
 import com.tessera.browser.viewmodel.BrowserViewModel
 import com.tessera.browser.viewmodel.ReaderArticle
 import com.tessera.browser.viewmodel.ReaderBlock
 import com.tessera.browser.viewmodel.ReaderBlockType
+import android.webkit.PermissionRequest
 import android.webkit.WebResourceError
 import com.tessera.browser.data.PageErrorInfo
 import com.tessera.browser.ui.components.DownloadVisualBanner
 import com.tessera.browser.ui.components.TesseraOfflineErrorView
 import java.io.ByteArrayInputStream
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -416,6 +423,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     var safeBrowsingCallback by remember { mutableStateOf<SafeBrowsingResponse?>(null) }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     // Request POST_NOTIFICATIONS on Android 13+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -530,7 +538,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
@@ -552,6 +560,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             customView = null
             customViewCallback = null
             viewModel.setFullscreenVideo(false)
+        } else if (state.showSiteSettingsModal) {
+            viewModel.dismissSiteSettings()
+        } else if (state.translationState.isBannerVisible) {
+            viewModel.dismissTranslationBanner()
         } else if (state.showQuickSettings) {
             viewModel.dismissQuickSettings()
         } else if (state.showTabsModal) {
@@ -977,6 +989,25 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             val isAvailable = result?.replace("\"", "")?.trim() == "true"
                                             viewModel.setReaderModeAvailable(isAvailable)
                                         }
+
+                                        // Detect Foreign Language for Real-Time Google Translation
+                                        view?.evaluateJavascript(
+                                            """
+                                            (function() {
+                                                var l = (document.documentElement.lang || (document.body && document.body.parentElement ? document.body.parentElement.lang : '') || '').trim().toLowerCase();
+                                                if (!l) {
+                                                    var meta = document.querySelector('meta[http-equiv="content-language"], meta[name="language"]');
+                                                    if (meta && meta.content) l = meta.content.trim().toLowerCase();
+                                                }
+                                                return l;
+                                            })()
+                                            """.trimIndent()
+                                        ) { langResult ->
+                                            val detected = langResult?.replace("\"", "")?.trim()?.lowercase() ?: ""
+                                            if (detected.isNotBlank() && detected != "null" && url != null) {
+                                                viewModel.onPageLanguageDetected(detected, url)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1038,18 +1069,82 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     origin: String?,
                                     callback: GeolocationPermissions.Callback?
                                 ) {
+                                    val safeOrigin = origin ?: ""
+                                    val siteSetting = viewModel.getSiteSettings(safeOrigin)
+                                    if (siteSetting.locationConfigured) {
+                                        callback?.invoke(origin, siteSetting.locationGranted, true)
+                                        return
+                                    }
+
                                     AlertDialog.Builder(context)
                                         .setTitle("Permissão de Localização")
-                                        .setMessage("$origin gostaria de acessar sua localização.")
+                                        .setMessage("$safeOrigin gostaria de acessar sua localização.")
                                         .setPositiveButton("Permitir") { _, _ ->
+                                            viewModel.updateSitePermission(safeOrigin) {
+                                                it.copy(locationGranted = true, locationConfigured = true)
+                                            }
                                             callback?.invoke(origin, true, true)
                                         }
                                         .setNegativeButton("Bloquear") { _, _ ->
+                                            viewModel.updateSitePermission(safeOrigin) {
+                                                it.copy(locationGranted = false, locationConfigured = true)
+                                            }
                                             callback?.invoke(origin, false, false)
                                         }
                                         .setOnCancelListener {
                                             callback?.invoke(origin, false, false)
                                         }
+                                        .show()
+                                }
+
+                                override fun onPermissionRequest(request: PermissionRequest?) {
+                                    if (request == null) return
+                                    val reqOrigin = request.origin?.toString() ?: ""
+                                    val cleanReqOrigin = try { java.net.URI(reqOrigin).host ?: reqOrigin } catch (e: Exception) { reqOrigin }
+                                    val currentSetting = viewModel.getSiteSettings(cleanReqOrigin)
+
+                                    val needsAudio = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                                    val needsVideo = request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+
+                                    if ((needsAudio && currentSetting.micConfigured) || (needsVideo && currentSetting.cameraConfigured)) {
+                                        val grantedResources = mutableListOf<String>()
+                                        if (needsAudio && currentSetting.micGranted) grantedResources.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                                        if (needsVideo && currentSetting.cameraGranted) grantedResources.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+
+                                        if (grantedResources.isNotEmpty()) {
+                                            request.grant(grantedResources.toTypedArray())
+                                        } else {
+                                            request.deny()
+                                        }
+                                        return
+                                    }
+
+                                    AlertDialog.Builder(context)
+                                        .setTitle("Permissão de Câmera/Microfone")
+                                        .setMessage("$cleanReqOrigin gostaria de acessar seus dispositivos de áudio/vídeo.")
+                                        .setPositiveButton("Permitir") { _, _ ->
+                                            viewModel.updateSitePermission(cleanReqOrigin) {
+                                                it.copy(
+                                                    cameraGranted = true,
+                                                    cameraConfigured = true,
+                                                    micGranted = true,
+                                                    micConfigured = true
+                                                )
+                                            }
+                                            request.grant(request.resources)
+                                        }
+                                        .setNegativeButton("Bloquear") { _, _ ->
+                                            viewModel.updateSitePermission(cleanReqOrigin) {
+                                                it.copy(
+                                                    cameraGranted = false,
+                                                    cameraConfigured = true,
+                                                    micGranted = false,
+                                                    micConfigured = true
+                                                )
+                                            }
+                                            request.deny()
+                                        }
+                                        .setOnCancelListener { request.deny() }
                                         .show()
                                 }
 
@@ -1203,64 +1298,165 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     animationSpec = tween(280)
                 )
             ) {
-                TesseraAirBar(
-                    progress = state.progress,
-                    displayUrl = if (state.isHomePage) "" else state.displayUrl,
-                    canGoBack = if (state.isHomePage) false else state.canGoBack,
-                    canGoForward = if (state.isHomePage) false else state.canGoForward,
-                    tabCount = state.tabs.size,
-                    isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
-                    isIncognito = state.isIncognitoMode,
-                    isDarkMode = state.isDarkMode,
-                    isReaderModeActive = state.isReaderModeActive,
-                    isReaderModeAvailable = state.isReaderModeAvailable,
-                    favorites = state.speedDialItems,
-                    searchSuggestions = state.searchSuggestions,
-                    onBack = { webViewInstance?.goBack() },
-                    onForward = { webViewInstance?.goForward() },
-                    onHome = { viewModel.goHome() },
-                    onReload = { webViewInstance?.reload() },
-                    onSearch = { query -> viewModel.openUrl(query) },
-                    onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
-                    onOpenAi = { query -> viewModel.openAiQuery(query) },
-                    onBrowseForMe = { query -> viewModel.browseForMe(query) },
-                    isEditingExternal = isSearchEditing,
-                    onEditingChange = { isSearchEditing = it },
-                    onFastAction = {
-                        if (state.isHomePage) {
-                            viewModel.openAiQuery("")
-                        } else {
-                            webViewInstance?.reload()
-                        }
-                    },
-                    onOpenAiAction = { viewModel.toggleAiActionModal() },
-                    onToggleBookmark = {
-                        if (state.isHomePage) {
-                            viewModel.toggleHistoryModal()
-                        } else {
-                            viewModel.toggleBookmark(
-                                title = webViewInstance?.title ?: "",
-                                url = state.displayUrl
-                            )
-                        }
-                    },
-                    onToggleIncognito = { viewModel.toggleIncognitoMode() },
-                    onToggleReaderMode = {
-                        if (state.isReaderModeActive) {
-                            viewModel.toggleReaderMode()
-                        } else {
-                            Toast.makeText(context, "Ativando modo leitura...", Toast.LENGTH_SHORT).show()
-                            webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
-                        }
-                    },
-                    onOpenTabs = { viewModel.toggleTabsModal() },
-                    onOpenHistory = { viewModel.toggleHistoryModal() },
-                    onOpenSettings = { viewModel.toggleQuickSettings() },
-                    onOpenFavorite = { url -> viewModel.openUrl(url) },
-                    onNextTab = { viewModel.selectNextTab() },
-                    onPreviousTab = { viewModel.selectPreviousTab() },
-                    accentColor = state.activeWallpaper.accentColor
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // GOOGLE REAL-TIME INLINE DOM TRANSLATE BAR
+                    if (!state.isHomePage && state.translationState.isBannerVisible) {
+                        TranslateBar(
+                            state = state.translationState,
+                            isDarkMode = state.isDarkMode,
+                            accentColor = state.activeWallpaper.accentColor,
+                            onTranslate = {
+                                viewModel.setTranslationProgress(isTranslating = true, isTranslated = false)
+                                webViewInstance?.evaluateJavascript(
+                                    """
+                                    (function() {
+                                        function doTranslate() {
+                                            var combo = document.querySelector('.goog-te-combo');
+                                            if (combo) {
+                                                combo.value = 'pt';
+                                                combo.dispatchEvent(new Event('change'));
+                                                return true;
+                                            }
+                                            return false;
+                                        }
+                                        if (doTranslate()) return;
+
+                                        document.cookie = 'googtrans=/auto/pt; path=/; domain=' + window.location.hostname;
+                                        document.cookie = 'googtrans=/auto/pt; path=/;';
+
+                                        var hideStyle = document.getElementById('tessera-translate-style');
+                                        if (!hideStyle) {
+                                            hideStyle = document.createElement('style');
+                                            hideStyle.id = 'tessera-translate-style';
+                                            hideStyle.textContent = '.goog-te-banner-frame, .skiptranslate, #goog-gt-tt, .goog-te-balloon-frame { display: none !important; } body { top: 0px !important; }';
+                                            (document.head || document.documentElement).appendChild(hideStyle);
+                                        }
+
+                                        window.googleTranslateElementInit = function() {
+                                            new google.translate.TranslateElement({
+                                                pageLanguage: 'auto',
+                                                includedLanguages: 'pt,en,es,fr,de,it,ja,zh-CN,ru',
+                                                autoDisplay: false
+                                            }, 'google_translate_element');
+                                            setTimeout(function() {
+                                                doTranslate();
+                                            }, 400);
+                                        };
+
+                                        var elem = document.getElementById('google_translate_element');
+                                        if (!elem) {
+                                            elem = document.createElement('div');
+                                            elem.id = 'google_translate_element';
+                                            elem.style.display = 'none';
+                                            (document.body || document.documentElement).appendChild(elem);
+                                        }
+
+                                        var s = document.createElement('script');
+                                        s.type = 'text/javascript';
+                                        s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+                                        (document.head || document.documentElement).appendChild(s);
+                                    })();
+                                    """.trimIndent(),
+                                    null
+                                )
+                                coroutineScope.launch {
+                                    delay(1200)
+                                    viewModel.setTranslationProgress(isTranslating = false, isTranslated = true)
+                                }
+                            },
+                            onRevert = {
+                                viewModel.setTranslationProgress(isTranslating = false, isTranslated = false)
+                                webViewInstance?.evaluateJavascript(
+                                    """
+                                    (function() {
+                                        document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=' + window.location.hostname;
+                                        document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                                        var combo = document.querySelector('.goog-te-combo');
+                                        if (combo) {
+                                            combo.value = '';
+                                            combo.dispatchEvent(new Event('change'));
+                                        }
+                                        var frame = document.querySelector('iframe.goog-te-banner-frame');
+                                        if (frame) {
+                                            try {
+                                                var doc = frame.contentDocument || frame.contentWindow.document;
+                                                var btn = doc.querySelector('.goog-te-banner-frame button');
+                                                if (btn) btn.click();
+                                            } catch(e) {}
+                                        }
+                                    })();
+                                    """.trimIndent(),
+                                    null
+                                )
+                            },
+                            onDismiss = { viewModel.dismissTranslationBanner() },
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+
+                    TesseraAirBar(
+                        progress = state.progress,
+                        displayUrl = if (state.isHomePage) "" else state.displayUrl,
+                        canGoBack = if (state.isHomePage) false else state.canGoBack,
+                        canGoForward = if (state.isHomePage) false else state.canGoForward,
+                        tabCount = state.tabs.size,
+                        isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
+                        isIncognito = state.isIncognitoMode,
+                        isDarkMode = state.isDarkMode,
+                        isReaderModeActive = state.isReaderModeActive,
+                        isReaderModeAvailable = state.isReaderModeAvailable,
+                        favorites = state.speedDialItems,
+                        searchSuggestions = state.searchSuggestions,
+                        onBack = { webViewInstance?.goBack() },
+                        onForward = { webViewInstance?.goForward() },
+                        onHome = { viewModel.goHome() },
+                        onReload = { webViewInstance?.reload() },
+                        onSearch = { query -> viewModel.openUrl(query) },
+                        onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
+                        onOpenAi = { query -> viewModel.openAiQuery(query) },
+                        onBrowseForMe = { query -> viewModel.browseForMe(query) },
+                        isEditingExternal = isSearchEditing,
+                        onEditingChange = { isSearchEditing = it },
+                        onFastAction = {
+                            if (state.isHomePage) {
+                                viewModel.openAiQuery("")
+                            } else {
+                                webViewInstance?.reload()
+                            }
+                        },
+                        onOpenAiAction = { viewModel.toggleAiActionModal() },
+                        onToggleBookmark = {
+                            if (state.isHomePage) {
+                                viewModel.toggleHistoryModal()
+                            } else {
+                                viewModel.toggleBookmark(
+                                    title = webViewInstance?.title ?: "",
+                                    url = state.displayUrl
+                                )
+                            }
+                        },
+                        onToggleIncognito = { viewModel.toggleIncognitoMode() },
+                        onToggleReaderMode = {
+                            if (state.isReaderModeActive) {
+                                viewModel.toggleReaderMode()
+                            } else {
+                                Toast.makeText(context, "Ativando modo leitura...", Toast.LENGTH_SHORT).show()
+                                webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
+                            }
+                        },
+                        onOpenTabs = { viewModel.toggleTabsModal() },
+                        onOpenHistory = { viewModel.toggleHistoryModal() },
+                        onOpenSettings = { viewModel.toggleQuickSettings() },
+                        onOpenSiteSettings = { viewModel.openSiteSettings(state.displayUrl) },
+                        onOpenFavorite = { url -> viewModel.openUrl(url) },
+                        onNextTab = { viewModel.selectNextTab() },
+                        onPreviousTab = { viewModel.selectPreviousTab() },
+                        accentColor = state.activeWallpaper.accentColor
+                    )
+                }
             }
         }
 
@@ -1289,10 +1485,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             TabsModal(
                 tabs = state.tabs,
                 activeTabId = state.activeTabId,
+                tabGroups = state.tabGroups,
                 onSelectTab = { viewModel.selectTab(it) },
                 onCloseTab = { viewModel.closeTab(it) },
                 onNewTab = { viewModel.addNewTab() },
                 onDismiss = { viewModel.dismissTabsModal() },
+                onCreateGroup = { title, colorArgb -> viewModel.createTabGroup(title, colorArgb) },
+                onDeleteGroup = { gid, closeTabs -> viewModel.deleteTabGroup(gid, closeTabs) },
+                onAddTabToGroup = { tabId, gid -> viewModel.addTabToGroup(tabId, gid) },
+                onRemoveTabFromGroup = { tabId -> viewModel.removeTabFromGroup(tabId) },
                 onTogglePin = { viewModel.togglePinTab(it) },
                 onCloseAllTabs = { viewModel.closeAllTabs() },
                 onArchiveInactiveTabs = { viewModel.archiveInactiveTabs() },
@@ -1550,6 +1751,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.dismissQuickSettings()
                     viewModel.showQrCodeModal()
                 },
+                onTranslatePage = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.showTranslationBanner(true)
+                },
+                onOpenSiteSettings = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.openSiteSettings(state.displayUrl)
+                },
                 onOpenHistory = {
                     viewModel.dismissQuickSettings()
                     viewModel.openHistoryModal(0)
@@ -1563,6 +1772,35 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
                 },
                 onDismiss = { viewModel.dismissQuickSettings() }
+            )
+        }
+
+        // SITE SETTINGS & PERMISSIONS MODAL
+        if (state.showSiteSettingsModal) {
+            val siteOrigin = state.siteSettingsOrigin.ifBlank {
+                try {
+                    val uri = java.net.URI(state.displayUrl)
+                    val host = uri.host ?: state.displayUrl
+                    if (host.startsWith("www.")) host.substring(4) else host
+                } catch (e: Exception) {
+                    state.displayUrl
+                }
+            }
+            val currentSiteSettings = viewModel.getSiteSettings(siteOrigin)
+
+            SiteSettingsModal(
+                origin = siteOrigin,
+                currentUrl = state.displayUrl,
+                settings = currentSiteSettings,
+                isDarkMode = state.isDarkMode,
+                accentColor = state.activeWallpaper.accentColor,
+                onUpdatePermission = { update ->
+                    viewModel.updateSitePermission(siteOrigin, update)
+                },
+                onClearSiteData = {
+                    viewModel.clearSiteData(context, siteOrigin, webViewInstance)
+                },
+                onDismiss = { viewModel.dismissSiteSettings() }
             )
         }
 

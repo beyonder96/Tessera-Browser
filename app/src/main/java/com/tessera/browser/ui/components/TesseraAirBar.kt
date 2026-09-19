@@ -42,6 +42,8 @@ import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.Search
@@ -108,6 +110,7 @@ fun TesseraAirBar(
     onOpenTabs: () -> Unit,
     onOpenHistory: () -> Unit = {},
     onOpenSettings: () -> Unit,
+    onOpenSiteSettings: () -> Unit = {},
     onOpenFavorite: (String) -> Unit = {},
     onFastAction: () -> Unit = {},
     onNextTab: () -> Unit = {},
@@ -424,13 +427,35 @@ fun TesseraAirBar(
                             }
                         }
 
-                        // Center: Display host or placeholder
-                        Box(
+                        // Center: Display host or placeholder with Security / Lock icon
+                        Row(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 6.dp),
-                            contentAlignment = Alignment.Center
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
+                            val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
+                            val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
+
+                            if (isWeb) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .clickable { onOpenSiteSettings() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                        contentDescription = "Configurações do site",
+                                        tint = if (isSecure) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(3.dp))
+                            }
+
                             val hostText = if (displayUrl.isNotBlank()) {
                                 try {
                                     val uri = java.net.URI(displayUrl)

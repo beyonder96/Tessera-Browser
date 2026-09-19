@@ -47,7 +47,9 @@ import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.StarOutline
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -124,6 +126,8 @@ fun QuickSettingsPanel(
     onAddToHomeScreen: () -> Unit = {},
     onSavePageOffline: () -> Unit = {},
     onShowQrCode: () -> Unit = {},
+    onTranslatePage: () -> Unit = {},
+    onOpenSiteSettings: () -> Unit = {},
     selectedSearchEngine: SearchEngine = SearchEngine.GOOGLE,
     onSearchEngineSelected: (SearchEngine) -> Unit = {},
     onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit = { _, _, _ -> },
@@ -836,6 +840,88 @@ fun QuickSettingsPanel(
                     )
                     Text(
                         text = "Código QR da página",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Traduzir página
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onTranslatePage()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Translate,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Traduzir página",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Configurações do site
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onOpenSiteSettings()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Configurações do site",
                         color = secondaryTextColor,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Medium

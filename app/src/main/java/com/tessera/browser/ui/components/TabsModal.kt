@@ -29,17 +29,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.tessera.browser.data.TabGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,10 +75,15 @@ import com.tessera.browser.viewmodel.BrowserTab
 fun TabsModal(
     tabs: List<BrowserTab>,
     activeTabId: String,
+    tabGroups: List<TabGroup> = emptyList(),
     onSelectTab: (String) -> Unit,
     onCloseTab: (String) -> Unit,
     onNewTab: () -> Unit,
     onDismiss: () -> Unit,
+    onCreateGroup: (title: String, colorArgb: Long) -> Unit = { _, _ -> },
+    onDeleteGroup: (groupId: String, closeTabs: Boolean) -> Unit = { _, _ -> },
+    onAddTabToGroup: (tabId: String, groupId: String) -> Unit = { _, _ -> },
+    onRemoveTabFromGroup: (tabId: String) -> Unit = {},
     onTogglePin: (String) -> Unit = {},
     onCloseAllTabs: () -> Unit = {},
     onArchiveInactiveTabs: () -> Unit = {},
@@ -82,13 +95,19 @@ fun TabsModal(
     var searchQuery by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
     var filterPinnedOnly by remember { mutableStateOf(false) }
+    var activeFilterGroupId by remember { mutableStateOf<String?>(null) }
+    var showCreateGroupDialog by remember { mutableStateOf(false) }
+    var newGroupTitle by remember { mutableStateOf("") }
+    var newGroupColor by remember { mutableStateOf(TabGroup.PRESET_COLORS.first()) }
+    var tabToAssignGroup by remember { mutableStateOf<BrowserTab?>(null) }
 
     val filteredTabs = tabs.filter { tab ->
         val matchesQuery = searchQuery.isBlank() ||
                 tab.title.contains(searchQuery, ignoreCase = true) ||
                 tab.url.contains(searchQuery, ignoreCase = true)
         val matchesPin = !filterPinnedOnly || tab.isPinned
-        matchesQuery && matchesPin
+        val matchesGroup = activeFilterGroupId == null || tab.groupId == activeFilterGroupId
+        matchesQuery && matchesPin && matchesGroup
     }
 
     val contentColor = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
@@ -99,8 +118,159 @@ fun TabsModal(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // 0. SELETOR DE GRUPOS DE ABAS (Pills Horizontais)
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Chip "Todas"
+            item {
+                val isAllSelected = activeFilterGroupId == null
+                val allShape = RoundedCornerShape(16.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(allShape)
+                        .background(
+                            if (isAllSelected) accentColor
+                            else if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color(0xFFE5E7EB)
+                        )
+                        .clickable { activeFilterGroupId = null }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Todas (${tabs.size})",
+                        color = if (isAllSelected) Color.White else contentColor,
+                        fontSize = 12.sp,
+                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+
+            // Chips dos grupos existentes
+            items(tabGroups, key = { it.id }) { group ->
+                val isSelected = activeFilterGroupId == group.id
+                val groupTabCount = tabs.count { it.groupId == group.id }
+                val groupShape = RoundedCornerShape(16.dp)
+                var showGroupMenu by remember { mutableStateOf(false) }
+
+                Box(
+                    modifier = Modifier
+                        .clip(groupShape)
+                        .background(
+                            if (isSelected) Color(group.colorArgb)
+                            else Color(group.colorArgb).copy(alpha = if (isDarkMode) 0.22f else 0.14f)
+                        )
+                        .border(
+                            1.dp,
+                            if (isSelected) Color.White.copy(alpha = 0.3f) else Color(group.colorArgb).copy(alpha = 0.4f),
+                            groupShape
+                        )
+                        .clickable {
+                            activeFilterGroupId = if (isSelected) null else group.id
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color.White else Color(group.colorArgb))
+                        )
+                        Text(
+                            text = "${group.title} ($groupTabCount)",
+                            color = if (isSelected) Color.White else contentColor,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .clickable { showGroupMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreHoriz,
+                                contentDescription = "Opções do grupo",
+                                tint = if (isSelected) Color.White.copy(alpha = 0.8f) else mutedColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+
+                            DropdownMenu(
+                                expanded = showGroupMenu,
+                                onDismissRequest = { showGroupMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Excluir grupo (manter abas)") },
+                                    onClick = {
+                                        showGroupMenu = false
+                                        if (activeFilterGroupId == group.id) activeFilterGroupId = null
+                                        onDeleteGroup(group.id, false)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Fechar grupo e abas") },
+                                    onClick = {
+                                        showGroupMenu = false
+                                        if (activeFilterGroupId == group.id) activeFilterGroupId = null
+                                        onDeleteGroup(group.id, true)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Botão "+ Grupo"
+            item {
+                val addShape = RoundedCornerShape(16.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(addShape)
+                        .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F3F5))
+                        .border(1.dp, if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color(0xFFE0E0E0), addShape)
+                        .clickable {
+                            newGroupTitle = ""
+                            newGroupColor = TabGroup.PRESET_COLORS.first()
+                            showCreateGroupDialog = true
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Novo grupo",
+                            tint = accentColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Grupo",
+                            color = accentColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
         // 1. CARROSSEL HORIZONTAL DE ABAS FLUTUANTES (Layout Imagem 3)
         Box(
             modifier = Modifier
@@ -113,7 +283,11 @@ fun TabsModal(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (filterPinnedOnly) "Nenhuma aba fixada" else "Nenhuma aba encontrada",
+                        text = when {
+                            filterPinnedOnly -> "Nenhuma aba fixada"
+                            activeFilterGroupId != null -> "Nenhuma aba neste grupo"
+                            else -> "Nenhuma aba encontrada"
+                        },
                         color = if (isDarkMode) Color.White.copy(alpha = 0.6f) else Color.White,
                         fontSize = 14.sp
                     )
@@ -127,13 +301,24 @@ fun TabsModal(
                 ) {
                     items(filteredTabs, key = { it.id }) { tab ->
                         val isActive = tab.id == activeTabId
+                        val tabGroup = tabGroups.find { it.id == tab.groupId }
                         TabCardItem(
                             tab = tab,
                             isActive = isActive,
+                            tabGroup = tabGroup,
+                            allGroups = tabGroups,
                             isDarkMode = isDarkMode,
                             accentColor = accentColor,
                             onClick = { onSelectTab(tab.id) },
-                            onClose = { onCloseTab(tab.id) }
+                            onClose = { onCloseTab(tab.id) },
+                            onAssignGroup = { gid -> onAddTabToGroup(tab.id, gid) },
+                            onRemoveFromGroup = { onRemoveTabFromGroup(tab.id) },
+                            onCreateNewGroup = {
+                                tabToAssignGroup = tab
+                                newGroupTitle = ""
+                                newGroupColor = TabGroup.PRESET_COLORS.first()
+                                showCreateGroupDialog = true
+                            }
                         )
                     }
                 }
@@ -340,6 +525,15 @@ fun TabsModal(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Novo grupo de abas") },
+                            onClick = {
+                                showMenu = false
+                                newGroupTitle = ""
+                                newGroupColor = TabGroup.PRESET_COLORS.first()
+                                showCreateGroupDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Arquivar abas inativas (24h)") },
                             onClick = {
                                 showMenu = false
@@ -369,16 +563,98 @@ fun TabsModal(
             }
         }
     }
+
+    if (showCreateGroupDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showCreateGroupDialog = false
+                tabToAssignGroup = null
+            },
+            title = { Text("Novo Grupo de Abas", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        value = newGroupTitle,
+                        onValueChange = { newGroupTitle = it },
+                        label = { Text("Nome do grupo") },
+                        placeholder = { Text("Ex: Trabalho, Compras, Pesquisa") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "Escolha uma cor:",
+                        fontSize = 13.sp,
+                        color = contentColor,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TabGroup.PRESET_COLORS.forEach { colorArgb ->
+                            val isSelected = newGroupColor == colorArgb
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(colorArgb))
+                                    .clickable { newGroupColor = colorArgb },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newGroupTitle.isNotBlank()) {
+                            onCreateGroup(newGroupTitle.trim(), newGroupColor)
+                            showCreateGroupDialog = false
+                            tabToAssignGroup = null
+                        }
+                    }
+                ) {
+                    Text("Criar", color = accentColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCreateGroupDialog = false
+                    tabToAssignGroup = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun TabCardItem(
     tab: BrowserTab,
     isActive: Boolean,
+    tabGroup: TabGroup? = null,
+    allGroups: List<TabGroup> = emptyList(),
     isDarkMode: Boolean,
     accentColor: Color,
     onClick: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onAssignGroup: (String) -> Unit = {},
+    onRemoveFromGroup: () -> Unit = {},
+    onCreateNewGroup: () -> Unit = {}
 ) {
     val cardShape = RoundedCornerShape(18.dp)
     val cardBg = if (isDarkMode) Color(0xFF26211E) else Color.White
@@ -476,21 +752,128 @@ private fun TabCardItem(
                 )
             }
 
-            // Close '✕' Button
+            // Ações da Aba (Menu de Grupo + Fechar)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                var showTabMenu by remember { mutableStateOf(false) }
+
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkMode) Color(0xFF38322E) else Color(0xFFEBECEF))
+                        .clickable { showTabMenu = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Opções da aba",
+                        tint = mutedColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+
+                    DropdownMenu(
+                        expanded = showTabMenu,
+                        onDismissRequest = { showTabMenu = false }
+                    ) {
+                        if (allGroups.isNotEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("Mover para grupo:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = mutedColor) },
+                                onClick = {},
+                                enabled = false
+                            )
+                            allGroups.forEach { g ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(g.colorArgb))
+                                            )
+                                            Text(g.title)
+                                        }
+                                    },
+                                    onClick = {
+                                        showTabMenu = false
+                                        onAssignGroup(g.id)
+                                    }
+                                )
+                            }
+                        }
+                        if (tabGroup != null) {
+                            DropdownMenuItem(
+                                text = { Text("Remover do grupo") },
+                                onClick = {
+                                    showTabMenu = false
+                                    onRemoveFromGroup()
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("+ Criar novo grupo...") },
+                            onClick = {
+                                showTabMenu = false
+                                onCreateNewGroup()
+                            }
+                        )
+                    }
+                }
+
+                // Close '✕' Button
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkMode) Color(0xFF38322E) else Color(0xFFEBECEF))
+                        .clickable { onClose() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Fechar aba",
+                        tint = mutedColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+
+        // Tag do Grupo de Abas (se houver)
+        if (tabGroup != null) {
             Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(if (isDarkMode) Color(0xFF38322E) else Color(0xFFEBECEF))
-                    .clickable { onClose() },
-                contentAlignment = Alignment.Center
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(tabGroup.colorArgb).copy(alpha = 0.18f))
+                    .border(0.5.dp, Color(tabGroup.colorArgb).copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Fechar aba",
-                    tint = mutedColor,
-                    modifier = Modifier.size(12.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(tabGroup.colorArgb))
+                    )
+                    Text(
+                        text = tabGroup.title,
+                        color = Color(tabGroup.colorArgb),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
