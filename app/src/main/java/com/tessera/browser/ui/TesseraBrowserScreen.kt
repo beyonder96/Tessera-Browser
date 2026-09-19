@@ -77,13 +77,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import android.print.PrintAttributes
 import android.print.PrintManager
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import android.webkit.SafeBrowsingResponse
+import com.tessera.browser.data.SafeBrowsingThreatInfo
 import com.tessera.browser.ui.components.AiActionsModal
 import com.tessera.browser.ui.components.ArcSummarySheet
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
+import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
+import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraReaderScreen
@@ -409,6 +414,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var lastActiveTabId by remember { mutableStateOf<String?>(null) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
+    var safeBrowsingCallback by remember { mutableStateOf<SafeBrowsingResponse?>(null) }
     val context = LocalContext.current
 
     // Request POST_NOTIFICATIONS on Android 13+
@@ -416,11 +422,23 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         contract = ActivityResultContracts.RequestPermission()
     ) { /* result ignored */ }
 
-    // Fetch initial weather, financial quotes, init persistence, and request notification permission
+    // Fetch initial weather, financial quotes, init persistence, safe browsing, and request notification permission
     LaunchedEffect(Unit) {
         viewModel.fetchWeather(context)
         viewModel.fetchQuotes()
         viewModel.initPersistence(context)
+
+        // Initialize Google Safe Browsing
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.START_SAFE_BROWSING)) {
+                WebViewCompat.startSafeBrowsing(context) { success ->
+                    Log.d("TesseraBrowser", "Google Safe Browsing inicializado: $success")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("TesseraBrowser", "Erro ao inicializar Safe Browsing", e)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -512,8 +530,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
-        if (state.pageError != null) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || isAirBarExpanded) {
+        if (state.safeBrowsingThreat != null) {
+            safeBrowsingCallback?.backToSafety(true)
+            viewModel.dismissSafeBrowsingThreat()
+            if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
+        } else if (state.showQrCodeModal) {
+            viewModel.dismissQrCodeModal()
+        } else if (state.pageError != null) {
             viewModel.clearPageError()
             viewModel.goHome()
         } else if (isSearchEditing) {
@@ -735,6 +759,19 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             )
 
                             webViewClient = object : WebViewClient() {
+                                override fun onSafeBrowsingHit(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    threatType: Int,
+                                    callback: SafeBrowsingResponse?
+                                ) {
+                                    val threatUrl = request?.url?.toString() ?: (view?.url ?: "")
+                                    safeBrowsingCallback = callback
+                                    viewModel.setSafeBrowsingThreat(
+                                        SafeBrowsingThreatInfo.create(threatUrl, threatType)
+                                    )
+                                }
+
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView?,
                                     request: WebResourceRequest?
@@ -1220,6 +1257,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     onOpenHistory = { viewModel.toggleHistoryModal() },
                     onOpenSettings = { viewModel.toggleQuickSettings() },
                     onOpenFavorite = { url -> viewModel.openUrl(url) },
+                    onNextTab = { viewModel.selectNextTab() },
+                    onPreviousTab = { viewModel.selectPreviousTab() },
                     accentColor = state.activeWallpaper.accentColor
                 )
             }
@@ -1303,6 +1342,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onShareDownload = { viewModel.shareDownloadedFile(context, it) },
                 onRemoveDownload = { viewModel.removeDownload(context, it) },
                 onClearDownloads = { viewModel.clearDownloads(context) },
+                savedPages = state.savedPages,
+                onOpenSavedPage = {
+                    viewModel.dismissHistoryModal()
+                    viewModel.openSavedPage(it)
+                },
+                onDeleteSavedPage = { viewModel.deleteSavedPage(it) },
                 onDismiss = { viewModel.dismissHistoryModal() },
                 accentColor = state.activeWallpaper.accentColor
             )
@@ -1493,6 +1538,18 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         printManager?.print(jobName, printAdapter, PrintAttributes.Builder().build())
                     }
                 },
+                onAddToHomeScreen = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.addCurrentPageToHomeScreen(context, webViewInstance)
+                },
+                onSavePageOffline = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.saveCurrentPageForOffline(context, webViewInstance)
+                },
+                onShowQrCode = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.showQrCodeModal()
+                },
                 onOpenHistory = {
                     viewModel.dismissQuickSettings()
                     viewModel.openHistoryModal(0)
@@ -1609,6 +1666,41 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSelectFontFamily = { family -> viewModel.setReaderFontFamily(family) },
                 onToggleShowImages = { viewModel.toggleReaderShowImages() },
                 onToggleTts = { viewModel.toggleReaderTts(context) }
+            )
+        }
+
+        // QR CODE SHARE MODAL
+        if (state.showQrCodeModal) {
+            QrCodeShareModal(
+                url = state.currentUrl,
+                title = webViewInstance?.title ?: state.tabs.find { it.id == state.activeTabId }?.title ?: "",
+                onDismiss = { viewModel.dismissQrCodeModal() },
+                accentColor = state.activeWallpaper.accentColor,
+                isDarkMode = state.isDarkMode
+            )
+        }
+
+        // GOOGLE SAFE BROWSING THREAT WARNING OVERLAY
+        if (state.safeBrowsingThreat != null) {
+            SafeBrowsingWarningView(
+                threatInfo = state.safeBrowsingThreat!!,
+                onBackToSafety = {
+                    safeBrowsingCallback?.backToSafety(true)
+                    viewModel.dismissSafeBrowsingThreat()
+                    if (state.canGoBack) {
+                        webViewInstance?.goBack()
+                    } else {
+                        viewModel.goHome()
+                    }
+                },
+                onProceedAnyway = {
+                    safeBrowsingCallback?.proceed(false)
+                    viewModel.dismissSafeBrowsingThreat()
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .displayCutoutPadding()
             )
         }
     }

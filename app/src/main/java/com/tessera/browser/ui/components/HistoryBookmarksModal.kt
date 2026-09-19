@@ -53,14 +53,20 @@ import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.DownloadFileType
 import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadStatus
+import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.viewmodel.HistoryEntry
+import androidx.compose.material.icons.rounded.OfflinePin
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HistoryBookmarksModal(
     bookmarks: List<SpeedDialItem>,
     history: List<HistoryEntry>,
     downloads: List<DownloadItem> = emptyList(),
+    savedPages: List<SavedPageItem> = emptyList(),
     initialTab: Int = 0,
     onTabSelected: ((Int) -> Unit)? = null,
     onSelectUrl: (String) -> Unit,
@@ -70,6 +76,8 @@ fun HistoryBookmarksModal(
     onShareDownload: (DownloadItem) -> Unit = {},
     onRemoveDownload: (Long) -> Unit = {},
     onClearDownloads: () -> Unit = {},
+    onOpenSavedPage: (SavedPageItem) -> Unit = {},
+    onDeleteSavedPage: (SavedPageItem) -> Unit = {},
     onDismiss: () -> Unit,
     accentColor: Color = Color(0xFF64B5F6),
     modifier: Modifier = Modifier
@@ -106,7 +114,7 @@ fun HistoryBookmarksModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Tab Favoritos
@@ -123,12 +131,12 @@ fun HistoryBookmarksModal(
                             selectedTab = 0
                             onTabSelected?.invoke(0)
                         }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Favoritos",
                         color = if (selectedTab == 0) accentColor else Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.5.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                     )
                 }
@@ -147,12 +155,12 @@ fun HistoryBookmarksModal(
                             selectedTab = 1
                             onTabSelected?.invoke(1)
                         }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Histórico",
                         color = if (selectedTab == 1) accentColor else Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.5.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                     )
                 }
@@ -171,13 +179,37 @@ fun HistoryBookmarksModal(
                             selectedTab = 2
                             onTabSelected?.invoke(2)
                         }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Downloads",
                         color = if (selectedTab == 2) accentColor else Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.5.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+
+                // Tab Salvos (Offline)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selectedTab == 3) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .border(
+                            1.dp,
+                            if (selectedTab == 3) accentColor else Color.White.copy(alpha = 0.1f),
+                            RoundedCornerShape(16.dp)
+                        )
+                        .clickable {
+                            selectedTab = 3
+                            onTabSelected?.invoke(3)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Salvos",
+                        color = if (selectedTab == 3) accentColor else Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.5.sp,
+                        fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
@@ -342,7 +374,7 @@ fun HistoryBookmarksModal(
                     }
                 }
             }
-        } else {
+        } else if (selectedTab == 2) {
             // DOWNLOADS LIST (selectedTab == 2)
             if (downloads.isEmpty()) {
                 Box(
@@ -511,6 +543,144 @@ fun HistoryBookmarksModal(
                                     contentDescription = "Remover",
                                     tint = Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (selectedTab == 3) {
+            // SAVED OFFLINE PAGES LIST
+            if (savedPages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.OfflinePin,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "Nenhuma página salva offline",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "No menu de Configurações, toque em \"Salvar para ler offline\" para acessar artigos mesmo sem sinal de internet.",
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 12.5.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(savedPages, key = { it.id }) { item ->
+                        val cardShape = RoundedCornerShape(16.dp)
+                        val formattedSize = remember(item.fileSize) {
+                            if (item.fileSize > 1024 * 1024) {
+                                String.format(Locale.getDefault(), "%.1f MB", item.fileSize / (1024.0 * 1024.0))
+                            } else if (item.fileSize > 1024) {
+                                "${item.fileSize / 1024} KB"
+                            } else {
+                                "${item.fileSize} B"
+                            }
+                        }
+                        val formattedDate = remember(item.timestamp) {
+                            SimpleDateFormat("dd/MM 'às' HH:mm", Locale.getDefault()).format(Date(item.timestamp))
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), cardShape)
+                                .clickable {
+                                    onOpenSavedPage(item)
+                                    onDismiss()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.OfflinePin,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.title.ifBlank { "Página Salva" },
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = formattedSize,
+                                            color = accentColor.copy(alpha = 0.85f),
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "•",
+                                            color = Color.White.copy(alpha = 0.3f),
+                                            fontSize = 10.sp
+                                        )
+                                        Text(
+                                            text = formattedDate,
+                                            color = Color.White.copy(alpha = 0.45f),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Delete button
+                            IconButton(
+                                onClick = { onDeleteSavedPage(item) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Excluir página offline",
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }

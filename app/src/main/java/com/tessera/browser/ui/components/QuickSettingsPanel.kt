@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
+import androidx.compose.material.icons.rounded.AppShortcut
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -40,7 +41,9 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.NorthEast
+import androidx.compose.material.icons.rounded.OfflinePin
 import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
@@ -118,6 +121,9 @@ fun QuickSettingsPanel(
     onFindInPage: () -> Unit = {},
     onSharePage: () -> Unit = {},
     onPrintPage: () -> Unit = {},
+    onAddToHomeScreen: () -> Unit = {},
+    onSavePageOffline: () -> Unit = {},
+    onShowQrCode: () -> Unit = {},
     selectedSearchEngine: SearchEngine = SearchEngine.GOOGLE,
     onSearchEngineSelected: (SearchEngine) -> Unit = {},
     onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit = { _, _, _ -> },
@@ -707,6 +713,129 @@ fun QuickSettingsPanel(
                     )
                     Text(
                         text = "Salvar em PDF / Imprimir",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Adicionar à Tela Inicial
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onAddToHomeScreen()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AppShortcut,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Adicionar à Tela Inicial",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Salvar para ler offline (.mht)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onSavePageOffline()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.OfflinePin,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Salvar para ler offline (.mht)",
+                        color = secondaryTextColor,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = cardArrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Código QR da Página
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onShowQrCode()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.QrCode2,
+                        contentDescription = null,
+                        tint = cardHistoryIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Código QR da página",
                         color = secondaryTextColor,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Medium

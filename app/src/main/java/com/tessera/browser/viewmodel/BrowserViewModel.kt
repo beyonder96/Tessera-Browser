@@ -27,6 +27,8 @@ import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
 import com.tessera.browser.data.PageErrorInfo
+import com.tessera.browser.data.SafeBrowsingThreatInfo
+import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
@@ -183,8 +185,15 @@ data class BrowserUiState(
     // History, Bookmarks & Downloads
     val history: List<HistoryEntry> = emptyList(),
     val showHistoryModal: Boolean = false,
-    val activeHubTab: Int = 0, // 0 = Favoritos, 1 = Histórico, 2 = Downloads
+    val activeHubTab: Int = 0, // 0 = Favoritos, 1 = Histórico, 2 = Downloads, 3 = Salvos
     val downloads: List<DownloadItem> = emptyList(),
+    val savedPages: List<SavedPageItem> = emptyList(),
+
+    // Modal de Compartilhamento QR Code
+    val showQrCodeModal: Boolean = false,
+
+    // Google Safe Browsing Ameaça
+    val safeBrowsingThreat: SafeBrowsingThreatInfo? = null,
 
     // Quick AI Actions Modal
     val showAiActionModal: Boolean = false,
@@ -845,6 +854,22 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun selectNextTab() {
+        val currentTabs = _uiState.value.tabs
+        if (currentTabs.size <= 1) return
+        val currentIndex = currentTabs.indexOfFirst { it.id == _uiState.value.activeTabId }
+        val nextIndex = if (currentIndex == -1 || currentIndex >= currentTabs.size - 1) 0 else currentIndex + 1
+        selectTab(currentTabs[nextIndex].id)
+    }
+
+    fun selectPreviousTab() {
+        val currentTabs = _uiState.value.tabs
+        if (currentTabs.size <= 1) return
+        val currentIndex = currentTabs.indexOfFirst { it.id == _uiState.value.activeTabId }
+        val prevIndex = if (currentIndex <= 0) currentTabs.size - 1 else currentIndex - 1
+        selectTab(currentTabs[prevIndex].id)
+    }
+
     fun closeTab(tabId: String) {
         val currentTabs = _uiState.value.tabs
         if (currentTabs.size <= 1) {
@@ -938,6 +963,102 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissHistoryModal() {
         _uiState.update { it.copy(showHistoryModal = false) }
+    }
+
+    fun openSavedPagesModal() {
+        _uiState.update { it.copy(showHistoryModal = true, activeHubTab = 3) }
+    }
+
+    fun showQrCodeModal() {
+        _uiState.update { it.copy(showQrCodeModal = true) }
+    }
+
+    fun dismissQrCodeModal() {
+        _uiState.update { it.copy(showQrCodeModal = false) }
+    }
+
+    fun setSafeBrowsingThreat(threat: SafeBrowsingThreatInfo) {
+        _uiState.update { it.copy(safeBrowsingThreat = threat) }
+    }
+
+    fun dismissSafeBrowsingThreat() {
+        _uiState.update { it.copy(safeBrowsingThreat = null) }
+    }
+
+    fun addCurrentPageToHomeScreen(context: Context, webView: WebView?) {
+        val url = _uiState.value.currentUrl
+        if (url.isBlank() || _uiState.value.isHomePage) {
+            Toast.makeText(context, "Navegue para uma página antes de adicionar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val title = webView?.title?.takeIf { it.isNotBlank() }
+            ?: _uiState.value.tabs.find { it.id == _uiState.value.activeTabId }?.title
+            ?: extractDomain(url)
+        val favicon = webView?.favicon
+        com.tessera.browser.util.ShortcutHelper.addPinShortcut(context, url, title, favicon)
+    }
+
+    fun saveCurrentPageForOffline(context: Context, webView: WebView?) {
+        if (webView == null) return
+        val targetUrl = _uiState.value.currentUrl
+        if (targetUrl.isBlank() || _uiState.value.isHomePage) {
+            Toast.makeText(context, "Navegue para uma página antes de salvar", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val savedPagesDir = File(context.filesDir, "saved_pages")
+            if (!savedPagesDir.exists()) {
+                savedPagesDir.mkdirs()
+            }
+            val file = File(savedPagesDir, "tessera_page_${System.currentTimeMillis()}.mht")
+            webView.saveWebArchive(file.absolutePath, false) { path ->
+                if (path != null) {
+                    val savedFile = File(path)
+                    val title = webView.title?.takeIf { it.isNotBlank() } ?: extractDomain(targetUrl)
+                    val newItem = SavedPageItem(
+                        title = title,
+                        url = targetUrl,
+                        filePath = path,
+                        fileSize = savedFile.length()
+                    )
+                    _uiState.update { state ->
+                        state.copy(savedPages = listOf(newItem) + state.savedPages)
+                    }
+                    saveSavedPages()
+                    Toast.makeText(context, "Página salva para leitura offline!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Não foi possível salvar esta página", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao salvar página offline", e)
+            Toast.makeText(context, "Erro ao salvar página: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun openSavedPage(item: SavedPageItem) {
+        val file = File(item.filePath)
+        if (!file.exists()) {
+            Toast.makeText(appContext, "Arquivo offline não encontrado", Toast.LENGTH_SHORT).show()
+            return
+        }
+        openUrl("file://${item.filePath}")
+    }
+
+    fun deleteSavedPage(item: SavedPageItem) {
+        try {
+            val file = File(item.filePath)
+            if (file.exists()) {
+                file.delete()
+            }
+        } catch (e: Exception) {
+            Log.w("BrowserViewModel", "Erro ao deletar arquivo de página offline", e)
+        }
+        _uiState.update { state ->
+            state.copy(savedPages = state.savedPages.filterNot { it.id == item.id })
+        }
+        saveSavedPages()
     }
 
     // PERSISTENCE SUBSYSTEM (Bookmarks, History, Settings & Downloads)
@@ -1344,10 +1465,22 @@ class BrowserViewModel : ViewModel() {
                 } else null
                 val readerShowImages = if (prefs.contains("reader_show_images")) prefs.getBoolean("reader_show_images", false) else null
 
+                // Saved Pages (Offline)
+                val savedPagesJson = prefs.getString("saved_pages_list", null)
+                val loadedSavedPages = if (!savedPagesJson.isNullOrBlank()) {
+                    val arr = JSONArray(savedPagesJson)
+                    val list = mutableListOf<SavedPageItem>()
+                    for (i in 0 until arr.length()) {
+                        list.add(SavedPageItem.fromJson(arr.getJSONObject(i)))
+                    }
+                    list
+                } else null
+
                 _uiState.update { current ->
                     current.copy(
                         speedDialItems = loadedBookmarks ?: current.speedDialItems,
                         history = loadedHistory ?: current.history,
+                        savedPages = loadedSavedPages ?: current.savedPages,
                         isDarkMode = isDark ?: current.isDarkMode,
                         forceDarkPages = forceDark ?: current.forceDarkPages,
                         showWallpaper = showWallpaper ?: current.showWallpaper,
@@ -1369,6 +1502,22 @@ class BrowserViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao carregar preferências", e)
+            }
+        }
+    }
+
+    private fun saveSavedPages() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.savedPages.forEach { item ->
+                    arr.put(item.toJson())
+                }
+                prefs.edit().putString("saved_pages_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar páginas offline", e)
             }
         }
     }

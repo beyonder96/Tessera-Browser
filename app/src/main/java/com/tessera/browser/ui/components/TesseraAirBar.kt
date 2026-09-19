@@ -14,6 +14,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -107,6 +110,8 @@ fun TesseraAirBar(
     onOpenSettings: () -> Unit,
     onOpenFavorite: (String) -> Unit = {},
     onFastAction: () -> Unit = {},
+    onNextTab: () -> Unit = {},
+    onPreviousTab: () -> Unit = {},
     isExpanded: Boolean = false,
     onExpandedChange: (Boolean) -> Unit = {},
     isEditingExternal: Boolean = false,
@@ -116,6 +121,10 @@ fun TesseraAirBar(
 ) {
     var queryText by remember { mutableStateOf(displayUrl) }
     var isEditing by remember { mutableStateOf(false) }
+    var dragAccumulator by remember { mutableStateOf(0f) }
+    val draggableState = rememberDraggableState { delta ->
+        dragAccumulator += delta
+    }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -228,6 +237,20 @@ fun TesseraAirBar(
                         width = 1.dp,
                         color = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.85f),
                         shape = omniShape
+                    )
+                    .draggable(
+                        state = draggableState,
+                        orientation = Orientation.Horizontal,
+                        enabled = !isEditing,
+                        onDragStopped = { velocity ->
+                            val threshold = 70f
+                            if (dragAccumulator < -threshold || velocity < -350f) {
+                                onNextTab()
+                            } else if (dragAccumulator > threshold || velocity > 350f) {
+                                onPreviousTab()
+                            }
+                            dragAccumulator = 0f
+                        }
                     )
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
