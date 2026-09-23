@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NorthWest
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
@@ -190,6 +191,48 @@ fun TesseraStartPage(
                     .displayCutoutPadding()
                     .padding(top = 16.dp)
             )
+        }
+
+        // Top-Right: Tema & Cores / Configurações Rápidas Shortcut
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .displayCutoutPadding()
+                .padding(top = 16.dp, end = 16.dp)
+        ) {
+            val pillShape = RoundedCornerShape(20.dp)
+            val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
+            val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.08f)
+            val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1E1E1E)
+
+            Row(
+                modifier = Modifier
+                    .clip(pillShape)
+                    .background(pillBg)
+                    .border(1.dp, pillBorder, pillShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onOpenSettings
+                    )
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Palette,
+                    contentDescription = "Tema & Configurações",
+                    tint = activeWallpaper.accentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Tema & Cores",
+                    color = textColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
         // Center Hero: Modern Uppercase Typography "TESSERA"

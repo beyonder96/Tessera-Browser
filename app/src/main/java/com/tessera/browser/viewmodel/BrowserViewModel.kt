@@ -41,6 +41,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -156,6 +157,7 @@ data class BrowserUiState(
     val canGoForward: Boolean = false,
     val isBarVisible: Boolean = true,
     val showQuickSettings: Boolean = false,
+    val showFullSettings: Boolean = false,
     val isIncognitoMode: Boolean = false,
     val isReaderModeActive: Boolean = false,
     val isReaderModeAvailable: Boolean = false,
@@ -220,6 +222,7 @@ data class BrowserUiState(
     val arcSummaryDomain: String = "",
     val arcSummaryReadTimeSaved: Int = 1,
     val arcSummaryError: String? = null,
+    val geminiApiKey: String? = null,
 
     // AdBlocker
     val adBlockEnabled: Boolean = true,
@@ -672,6 +675,13 @@ class BrowserViewModel : ViewModel() {
 
         viewModelScope.launch(Dispatchers.Main) {
             try {
+                if (!isTtsInitialized) {
+                    withTimeoutOrNull(2500) {
+                        while (!isTtsInitialized) {
+                            delay(60)
+                        }
+                    }
+                }
                 tts?.stop()
                 val chunks = textToRead.chunked(3000)
                 chunks.forEachIndexed { index, chunk ->
@@ -715,6 +725,13 @@ class BrowserViewModel : ViewModel() {
 
         viewModelScope.launch(Dispatchers.Main) {
             try {
+                if (!isTtsInitialized) {
+                    withTimeoutOrNull(2500) {
+                        while (!isTtsInitialized) {
+                            delay(60)
+                        }
+                    }
+                }
                 tts?.stop()
                 val chunks = clean.chunked(3000)
                 chunks.forEachIndexed { index, chunk ->
@@ -1743,6 +1760,7 @@ class BrowserViewModel : ViewModel() {
                     try { ReaderFontFamily.valueOf(readerFontName) } catch (e: Exception) { null }
                 } else null
                 val readerShowImages = if (prefs.contains("reader_show_images")) prefs.getBoolean("reader_show_images", false) else null
+                val loadedGeminiKey = prefs.getString("gemini_api_key", null)
 
                 // Saved Pages (Offline)
                 val savedPagesJson = prefs.getString("saved_pages_list", null)
@@ -1801,7 +1819,8 @@ class BrowserViewModel : ViewModel() {
                         readerFontSizeSp = readerFontSize ?: current.readerFontSizeSp,
                         readerTheme = readerTheme ?: current.readerTheme,
                         readerFontFamily = readerFont ?: current.readerFontFamily,
-                        readerShowImages = readerShowImages ?: current.readerShowImages
+                        readerShowImages = readerShowImages ?: current.readerShowImages,
+                        geminiApiKey = loadedGeminiKey ?: current.geminiApiKey
                     )
                 }
             } catch (e: Exception) {
@@ -1914,6 +1933,7 @@ class BrowserViewModel : ViewModel() {
                     .putString("reader_theme", s.readerTheme.name)
                     .putString("reader_font_family", s.readerFontFamily.name)
                     .putBoolean("reader_show_images", s.readerShowImages)
+                    .putString("gemini_api_key", s.geminiApiKey)
                     .apply()
 
             } catch (e: Exception) {
@@ -1999,13 +2019,44 @@ class BrowserViewModel : ViewModel() {
         // Deprecated - Navegue por mim removido da barra
     }
 
-    // ARC PAGE SUMMARY (IA GRATUITA & EFEITO VISUAL ARC)
+    fun setGeminiApiKey(key: String) {
+        _uiState.update { it.copy(geminiApiKey = key.trim().takeIf { k -> k.isNotBlank() }) }
+        saveSettings()
+    }
+
+    // ARC PAGE SUMMARY (IA GEMINI / GRATUITA & FALLBACK LOCAL RESILIENTE)
     private var arcSummaryJob: Job? = null
     private var lastSummaryTitle: String = ""
     private var lastSummaryDomain: String = ""
     private var lastSummaryContent: String = ""
 
+    fun prepareArcSummary(title: String, domain: String) {
+        arcSummaryJob?.cancel()
+        _uiState.update {
+            it.copy(
+                showArcSummary = true,
+                isGeneratingArcSummary = true,
+                arcSummaryTitle = title.ifBlank { "Página Atual" },
+                arcSummaryDomain = domain,
+                arcSummaryContent = null,
+                arcSummaryError = null,
+                showAiActionModal = false
+            )
+        }
+    }
+
     fun requestArcSummary(title: String, domain: String, content: String) {
+        if (content.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    showArcSummary = true,
+                    isGeneratingArcSummary = false,
+                    arcSummaryError = "Conteúdo insuficiente na página para gerar resumo."
+                )
+            }
+            return
+        }
+
         lastSummaryTitle = title
         lastSummaryDomain = domain
         lastSummaryContent = content
@@ -2028,83 +2079,248 @@ class BrowserViewModel : ViewModel() {
 
         arcSummaryJob?.cancel()
         arcSummaryJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val cleanContent = if (content.length > 6000) {
-                    content.take(6000) + "..."
-                } else {
-                    content
-                }
+            val cleanContent = if (content.length > 7000) content.take(7000) + "..." else content
 
-                val systemPrompt = "Você é a inteligência artificial do navegador Tessera estilo Arc Search. Resuma a página com alta precisão, elegância e foco no essencial em Português do Brasil.\n" +
-                        "Estrutura obrigatória:\n" +
-                        "1. Um parágrafo curto de Visão Geral (2 linhas).\n" +
-                        "2. De 3 a 5 pontos-chave principais, cada um iniciado por '-' e um emoji adequado (ex: '- 💡 Ponto importante...').\n" +
-                        "3. Uma conclusão curta e objetiva (1 a 2 linhas).\n" +
-                        "Evite enrolação. Use Markdown limpo."
-
-                val userPrompt = "Título: $title\nDomínio: $domain\n\nConteúdo da página:\n$cleanContent"
-
-                val messagesArr = JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "system")
-                        put("content", systemPrompt)
-                    })
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("content", userPrompt)
-                    })
-                }
-
-                val reqJson = JSONObject().apply {
-                    put("messages", messagesArr)
-                    put("model", "openai")
-                    put("seed", 42)
-                }
-
-                val url = URL("https://text.pollinations.ai/")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 12000
-                    readTimeout = 25000
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                    setRequestProperty("User-Agent", "TesseraBrowser/1.3.0")
-                }
-
-                val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-                writer.write(reqJson.toString())
-                writer.flush()
-                writer.close()
-
-                val respCode = conn.responseCode
-                if (respCode in 200..299) {
-                    val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-                    val response = reader.readText()
-                    reader.close()
-
-                    if (response.isNotBlank()) {
+            // TIER 1: Gemini API Oficial (se chave configurada pelo usuário)
+            val geminiKey = _uiState.value.geminiApiKey?.trim().orEmpty()
+            if (geminiKey.isNotBlank()) {
+                try {
+                    val geminiResult = callGeminiApi(geminiKey, title, domain, cleanContent)
+                    if (!geminiResult.isNullOrBlank() && isValidAiSummary(geminiResult)) {
                         _uiState.update {
                             it.copy(
                                 isGeneratingArcSummary = false,
-                                arcSummaryContent = response.trim(),
+                                arcSummaryContent = geminiResult.trim(),
                                 arcSummaryError = null
                             )
                         }
-                    } else {
-                        throw Exception("Resposta vazia da IA")
+                        return@launch
                     }
-                } else {
-                    throw Exception("Erro HTTP $respCode")
+                } catch (e: Exception) {
+                    Log.w("TesseraBrowser", "Falha na chamada Gemini API oficial, tentando fallback", e)
+                }
+            }
+
+            // TIER 2: Provedor IA Gratuito com validação de créditos/erros
+            try {
+                val freeAiResult = callFreeAiApi(title, domain, cleanContent)
+                if (!freeAiResult.isNullOrBlank() && isValidAiSummary(freeAiResult)) {
+                    _uiState.update {
+                        it.copy(
+                            isGeneratingArcSummary = false,
+                            arcSummaryContent = freeAiResult.trim(),
+                            arcSummaryError = null
+                        )
+                    }
+                    return@launch
                 }
             } catch (e: Exception) {
-                Log.e("TesseraBrowser", "Falha ao gerar resumo Arc com IA", e)
+                Log.w("TesseraBrowser", "Falha no provedor IA gratuito, ativando fallback local", e)
+            }
+
+            // TIER 3: Motor de Resumo Extrativo Local (GARANTIA 100% FUNCIONAMENTO / OFFLINE)
+            try {
+                val localSummary = generateLocalArcSummary(title, domain, content)
                 _uiState.update {
                     it.copy(
                         isGeneratingArcSummary = false,
-                        arcSummaryError = "Não foi possível conectar ao assistente de IA. Verifique sua conexão e tente novamente."
+                        arcSummaryContent = localSummary,
+                        arcSummaryError = null
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("TesseraBrowser", "Falha no resumo local", e)
+                _uiState.update {
+                    it.copy(
+                        isGeneratingArcSummary = false,
+                        arcSummaryError = "Não foi possível sintetizar o resumo desta página."
                     )
                 }
             }
+        }
+    }
+
+    private fun callGeminiApi(apiKey: String, title: String, domain: String, content: String): String? {
+        val systemPrompt = "Você é o assistente de síntese do navegador Tessera estilo Arc Search. Resuma a página de forma elegante, precisa e direta ao ponto em Português do Brasil.\n" +
+                "Estrutura obrigatória:\n" +
+                "1. Um parágrafo curto de Visão Geral (2 linhas).\n" +
+                "2. De 3 a 5 pontos-chave principais, cada um iniciado por '-' e um emoji adequado (ex: '- 💡 Ponto importante...').\n" +
+                "3. Uma conclusão curta e objetiva (1 linha).\n" +
+                "Evite enrolação. Use Markdown limpo."
+
+        val userPrompt = "Título: $title\nDomínio: $domain\n\nConteúdo da página:\n$content"
+
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey"
+        val payload = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", "$systemPrompt\n\n$userPrompt")
+                        })
+                    })
+                })
+            })
+            put("generationConfig", JSONObject().apply {
+                put("temperature", 0.4)
+                put("maxOutputTokens", 800)
+            })
+        }
+
+        val url = URL(endpoint)
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+        }
+
+        OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(payload.toString()) }
+
+        if (conn.responseCode in 200..299) {
+            val responseStr = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).use { it.readText() }
+            val root = JSONObject(responseStr)
+            val candidates = root.optJSONArray("candidates")
+            if (candidates != null && candidates.length() > 0) {
+                val first = candidates.getJSONObject(0)
+                val contentObj = first.optJSONObject("content")
+                val parts = contentObj?.optJSONArray("parts")
+                if (parts != null && parts.length() > 0) {
+                    return parts.getJSONObject(0).optString("text", "")
+                }
+            }
+        }
+        return null
+    }
+
+    private fun callFreeAiApi(title: String, domain: String, content: String): String? {
+        val systemPrompt = "Você é a inteligência artificial do navegador Tessera estilo Arc Search. Resuma a página com alta precisão, elegância e foco no essencial em Português do Brasil.\n" +
+                "Estrutura obrigatória:\n" +
+                "1. Um parágrafo curto de Visão Geral (2 linhas).\n" +
+                "2. De 3 a 5 pontos-chave principais, cada um iniciado por '-' e um emoji adequado (ex: '- 💡 Ponto importante...').\n" +
+                "3. Uma conclusão curta e objetiva (1 a 2 linhas).\n" +
+                "Evite enrolação. Use Markdown limpo."
+
+        val userPrompt = "Título: $title\nDomínio: $domain\n\nConteúdo da página:\n$content"
+
+        val messagesArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "system")
+                put("content", systemPrompt)
+            })
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", userPrompt)
+            })
+        }
+
+        val reqJson = JSONObject().apply {
+            put("messages", messagesArr)
+            put("model", "openai")
+            put("seed", 42)
+        }
+
+        val url = URL("https://text.pollinations.ai/")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 7000
+            readTimeout = 12000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            setRequestProperty("User-Agent", "TesseraBrowser/1.5.0")
+        }
+
+        OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(reqJson.toString()) }
+
+        if (conn.responseCode in 200..299) {
+            val response = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).use { it.readText() }
+            return response.trim()
+        }
+        return null
+    }
+
+    private fun isValidAiSummary(text: String): Boolean {
+        val lower = text.lowercase()
+        if (lower.contains("enough credits") ||
+            lower.contains("top up") ||
+            lower.contains("queue full") ||
+            lower.contains("rate limit") ||
+            lower.contains("error:") ||
+            lower.contains("<!doctype") ||
+            lower.contains("<html") ||
+            text.length < 50
+        ) {
+            return false
+        }
+        return true
+    }
+
+    private fun generateLocalArcSummary(title: String, domain: String, content: String): String {
+        val rawParagraphs = content.split("\n\n")
+            .map { it.replace("\n", " ").trim() }
+            .filter { it.length > 30 && !it.startsWith("http") && !it.contains("cookie", ignoreCase = true) }
+
+        val allSentences = mutableListOf<String>()
+        rawParagraphs.forEach { p ->
+            val sentences = p.split(Regex("(?<=[.!?])\\s+"))
+                .map { it.trim() }
+                .filter { it.length in 35..250 && !it.contains("http") }
+            allSentences.addAll(sentences)
+        }
+
+        val overview = if (rawParagraphs.isNotEmpty()) {
+            val firstP = rawParagraphs.first()
+            if (firstP.length > 220) firstP.take(217) + "..." else firstP
+        } else if (title.isNotBlank()) {
+            "Artigo publicado em $domain abordando os tópicos e novidades sobre $title."
+        } else {
+            "Síntese dos tópicos principais apresentados na página."
+        }
+
+        val candidates = allSentences.drop(1).distinct().filter { s ->
+            s != overview && !s.startsWith("-") && !s.startsWith("http")
+        }.sortedByDescending { s ->
+            var score = s.length.coerceAtMost(160)
+            if (s.any { it.isDigit() }) score += 20
+            if (s.contains("%") || s.contains("R$") || s.contains("$")) score += 15
+            if (s.contains("importante", ignoreCase = true) || s.contains("destaque", ignoreCase = true) || s.contains("principal", ignoreCase = true) || s.contains("novo", ignoreCase = true)) score += 20
+            score
+        }
+
+        val arcEmojis = listOf("💡", "📌", "⚡", "🎯", "🔍")
+        val selectedPoints = candidates.take(5)
+
+        val bulletSection = buildString {
+            if (selectedPoints.isNotEmpty()) {
+                selectedPoints.forEachIndexed { idx, pt ->
+                    val emoji = arcEmojis.getOrElse(idx) { "✨" }
+                    val cleanPt = pt.replace(Regex("^[-*•\\s]+"), "").trim()
+                    append("- $emoji $cleanPt\n")
+                }
+            } else {
+                append("- 💡 ${title.ifBlank { "Tópico central identificado na página" }}\n")
+                append("- 📌 Conteúdo textual compilado diretamente da página para leitura otimizada.\n")
+                append("- ⚡ Navegação focada sem anúncios e sem distrações visuais.\n")
+            }
+        }.trimEnd()
+
+        val conclusion = if (allSentences.size > 4) {
+            val last = allSentences.last()
+            if (last.length > 180) last.take(177) + "..." else last
+        } else {
+            "Artigo completo disponível para leitura imersiva no Tessera Browser."
+        }
+
+        return buildString {
+            append("## Visão Geral\n")
+            append(overview)
+            append("\n\n")
+            append("## Destaques Principais\n")
+            append(bulletSection)
+            append("\n\n")
+            append("## Conclusão\n")
+            append(conclusion)
         }
     }
 
@@ -2515,6 +2731,22 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissQuickSettings() {
         _uiState.update { it.copy(showQuickSettings = false) }
+    }
+
+    fun openFullSettings() {
+        _uiState.update { it.copy(showFullSettings = true, showQuickSettings = false) }
+    }
+
+    fun dismissFullSettings() {
+        _uiState.update { it.copy(showFullSettings = false) }
+    }
+
+    fun toggleFullSettings() {
+        _uiState.update { it.copy(showFullSettings = !it.showFullSettings, showQuickSettings = false) }
+    }
+
+    fun openQuickSettings() {
+        _uiState.update { it.copy(showQuickSettings = true, showFullSettings = false) }
     }
 
     // Bookmarks Management

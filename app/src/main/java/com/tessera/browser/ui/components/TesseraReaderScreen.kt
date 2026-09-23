@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.FormatSize
@@ -145,6 +146,7 @@ fun TesseraReaderScreen(
     onSelectFontFamily: (ReaderFontFamily) -> Unit,
     onToggleShowImages: () -> Unit,
     onToggleTts: () -> Unit,
+    onOpenArcSummary: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -171,6 +173,7 @@ fun TesseraReaderScreen(
                 isSettingsOpen = isSettingsOpen,
                 onClose = onClose,
                 onToggleTts = onToggleTts,
+                onOpenArcSummary = onOpenArcSummary,
                 onCopyText = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                     if (clipboard != null && article.plainText.isNotBlank()) {
@@ -425,6 +428,7 @@ private fun ReaderTopBar(
     isSettingsOpen: Boolean,
     onClose: () -> Unit,
     onToggleTts: () -> Unit,
+    onOpenArcSummary: () -> Unit,
     onCopyText: () -> Unit,
     onToggleSettings: () -> Unit
 ) {
@@ -472,11 +476,21 @@ private fun ReaderTopBar(
                 }
             }
 
-            // Quick Actions: TTS, Copy, Typography (Aa)
+            // Quick Actions: Arc AI Summary, TTS, Copy, Typography (Aa)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                // Arc AI Summary
+                IconButton(onClick = onOpenArcSummary) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = "Resumir artigo com Arc IA",
+                        tint = colors.accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 // TTS Play / Stop
                 IconButton(onClick = onToggleTts) {
                     Icon(

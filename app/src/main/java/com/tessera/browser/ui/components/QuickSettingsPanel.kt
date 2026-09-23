@@ -26,10 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import androidx.compose.material.icons.automirrored.rounded.TrendingUp
-import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AppShortcut
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Computer
@@ -37,54 +35,47 @@ import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.NorthEast
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.OfflinePin
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.Translate
-import androidx.compose.material.icons.rounded.WbSunny
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
-import com.tessera.browser.data.SearchEngine
-
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tessera.browser.data.AvailableWallpapers
-import com.tessera.browser.data.WallpaperTheme
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import coil.compose.SubcomposeAsyncImage
+import com.tessera.browser.data.AvailableWallpapers
+import com.tessera.browser.data.SearchEngine
+import com.tessera.browser.data.WallpaperTheme
 
+/**
+ * Painel de Configurações Rápidas (Quick Settings BottomSheet).
+ * Limpo, focado e direto ao ponto — inspirado nos melhores navegadores modernos (Opera, Samsung Internet, Arc).
+ * Contém alternâncias imediatas (Modo Escuro, Desktop, AdBlock, Cookies), ações contextuais da página ativa,
+ * personalização rápida de papel de parede e atalho direto para a Tela Completa de Configurações.
+ */
 @Composable
 fun QuickSettingsPanel(
     isDarkMode: Boolean,
@@ -92,12 +83,12 @@ fun QuickSettingsPanel(
     showWallpaper: Boolean,
     selectedWallpaperId: String,
     customWallpaperUri: String? = null,
-    showFavoritesBar: Boolean,
-    tesseraAiEnabled: Boolean,
-    aiToolbarButton: Boolean,
-    aiTextHighlightPrompts: Boolean,
-    showSidebar: Boolean,
-    autoHideSidebar: Boolean,
+    showFavoritesBar: Boolean = true,
+    tesseraAiEnabled: Boolean = true,
+    aiToolbarButton: Boolean = true,
+    aiTextHighlightPrompts: Boolean = true,
+    showSidebar: Boolean = false,
+    autoHideSidebar: Boolean = true,
     adBlockEnabled: Boolean = true,
     isDesktopMode: Boolean = false,
     cookieBlockerEnabled: Boolean = true,
@@ -109,14 +100,14 @@ fun QuickSettingsPanel(
     onShowWallpaperChanged: (Boolean) -> Unit,
     onSelectWallpaper: (String) -> Unit,
     onUploadWallpaper: () -> Unit = {},
-    onShowFavoritesBarChanged: (Boolean) -> Unit,
+    onShowFavoritesBarChanged: (Boolean) -> Unit = {},
     onShowWeatherWidgetChanged: (Boolean) -> Unit = {},
     onShowQuotesWidgetChanged: (Boolean) -> Unit = {},
-    onTesseraAiChanged: (Boolean) -> Unit,
-    onAiToolbarButtonChanged: (Boolean) -> Unit,
-    onAiTextHighlightPromptsChanged: (Boolean) -> Unit,
-    onShowSidebarChanged: (Boolean) -> Unit,
-    onAutoHideSidebarChanged: (Boolean) -> Unit,
+    onTesseraAiChanged: (Boolean) -> Unit = {},
+    onAiToolbarButtonChanged: (Boolean) -> Unit = {},
+    onAiTextHighlightPromptsChanged: (Boolean) -> Unit = {},
+    onShowSidebarChanged: (Boolean) -> Unit = {},
+    onAutoHideSidebarChanged: (Boolean) -> Unit = {},
     onAdBlockChanged: (Boolean) -> Unit,
     onDesktopModeChanged: (Boolean) -> Unit = {},
     onCookieBlockerChanged: (Boolean) -> Unit = {},
@@ -134,17 +125,14 @@ fun QuickSettingsPanel(
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit = {},
     onOpenReaderMode: () -> Unit = {},
+    onOpenFullSettings: () -> Unit = {},
+    geminiApiKey: String? = null,
+    onGeminiApiKeyChanged: (String) -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     val verticalScrollState = rememberScrollState()
-
-    var showClearDataDialog by remember { mutableStateOf(false) }
-    var clearHistoryChecked by remember { mutableStateOf(true) }
-    var clearCacheChecked by remember { mutableStateOf(true) }
-    var clearCookiesChecked by remember { mutableStateOf(true) }
-
 
     val panelBg = if (isDarkMode) {
         Brush.verticalGradient(
@@ -173,16 +161,13 @@ fun QuickSettingsPanel(
     }
 
     val titleColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF19191C)
-    val closeIconTint = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF48484A)
+    val iconButtonTint = if (isDarkMode) Color.White.copy(alpha = 0.8f) else Color(0xFF48484A)
     val primaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF1C1C1E)
-    val secondaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF2C2C2E)
-    val tertiaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366)
+    val secondaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF48484A)
     val sectionHeaderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
     val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0x0A000000)
     val cardArrowTint = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
-    val cardHistoryIconTint = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF3A3A3C)
-    val infoIconTint = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF8E8E93)
-    val secondaryIconTint = if (isDarkMode) Color.White.copy(alpha = 0.6f) else Color(0xFF8E8E93)
+    val accentColor = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4)
 
     Column(
         modifier = modifier
@@ -190,114 +175,298 @@ fun QuickSettingsPanel(
             .fillMaxHeight(0.85f)
             .clip(panelShape)
             .background(panelBg)
-            .border(
-                width = 1.dp,
-                brush = panelBorder,
-                shape = panelShape
-            )
-            .padding(horizontal = 24.dp)
+            .border(width = 1.dp, brush = panelBorder, shape = panelShape)
+            .padding(horizontal = 20.dp)
             .verticalScroll(verticalScrollState)
     ) {
-        // Sticky Header with Close button
-        Spacer(modifier = Modifier.height(16.dp))
+        // DRAG HANDLE & HEADER
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(width = 36.dp, height = 4.dp)
+                .clip(CircleShape)
+                .background(if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.15f))
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Configuração fácil",
-                color = titleColor,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Fechar",
-                    tint = closeIconTint,
-                    modifier = Modifier.size(20.dp)
+            Column {
+                Text(
+                    text = "Configurações rápidas",
+                    color = titleColor,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = "Ajustes rápidos de navegação e página",
+                    color = sectionHeaderColor,
+                    fontSize = 11.5.sp
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Botão de atalho para todas as configurações
+                IconButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenFullSettings()
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "Todas as configurações",
+                        tint = accentColor,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+
+                // Botão de fechar
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Fechar",
+                        tint = iconButtonTint,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
         SettingsDivider(isDarkMode = isDarkMode)
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // 1. SEÇÃO: AMBIENTE
-        Spacer(modifier = Modifier.height(16.dp))
+        // 1. GRADE DE ALTERNÂNCIAS RÁPIDAS (Quick Toggles)
+        Text(
+            text = "ALTERNÂNCIAS RÁPIDAS",
+            color = sectionHeaderColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Toggle 1: Ambiente (Tema Claro / Escuro)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(cardBg)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Ambiente",
-                color = primaryTextColor,
-                fontSize = 15.5.sp,
-                fontWeight = FontWeight.Medium
-            )
-
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = if (isDarkMode) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
+                    contentDescription = null,
+                    tint = if (isDarkMode) Color(0xFFFFA726) else Color(0xFFF57C00),
+                    modifier = Modifier.size(20.dp)
+                )
+                Column {
+                    Text(
+                        text = "Ambiente",
+                        color = primaryTextColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = if (isDarkMode) "Modo escuro" else "Modo claro",
+                        color = sectionHeaderColor,
+                        fontSize = 11.5.sp
+                    )
+                }
+            }
             ThemeTogglePill(
                 isDarkMode = isDarkMode,
                 onToggle = { onDarkModeChanged(!isDarkMode) }
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Forçar páginas escuras
+        // Grade 2 colunas com toggles compactos
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Forçar páginas escuras",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-                Icon(
-                    imageVector = Icons.Rounded.Info,
-                    contentDescription = null,
-                    tint = infoIconTint,
-                    modifier = Modifier.size(16.dp)
-                )
-                Icon(
-                    imageVector = Icons.Rounded.NorthEast,
-                    contentDescription = null,
-                    tint = infoIconTint,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            TesseraSwitch(
-                checked = forceDarkPages,
-                onCheckedChange = onForceDarkPagesChanged,
-                isDarkMode = isDarkMode
+            // Card: Modo Desktop / Computador
+            QuickToggleMiniCard(
+                icon = Icons.Rounded.Computer,
+                iconTint = if (isDesktopMode) Color(0xFF42A5F5) else sectionHeaderColor,
+                title = "Versão PC",
+                subtitle = if (isDesktopMode) "Ativa" else "Celular",
+                checked = isDesktopMode,
+                onCheckedChange = onDesktopModeChanged,
+                isDarkMode = isDarkMode,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Card: Bloqueador de Anúncios (AdBlock)
+            QuickToggleMiniCard(
+                icon = Icons.Rounded.Shield,
+                iconTint = if (adBlockEnabled) Color(0xFF64B5F6) else sectionHeaderColor,
+                title = "AdBlock",
+                subtitle = if (adBlockEnabled) "Ativo" else "Inativo",
+                checked = adBlockEnabled,
+                onCheckedChange = onAdBlockChanged,
+                isDarkMode = isDarkMode,
+                modifier = Modifier.weight(1f)
             )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // 2. SEÇÃO: PAPEL DE PAREDE
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Card: Forçar Páginas Escuras
+            QuickToggleMiniCard(
+                icon = Icons.Rounded.DarkMode,
+                iconTint = if (forceDarkPages) Color(0xFFBA68C8) else sectionHeaderColor,
+                title = "Sites escuros",
+                subtitle = if (forceDarkPages) "Forçado" else "Padrão",
+                checked = forceDarkPages,
+                onCheckedChange = onForceDarkPagesChanged,
+                isDarkMode = isDarkMode,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Card: Bloquear Avisos de Cookies LGPD
+            QuickToggleMiniCard(
+                icon = Icons.Rounded.Cookie,
+                iconTint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else sectionHeaderColor,
+                title = "Sem cookies",
+                subtitle = if (cookieBlockerEnabled) "Bloqueando" else "Padrão",
+                checked = cookieBlockerEnabled,
+                onCheckedChange = onCookieBlockerChanged,
+                isDarkMode = isDarkMode,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // 2. SEÇÃO: FERRAMENTAS DA PÁGINA (Somente quando navegando)
+        if (isWebPageActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsDivider(isDarkMode = isDarkMode)
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "AÇÕES DA PÁGINA ATIVA",
+                color = sectionHeaderColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Grade 2 colunas com ações rápidas
+            val actionItems = listOf(
+                PageActionItem(Icons.AutoMirrored.Rounded.MenuBook, "Modo de Leitura", Color(0xFF42A5F5)) {
+                    onDismiss()
+                    onOpenReaderMode()
+                },
+                PageActionItem(Icons.Rounded.Search, "Localizar na Página", Color(0xFF66BB6A)) {
+                    onDismiss()
+                    onFindInPage()
+                },
+                PageActionItem(Icons.Rounded.Translate, "Traduzir Página", Color(0xFF26A69A)) {
+                    onDismiss()
+                    onTranslatePage()
+                },
+                PageActionItem(Icons.Rounded.Share, "Compartilhar", Color(0xFFAB47BC)) {
+                    onDismiss()
+                    onSharePage()
+                },
+                PageActionItem(Icons.Rounded.Print, "Salvar em PDF", Color(0xFFFFA726)) {
+                    onDismiss()
+                    onPrintPage()
+                },
+                PageActionItem(Icons.Rounded.AppShortcut, "Adicionar à Home", Color(0xFF29B6F6)) {
+                    onDismiss()
+                    onAddToHomeScreen()
+                },
+                PageActionItem(Icons.Rounded.OfflinePin, "Salvar Offline", Color(0xFF8D6E63)) {
+                    onDismiss()
+                    onSavePageOffline()
+                },
+                PageActionItem(Icons.Rounded.QrCode2, "Código QR", Color(0xFF78909C)) {
+                    onDismiss()
+                    onShowQrCode()
+                },
+                PageActionItem(Icons.Rounded.Lock, "Permissões do Site", Color(0xFFEF5350)) {
+                    onDismiss()
+                    onOpenSiteSettings()
+                }
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                actionItems.chunked(2).forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        pair.forEach { action ->
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(cardBg)
+                                    .clickable(onClick = action.onClick)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = action.icon,
+                                    contentDescription = null,
+                                    tint = action.tint,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = action.title,
+                                    color = secondaryTextColor,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        if (pair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. PERSONALIZAÇÃO RÁPIDA: PAPEL DE PAREDE
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsDivider(isDarkMode = isDarkMode)
         Spacer(modifier = Modifier.height(14.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Exibir papel de parede",
+                text = "Papel de parede da tela inicial",
                 color = primaryTextColor,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
             TesseraSwitch(
@@ -307,9 +476,8 @@ fun QuickSettingsPanel(
             )
         }
 
-        // Galeria de miniaturas de papéis de parede (Reference Screenshot 3)
         if (showWallpaper) {
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             WallpaperCarousel(
                 wallpapers = AvailableWallpapers,
                 selectedId = selectedWallpaperId,
@@ -320,107 +488,54 @@ fun QuickSettingsPanel(
             )
         }
 
+        // 4. ATALHOS RÁPIDOS
         Spacer(modifier = Modifier.height(16.dp))
         SettingsDivider(isDarkMode = isDarkMode)
-
-        // 3. SEÇÃO: SEGURANÇA E NAVEGAÇÃO
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "Mecanismo de busca padrão",
-            color = sectionHeaderColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        SearchEngineSelector(
-            selectedEngine = selectedSearchEngine,
-            onSelectEngine = onSearchEngineSelected,
-            isDarkMode = isDarkMode
-        )
-
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Bloqueador de Anúncios
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Histórico e Favoritos
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Shield,
-                    contentDescription = null,
-                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Bloqueador de anúncios (AdBlock)",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = adBlockEnabled,
-                onCheckedChange = onAdBlockChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Histórico e Favoritos
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .clickable(onClick = onOpenHistory)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onOpenHistory()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.History,
                     contentDescription = null,
-                    tint = cardHistoryIconTint,
+                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = "Histórico e Favoritos",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp,
+                    text = "Histórico & Hub",
+                    color = primaryTextColor,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = null,
-                tint = cardArrowTint,
-                modifier = Modifier.size(16.dp)
-            )
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Downloads
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .clickable(onClick = onOpenDownloads)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+            // Downloads
             Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardBg)
+                    .clickable {
+                        onDismiss()
+                        onOpenDownloads()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -432,52 +547,72 @@ fun QuickSettingsPanel(
                 )
                 Text(
                     text = "Downloads",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp,
+                    color = primaryTextColor,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = null,
-                tint = cardArrowTint,
-                modifier = Modifier.size(16.dp)
-            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // 5. CARD DESTACADO: TODAS AS CONFIGURAÇÕES
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Limpar Dados de Navegação
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .clickable(onClick = { showClearDataDialog = true })
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    if (isDarkMode) {
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF00E5FF).copy(alpha = 0.15f), Color(0xFF7C4DFF).copy(alpha = 0.15f))
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFFE3F2FD), Color(0xFFEDE7F6))
+                        )
+                    }
+                )
+                .border(
+                    width = 1.2.dp,
+                    color = if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.4f) else Color(0xFF0288D1).copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .clickable {
+                    onDismiss()
+                    onOpenFullSettings()
+                }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.DeleteOutline,
-                    contentDescription = null,
-                    tint = Color(0xFFFF5252),
-                    modifier = Modifier.size(18.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color(0xFF0288D1).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = null,
+                        tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 Column {
                     Text(
-                        text = "Limpar dados de navegação",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
+                        text = "Todas as configurações",
+                        color = primaryTextColor,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Histórico, cache e cookies",
-                        color = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93),
+                        text = "Mecanismo de busca, IA, privacidade e mais",
+                        color = sectionHeaderColor,
                         fontSize = 11.5.sp
                     )
                 }
@@ -485,783 +620,80 @@ fun QuickSettingsPanel(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = cardArrowTint,
-                modifier = Modifier.size(16.dp)
+                tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
+                modifier = Modifier.size(18.dp)
             )
         }
 
+        Spacer(modifier = Modifier.height(28.dp))
+    }
+}
 
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
+private data class PageActionItem(
+    val icon: ImageVector,
+    val title: String,
+    val tint: Color,
+    val onClick: () -> Unit
+)
 
-        // SEÇÃO: FERRAMENTAS DA PÁGINA (CHROME & OPERA)
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "Ferramentas da página",
-            color = sectionHeaderColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+@Composable
+private fun QuickToggleMiniCard(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    isDarkMode: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0x0A000000)
+    val primaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF1C1C1E)
+    val sectionHeaderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
 
-        if (isWebPageActive) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onOpenReaderMode()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                        contentDescription = null,
-                        tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Modo de Leitura (Somente Texto)",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // Versão para Computador (Desktop)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(cardBg)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Computer,
-                    contentDescription = null,
-                    tint = if (isDesktopMode) Color(0xFF42A5F5) else secondaryIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Versão para computador",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = isDesktopMode,
-                onCheckedChange = onDesktopModeChanged,
-                isDarkMode = isDarkMode
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
             )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Bloqueador de Avisos de Cookies
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Cookie,
-                    contentDescription = null,
-                    tint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else secondaryIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
+            Column {
                 Text(
-                    text = "Bloquear avisos de cookies (LGPD)",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = cookieBlockerEnabled,
-                onCheckedChange = onCookieBlockerChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        if (isWebPageActive) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Localizar na Página
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onFindInPage()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Localizar na página",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Compartilhar Página
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onSharePage()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Share,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Compartilhar página",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Imprimir / Salvar em PDF
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onPrintPage()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Print,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Salvar em PDF / Imprimir",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Adicionar à Tela Inicial
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onAddToHomeScreen()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AppShortcut,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Adicionar à Tela Inicial",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Salvar para ler offline (.mht)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onSavePageOffline()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.OfflinePin,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Salvar para ler offline (.mht)",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Código QR da Página
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onShowQrCode()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.QrCode2,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Código QR da página",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Traduzir página
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onTranslatePage()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Translate,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Traduzir página",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Configurações do site
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onOpenSiteSettings()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Lock,
-                        contentDescription = null,
-                        tint = cardHistoryIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Configurações do site",
-                        color = secondaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = cardArrowTint,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 4. SEÇÃO: BARRA DE FAVORITOS
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.StarOutline,
-                    contentDescription = null,
-                    tint = secondaryIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Exibir a barra de favoritos",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = showFavoritesBar,
-                onCheckedChange = onShowFavoritesBarChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-
-        // 4. SEÇÃO: WIDGETS DA TELA INICIAL
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "Widgets da tela inicial",
-            color = sectionHeaderColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Widget de Tempo / Clima
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.WbSunny,
-                    contentDescription = null,
-                    tint = Color(0xFFFFA726),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Widget de tempo (clima)",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = showWeatherWidget,
-                onCheckedChange = onShowWeatherWidgetChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Widget de Cotações
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
-                    contentDescription = null,
-                    tint = Color(0xFF4CAF50),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Widget de cotações (USD, EUR, BTC)",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = showQuotesWidget,
-                onCheckedChange = onShowQuotesWidgetChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-
-        // 5. SEÇÃO: TESSERA AI (OPERA AI)
-        Spacer(modifier = Modifier.height(14.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4),
-                    modifier = Modifier.size(19.dp)
-                )
-                Text(
-                    text = "Tessera AI",
+                    text = title,
                     color = primaryTextColor,
-                    fontSize = 15.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
-            }
-            TesseraSwitch(
-                checked = tesseraAiEnabled,
-                onCheckedChange = onTesseraAiChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        if (tesseraAiEnabled) {
-            Spacer(modifier = Modifier.height(12.dp))
-            // Sub-item: Botão de IA na barra de ferramentas
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Text(
-                    text = "Botão de IA na barra de ferramentas",
-                    color = tertiaryTextColor,
-                    fontSize = 13.5.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                TesseraSwitch(
-                    checked = aiToolbarButton,
-                    onCheckedChange = onAiToolbarButtonChanged,
-                    isDarkMode = isDarkMode
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            // Sub-item: Avisos da IA no pop-up de destaque
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Avisos da IA no pop-up de destaque do texto",
-                    color = tertiaryTextColor,
-                    fontSize = 13.5.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                TesseraSwitch(
-                    checked = aiTextHighlightPrompts,
-                    onCheckedChange = onAiTextHighlightPromptsChanged,
-                    isDarkMode = isDarkMode
+                    text = subtitle,
+                    color = sectionHeaderColor,
+                    fontSize = 11.sp
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-
-        // 6. SEÇÃO: BARRA LATERAL
-        Spacer(modifier = Modifier.height(14.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
-                    contentDescription = null,
-                    tint = secondaryIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Exibir a barra lateral",
-                    color = secondaryTextColor,
-                    fontSize = 14.5.sp
-                )
-            }
-            TesseraSwitch(
-                checked = showSidebar,
-                onCheckedChange = onShowSidebarChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        if (showSidebar) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Ocultar automaticamente a barra lateral",
-                    color = tertiaryTextColor,
-                    fontSize = 13.5.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                TesseraSwitch(
-                    checked = autoHideSidebar,
-                    onCheckedChange = onAutoHideSidebarChanged,
-                    isDarkMode = isDarkMode
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-    }
-
-    if (showClearDataDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDataDialog = false },
-            title = {
-                Text(
-                    text = "Limpar dados de navegação",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Selecione quais dados você deseja remover:",
-                        fontSize = 13.sp,
-                        color = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF636366)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearHistoryChecked = !clearHistoryChecked }
-                    ) {
-                        Checkbox(
-                            checked = clearHistoryChecked,
-                            onCheckedChange = { clearHistoryChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Histórico de navegação", fontSize = 14.sp)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearCacheChecked = !clearCacheChecked }
-                    ) {
-                        Checkbox(
-                            checked = clearCacheChecked,
-                            onCheckedChange = { clearCacheChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Cache de páginas e imagens", fontSize = 14.sp)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearCookiesChecked = !clearCookiesChecked }
-                    ) {
-                        Checkbox(
-                            checked = clearCookiesChecked,
-                            onCheckedChange = { clearCookiesChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Cookies e dados de sites", fontSize = 14.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearDataDialog = false
-                        onClearBrowsingData(clearHistoryChecked, clearCookiesChecked, clearCacheChecked)
-                    }
-                ) {
-                    Text("Limpar agora", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDataDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
+        TesseraSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            isDarkMode = isDarkMode
         )
     }
 }
 
-
 @Composable
-private fun WallpaperCarousel(
+fun WallpaperCarousel(
     wallpapers: List<WallpaperTheme>,
     selectedId: String,
     customWallpaperUri: String?,
@@ -1383,7 +815,7 @@ private fun WallpaperCarousel(
             }
         }
 
-        // 3. Papéis de Parede Oficiais (Villa Mediterrânea principal mantida + novos temas)
+        // 3. Papéis de Parede Oficiais
         wallpapers.forEach { theme ->
             val isSelected = theme.id == selectedId
             Column(
@@ -1447,7 +879,7 @@ private fun WallpaperCarousel(
 }
 
 @Composable
-private fun ThemeTogglePill(
+fun ThemeTogglePill(
     isDarkMode: Boolean,
     onToggle: () -> Unit
 ) {
@@ -1483,8 +915,8 @@ private fun ThemeTogglePill(
 }
 
 @Composable
-private fun ThemeIconChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+fun ThemeIconChip(
+    icon: ImageVector,
     isSelected: Boolean,
     isDarkMode: Boolean = true,
     description: String
@@ -1525,7 +957,7 @@ private fun ThemeIconChip(
 }
 
 @Composable
-private fun TesseraSwitch(
+fun TesseraSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     isDarkMode: Boolean = true
@@ -1545,7 +977,7 @@ private fun TesseraSwitch(
 }
 
 @Composable
-private fun SettingsDivider(
+fun SettingsDivider(
     isDarkMode: Boolean = true
 ) {
     HorizontalDivider(
@@ -1555,7 +987,7 @@ private fun SettingsDivider(
 }
 
 @Composable
-private fun SearchEngineSelector(
+fun SearchEngineSelector(
     selectedEngine: SearchEngine,
     onSelectEngine: (SearchEngine) -> Unit,
     isDarkMode: Boolean
@@ -1618,4 +1050,3 @@ private fun SearchEngineSelector(
         }
     }
 }
-

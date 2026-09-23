@@ -37,7 +37,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +92,7 @@ import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
+import com.tessera.browser.ui.components.TesseraSettingsScreen
 import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.SiteSettingsModal
 import com.tessera.browser.ui.components.TabsModal
@@ -162,148 +165,160 @@ private val COSMETIC_ADBLOCK_SCRIPT = """
 private val READER_EXTRACTION_SCRIPT = """
     (function() {
         try {
-            var domain = (window.location.hostname || '').replace('www.', '');
+            var domain = (window.location.hostname || '').replace(/^www\./, '');
 
+            // 1. Title Extraction
             var title = '';
-            var metaOgTitle = document.querySelector('meta[property="og:title"]');
-            var metaTwitterTitle = document.querySelector('meta[name="twitter:title"]');
+            var metaOg = document.querySelector('meta[property="og:title"]');
+            var metaTw = document.querySelector('meta[name="twitter:title"]');
             var h1 = document.querySelector('h1');
-            if (metaOgTitle && metaOgTitle.content) {
-                title = metaOgTitle.content.trim();
-            } else if (metaTwitterTitle && metaTwitterTitle.content) {
-                title = metaTwitterTitle.content.trim();
-            } else if (h1 && (h1.innerText || '').trim().length > 5) {
-                title = h1.innerText.trim();
+            if (metaOg && metaOg.content) {
+                title = metaOg.content.trim();
+            } else if (metaTw && metaTw.content) {
+                title = metaTw.content.trim();
+            } else if (h1 && (h1.innerText || h1.textContent || '').trim().length > 3) {
+                title = (h1.innerText || h1.textContent).trim();
             } else {
                 title = document.title || '';
             }
+            title = title.replace(/\s*[-–—|]\s*[^-–—|]+$/, '').trim();
 
+            // 2. Author Extraction
             var author = '';
             var authorMeta = document.querySelector('meta[name="author"], meta[property="article:author"], meta[name="byl"]');
-            var authorEl = document.querySelector('[rel="author"], .byline, .author, .c-byline__item, .author-name, .article__author');
+            var authorEl = document.querySelector('[rel="author"], .byline, .author, .c-byline__item, .author-name, .article__author, [itemprop="author"]');
             if (authorMeta && authorMeta.content) {
                 author = authorMeta.content.trim();
-            } else if (authorEl && (authorEl.innerText || '').trim()) {
-                author = authorEl.innerText.trim();
+            } else if (authorEl && (authorEl.innerText || authorEl.textContent || '').trim()) {
+                author = (authorEl.innerText || authorEl.textContent).trim();
             }
 
+            // 3. Date Extraction
             var dateStr = '';
             var timeMeta = document.querySelector('meta[property="article:published_time"], meta[name="pubdate"], meta[name="date"]');
-            var timeEl = document.querySelector('time, [property="article:published_time"], .date, .published, .datetime');
+            var timeEl = document.querySelector('time, [property="article:published_time"], .date, .published, .datetime, [itemprop="datePublished"]');
             if (timeMeta && timeMeta.content) {
                 dateStr = timeMeta.content.trim();
             } else if (timeEl) {
-                dateStr = (timeEl.getAttribute('datetime') || timeEl.innerText || '').trim();
+                dateStr = (timeEl.getAttribute('datetime') || timeEl.innerText || timeEl.textContent || '').trim();
             }
             if (dateStr.length > 35) dateStr = dateStr.substring(0, 35);
 
-            var clone = document.body.cloneNode(true);
-
-            var unwantedSelectors = [
-                'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'nav', 'footer', 'header',
-                'form', 'button', 'input', 'select', 'textarea',
-                '.ad', '.ads', '.advertisement', '[id*="google_ads"]', '[class*="google_ads"]',
-                '[id*="banner"]', '[class*="banner"]', '.sidebar', '.widget',
-                '.share', '.social', '.share-buttons', '#comments', '.comments',
-                '.cookie-banner', '.cookie-notice', '.cookie-consent',
-                '.modal', '.popup', '[role="navigation"]', '[role="banner"]',
-                '[role="complementary"]', '[role="dialog"]', '[aria-hidden="true"]'
-            ];
-            var badNodes = clone.querySelectorAll(unwantedSelectors.join(','));
-            for (var b = 0; b < badNodes.length; b++) {
-                badNodes[b].remove();
-            }
-
+            // 4. Candidate Content Containers (Searching LIVE DOM directly)
             var candidateSelectors = [
-                'article', '[itemprop="articleBody"]', 'main article', '.article-body',
-                '.post-content', '.entry-content', '.story-body', '.content-article',
-                '#article-body', '#story', '.noticia-texto', '[role="main"] article',
-                'main', '[role="main"]', '.main-content', '#main-content', '#content'
+                'article', '[itemprop="articleBody"]', 'main article', '[role="main"] article',
+                '.article-body', '.article__body', '.post-content', '.entry-content', '.story-body',
+                '.content-article', '.caas-body', '#article-body', '#story', '.noticia-texto',
+                '.materia-conteudo', '.post_content', '.articleContent', 'main', '[role="main"]',
+                '#main-content', '.main-content', '#content'
             ];
 
             var bestContainer = null;
-            var maxScore = 0;
+            var maxScore = -1;
 
             for (var c = 0; c < candidateSelectors.length; c++) {
-                var el = clone.querySelector(candidateSelectors[c]);
-                if (el) {
-                    var pCount = el.querySelectorAll('p').length;
-                    var textLen = (el.innerText || '').trim().length;
-                    var score = pCount * 100 + textLen;
-                    if (score > maxScore && textLen > 150) {
+                var els = document.querySelectorAll(candidateSelectors[c]);
+                for (var e = 0; e < els.length; e++) {
+                    var el = els[e];
+                    if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
+                    var pList = el.querySelectorAll('p');
+                    var text = (el.innerText || el.textContent || '').trim();
+                    var links = el.querySelectorAll('a');
+                    var linkTextLen = 0;
+                    for (var l = 0; l < links.length; l++) {
+                        linkTextLen += (links[l].innerText || links[l].textContent || '').length;
+                    }
+                    var substantiveTextLen = Math.max(0, text.length - linkTextLen);
+                    var score = pList.length * 150 + substantiveTextLen;
+                    if (score > maxScore && substantiveTextLen > 150) {
                         maxScore = score;
                         bestContainer = el;
                     }
                 }
+                if (bestContainer && maxScore > 600) break;
             }
 
             if (!bestContainer) {
-                bestContainer = clone;
+                bestContainer = document.body;
             }
+
+            var ignoreSelector = 'nav, footer, header, form, button, input, select, textarea, script, style, noscript, iframe, svg, canvas, .ad, .ads, .advertisement, [id*="google_ads"], [class*="google_ads"], [id*="banner"], [class*="banner"], .sidebar, .widget, .share, .social, .share-buttons, #comments, .comments, .cookie-banner, .cookie-notice, .cookie-consent, .modal, .popup, [role="navigation"], [role="banner"], [role="complementary"], [role="dialog"], [aria-hidden="true"]';
 
             var blocks = [];
             var plainTextParts = [];
-            var elements = bestContainer.querySelectorAll('h1, h2, h3, h4, p, blockquote, li, img');
             var seenTexts = new Set();
 
-            for (var i = 0; i < elements.length; i++) {
-                var node = elements[i];
+            var items = bestContainer.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, li, img');
+            for (var i = 0; i < items.length; i++) {
+                var node = items[i];
+                if (node.closest(ignoreSelector)) continue;
+
                 var tag = node.tagName.toLowerCase();
 
                 if (tag === 'img') {
-                    var src = node.getAttribute('src') || node.getAttribute('data-src') || node.getAttribute('data-lazy-src') || '';
-                    if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar') && !src.includes('pixel')) {
-                        var alt = node.getAttribute('alt') || '';
-                        blocks.push({
-                            type: 'IMAGE',
-                            text: '',
-                            imageUrl: src,
-                            caption: alt
-                        });
+                    var rawSrc = node.currentSrc || node.getAttribute('data-src') || node.getAttribute('data-lazy-src') || node.getAttribute('data-original') || node.src || '';
+                    if (rawSrc && !rawSrc.startsWith('data:') && !rawSrc.includes('icon') && !rawSrc.includes('logo') && !rawSrc.includes('avatar') && !rawSrc.includes('pixel') && !rawSrc.includes('tracking')) {
+                        try {
+                            var absUrl = new URL(rawSrc, document.baseURI).href;
+                            var caption = (node.getAttribute('alt') || node.getAttribute('title') || '').trim();
+                            if (!caption) {
+                                var fig = node.closest('figure');
+                                if (fig) {
+                                    var figCap = fig.querySelector('figcaption');
+                                    if (figCap) caption = (figCap.innerText || figCap.textContent || '').trim();
+                                }
+                            }
+                            blocks.push({
+                                type: 'IMAGE',
+                                text: '',
+                                imageUrl: absUrl,
+                                caption: caption
+                            });
+                        } catch(uErr) {}
                     }
                     continue;
                 }
 
-                var text = (node.innerText || '').trim();
-                if (text.length < 15) continue;
-                if (seenTexts.has(text)) continue;
-                seenTexts.add(text);
+                var t = (node.innerText || node.textContent || '').trim();
+                if (!t || t.length < 10) continue;
+                if (seenTexts.has(t)) continue;
+                seenTexts.add(t);
 
                 if (tag === 'h1' && blocks.length > 0) {
-                    blocks.push({ type: 'H1', text: text });
-                    plainTextParts.push(text);
+                    blocks.push({ type: 'H1', text: t });
+                    plainTextParts.push(t);
                 } else if (tag === 'h2') {
-                    blocks.push({ type: 'H2', text: text });
-                    plainTextParts.push(text);
-                } else if (tag === 'h3' || tag === 'h4') {
-                    blocks.push({ type: 'H3', text: text });
-                    plainTextParts.push(text);
+                    blocks.push({ type: 'H2', text: t });
+                    plainTextParts.push(t);
+                } else if (tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
+                    blocks.push({ type: 'H3', text: t });
+                    plainTextParts.push(t);
                 } else if (tag === 'blockquote') {
-                    blocks.push({ type: 'BLOCKQUOTE', text: text });
-                    plainTextParts.push(text);
+                    blocks.push({ type: 'BLOCKQUOTE', text: t });
+                    plainTextParts.push(t);
                 } else {
-                    blocks.push({ type: 'PARAGRAPH', text: text });
-                    plainTextParts.push(text);
+                    blocks.push({ type: 'PARAGRAPH', text: t });
+                    plainTextParts.push(t);
                 }
             }
 
             if (blocks.length < 2) {
-                var paragraphs = clone.querySelectorAll('p, div');
-                for (var p = 0; p < paragraphs.length; p++) {
-                    var pel = paragraphs[p];
-                    if (pel.querySelectorAll('p').length > 0) continue;
-                    var pText = (pel.innerText || '').trim();
-                    if (pText.length > 40 && !seenTexts.has(pText)) {
-                        seenTexts.add(pText);
-                        blocks.push({ type: 'PARAGRAPH', text: pText });
-                        plainTextParts.push(pText);
+                var allP = document.body.querySelectorAll('p');
+                for (var p = 0; p < allP.length; p++) {
+                    var pel = allP[p];
+                    if (pel.closest(ignoreSelector)) continue;
+                    var pt = (pel.innerText || pel.textContent || '').trim();
+                    if (pt.length > 30 && !seenTexts.has(pt)) {
+                        seenTexts.add(pt);
+                        blocks.push({ type: 'PARAGRAPH', text: pt });
+                        plainTextParts.push(pt);
                     }
                 }
             }
 
             var fullText = plainTextParts.join('\n\n');
             var words = (fullText.match(/\S+/g) || []).length;
-            var readTime = Math.max(1, Math.round(words / 200));
+            var readTime = Math.max(1, Math.round(words / 190));
 
             var articleData = {
                 title: title,
@@ -329,45 +344,77 @@ private val READER_EXTRACTION_SCRIPT = """
 private val SUMMARY_EXTRACTION_SCRIPT = """
     (function() {
         try {
-            var domain = (window.location.hostname || '').replace('www.', '');
-            var metaOgTitle = document.querySelector('meta[property="og:title"]');
-            var metaTwitter = document.querySelector('meta[name="twitter:title"]');
+            var domain = (window.location.hostname || '').replace(/^www\./, '');
+            var title = '';
+            var metaOg = document.querySelector('meta[property="og:title"]');
+            var metaTw = document.querySelector('meta[name="twitter:title"]');
             var h1 = document.querySelector('h1');
-            var title = (metaOgTitle && metaOgTitle.content) || 
-                        (metaTwitter && metaTwitter.content) || 
-                        (h1 && h1.innerText) || 
-                        document.title || '';
+            if (metaOg && metaOg.content) title = metaOg.content.trim();
+            else if (metaTw && metaTw.content) title = metaTw.content.trim();
+            else if (h1 && (h1.innerText || h1.textContent || '').trim().length > 3) title = (h1.innerText || h1.textContent).trim();
+            else title = document.title || '';
+            title = title.replace(/\s*[-–—|]\s*[^-–—|]+$/, '').trim();
 
-            var clone = document.body.cloneNode(true);
-            var unwanted = clone.querySelectorAll('script, style, noscript, iframe, svg, canvas, nav, footer, header, form, button, input, .ad, .ads, [id*="google_ads"], [class*="google_ads"], .sidebar, .widget, .comments, #comments, .cookie-banner, .cookie-notice');
-            for (var i = 0; i < unwanted.length; i++) {
-                unwanted[i].remove();
-            }
+            var ignoreSelector = 'nav, footer, header, form, button, input, select, textarea, script, style, noscript, iframe, svg, canvas, .ad, .ads, .advertisement, [id*="google_ads"], [class*="google_ads"], [id*="banner"], [class*="banner"], .sidebar, .widget, .share, .social, #comments, .comments, .cookie-banner, .cookie-notice, .modal, .popup';
 
             var candidateSelectors = [
-                'article', '[itemprop="articleBody"]', 'main article', '.article-body',
-                '.post-content', '.entry-content', '.story-body', '.content-article',
-                '#article-body', '#story', '.noticia-texto', 'main', '#content'
+                'article', '[itemprop="articleBody"]', 'main article', '[role="main"] article',
+                '.article-body', '.article__body', '.post-content', '.entry-content', '.story-body',
+                '.content-article', '.caas-body', '#article-body', '#story', '.noticia-texto',
+                '.materia-conteudo', 'main', '[role="main"]', '#main-content', '.main-content', '#content'
             ];
 
-            var best = null;
+            var bestContainer = null;
+            var maxScore = -1;
             for (var c = 0; c < candidateSelectors.length; c++) {
-                var el = clone.querySelector(candidateSelectors[c]);
-                if (el && (el.innerText || '').trim().length > 180) {
-                    best = el;
-                    break;
+                var els = document.querySelectorAll(candidateSelectors[c]);
+                for (var e = 0; e < els.length; e++) {
+                    var el = els[e];
+                    if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
+                    var pList = el.querySelectorAll('p');
+                    var text = (el.innerText || el.textContent || '').trim();
+                    var score = pList.length * 100 + text.length;
+                    if (score > maxScore && text.length > 150) {
+                        maxScore = score;
+                        bestContainer = el;
+                    }
+                }
+                if (bestContainer && maxScore > 500) break;
+            }
+            if (!bestContainer) bestContainer = document.body;
+
+            var parts = [];
+            var seen = new Set();
+            var elements = bestContainer.querySelectorAll('h1, h2, h3, h4, p, blockquote, li');
+            for (var i = 0; i < elements.length; i++) {
+                var node = elements[i];
+                if (node.closest(ignoreSelector)) continue;
+                var t = (node.innerText || node.textContent || '').trim();
+                if (t.length < 15 || seen.has(t)) continue;
+                seen.add(t);
+                parts.push(t);
+            }
+
+            if (parts.length < 2) {
+                var allP = document.body.querySelectorAll('p');
+                for (var p = 0; p < allP.length; p++) {
+                    var pel = allP[p];
+                    if (pel.closest(ignoreSelector)) continue;
+                    var pt = (pel.innerText || pel.textContent || '').trim();
+                    if (pt.length > 35 && !seen.has(pt)) {
+                        seen.add(pt);
+                        parts.push(pt);
+                    }
                 }
             }
-            if (!best) best = clone;
 
-            var text = (best.innerText || clone.innerText || '').trim();
-            text = text.replace(/\n\s*\n/g, '\n\n');
-            if (text.length > 7000) text = text.substring(0, 7000);
+            var fullText = parts.join('\n\n');
+            if (fullText.length > 8000) fullText = fullText.substring(0, 8000);
 
             var payload = {
-                title: title.trim(),
+                title: title.trim() || document.title || 'Página Atual',
                 domain: domain,
-                content: text
+                content: fullText
             };
 
             if (window.TesseraBridge && window.TesseraBridge.onSummaryExtracted) {
@@ -376,9 +423,9 @@ private val SUMMARY_EXTRACTION_SCRIPT = """
         } catch(e) {
             if (window.TesseraBridge && window.TesseraBridge.onSummaryExtracted) {
                 window.TesseraBridge.onSummaryExtracted(JSON.stringify({
-                    title: document.title || '',
-                    domain: (window.location.hostname || '').replace('www.', ''),
-                    content: (document.body.innerText || '').substring(0, 5000)
+                    title: document.title || 'Página Atual',
+                    domain: (window.location.hostname || '').replace(/^www\./, ''),
+                    content: (document.body ? (document.body.innerText || document.body.textContent || '').substring(0, 5000) : '')
                 }));
             }
         }
@@ -538,11 +585,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
             if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
+        } else if (state.showFullSettings) {
+            viewModel.dismissFullSettings()
         } else if (state.showQrCodeModal) {
             viewModel.dismissQrCodeModal()
         } else if (state.pageError != null) {
@@ -963,32 +1012,42 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             )
                                         }
 
-                                        // Detect Reader Mode availability on actual articles/content pages
-                                        view?.evaluateJavascript(
-                                            """
+                                        // Detect Reader Mode availability on actual articles/content pages (Immediate + SPA delayed)
+                                        val checkReaderScript = """
                                             (function() {
                                                 var host = (window.location.hostname || '').toLowerCase();
                                                 if (host.includes('google.') || host.includes('duckduckgo.') || host.includes('bing.') || host.includes('duck.ai') || host.includes('youtube.com')) {
                                                     return 'false';
                                                 }
                                                 var article = document.querySelector('article, [itemprop="articleBody"], main article, .article-body, .post-content, .entry-content, [role="main"] article');
-                                                if (article && (article.innerText || '').trim().length > 350) {
+                                                if (article && (article.innerText || article.textContent || '').trim().length > 180) {
                                                     return 'true';
                                                 }
                                                 var paragraphs = document.querySelectorAll('p');
                                                 var substantialP = 0;
                                                 for (var i = 0; i < paragraphs.length; i++) {
-                                                    if ((paragraphs[i].innerText || '').trim().length > 70) {
+                                                    if ((paragraphs[i].innerText || paragraphs[i].textContent || '').trim().length > 45) {
                                                         substantialP++;
                                                     }
                                                 }
-                                                return (substantialP >= 3) ? 'true' : 'false';
+                                                return (substantialP >= 2) ? 'true' : 'false';
                                             })()
-                                            """.trimIndent()
-                                        ) { result ->
+                                        """.trimIndent()
+
+                                        view?.evaluateJavascript(checkReaderScript) { result ->
                                             val isAvailable = result?.replace("\"", "")?.trim() == "true"
                                             viewModel.setReaderModeAvailable(isAvailable)
                                         }
+
+                                        // Re-check after 1s to capture client-side hydrated SPA articles (Medium, Substack, News SPAs)
+                                        view?.postDelayed({
+                                            view.evaluateJavascript(checkReaderScript) { result ->
+                                                val isAvailable = result?.replace("\"", "")?.trim() == "true"
+                                                if (isAvailable) {
+                                                    viewModel.setReaderModeAvailable(true)
+                                                }
+                                            }
+                                        }, 1000)
 
                                         // Detect Foreign Language for Real-Time Google Translation
                                         view?.evaluateJavascript(
@@ -1585,8 +1644,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         } else {
                             val currentTitle = webViewInstance?.title ?: ""
                             val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
-                            viewModel.requestArcSummary(currentTitle, currentDomain, "Extraindo conteúdo da página...")
-                            webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                            if (state.isReaderModeActive && state.readerArticle != null) {
+                                viewModel.requestArcSummary(state.readerArticle!!.title, state.readerArticle!!.domain, state.readerArticle!!.plainText)
+                            } else {
+                                viewModel.prepareArcSummary(currentTitle, currentDomain)
+                                webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                            }
                         }
                     } else {
                         viewModel.openAiAction(action)
@@ -1624,8 +1687,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onRetry = {
                     val currentTitle = webViewInstance?.title ?: ""
                     val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
-                    viewModel.requestArcSummary(currentTitle, currentDomain, "Recarregando...")
-                    webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                    if (state.isReaderModeActive && state.readerArticle != null) {
+                        viewModel.requestArcSummary(state.readerArticle!!.title, state.readerArticle!!.domain, state.readerArticle!!.plainText)
+                    } else {
+                        viewModel.prepareArcSummary(currentTitle, currentDomain)
+                        webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                    }
                 },
                 onDismiss = { viewModel.dismissArcSummary() }
             )
@@ -1768,10 +1835,89 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.openDownloadsModal()
                 },
                 onOpenReaderMode = {
+                    viewModel.dismissQuickSettings()
                     Toast.makeText(context, "Convertendo página em texto...", Toast.LENGTH_SHORT).show()
                     webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
                 },
+                onOpenFullSettings = {
+                    viewModel.openFullSettings()
+                },
+                geminiApiKey = state.geminiApiKey,
+                onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
                 onDismiss = { viewModel.dismissQuickSettings() }
+            )
+        }
+
+        // FULL SETTINGS SCREEN OVERLAY
+        AnimatedVisibility(
+            visible = state.showFullSettings,
+            enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(tween(300)),
+            exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(250)) + fadeOut(tween(250)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            TesseraSettingsScreen(
+                isDarkMode = state.isDarkMode,
+                forceDarkPages = state.forceDarkPages,
+                showWallpaper = state.showWallpaper,
+                selectedWallpaperId = state.selectedWallpaperId,
+                customWallpaperUri = state.customWallpaperUri,
+                showFavoritesBar = state.showFavoritesBar,
+                showWeatherWidget = state.showWeatherWidget,
+                showQuotesWidget = state.showQuotesWidget,
+                tesseraAiEnabled = state.tesseraAiEnabled,
+                aiToolbarButton = state.aiToolbarButton,
+                aiTextHighlightPrompts = state.aiTextHighlightPrompts,
+                showSidebar = state.showSidebar,
+                autoHideSidebar = state.autoHideSidebar,
+                adBlockEnabled = state.adBlockEnabled,
+                cookieBlockerEnabled = state.cookieBlockerEnabled,
+                selectedSearchEngine = state.searchEngine,
+                geminiApiKey = state.geminiApiKey,
+                onDarkModeChanged = { viewModel.setDarkMode(it) },
+                onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
+                onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
+                onSelectWallpaper = { viewModel.selectWallpaper(it) },
+                onUploadWallpaper = {
+                    wallpaperPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
+                onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
+                onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
+                onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
+                onAiToolbarButtonChanged = { viewModel.setAiToolbarButton(it) },
+                onAiTextHighlightPromptsChanged = { viewModel.setAiTextHighlightPrompts(it) },
+                onShowSidebarChanged = { viewModel.setShowSidebar(it) },
+                onAutoHideSidebarChanged = { viewModel.setAutoHideSidebar(it) },
+                onAdBlockChanged = { viewModel.setAdBlockEnabled(it) },
+                onCookieBlockerChanged = { viewModel.toggleCookieBlocker() },
+                onSearchEngineSelected = { viewModel.setSearchEngine(it) },
+                onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
+                onClearBrowsingData = { clearHistory, clearCookies, clearCache ->
+                    viewModel.clearBrowsingData(
+                        context = context,
+                        webView = webViewInstance,
+                        clearHistory = clearHistory,
+                        clearCookies = clearCookies,
+                        clearCache = clearCache
+                    ) {
+                        Toast.makeText(context, "Dados de navegação limpos com sucesso!", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onOpenDownloads = {
+                    viewModel.dismissFullSettings()
+                    viewModel.openDownloadsModal()
+                },
+                onOpenHistory = {
+                    viewModel.dismissFullSettings()
+                    viewModel.openHistoryModal(0)
+                },
+                onOpenSiteSettings = {
+                    viewModel.dismissFullSettings()
+                    viewModel.openSiteSettings(state.displayUrl)
+                },
+                onBack = { viewModel.dismissFullSettings() }
             )
         }
 
@@ -1903,7 +2049,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSelectTheme = { theme -> viewModel.setReaderTheme(theme) },
                 onSelectFontFamily = { family -> viewModel.setReaderFontFamily(family) },
                 onToggleShowImages = { viewModel.toggleReaderShowImages() },
-                onToggleTts = { viewModel.toggleReaderTts(context) }
+                onToggleTts = { viewModel.toggleReaderTts(context) },
+                onOpenArcSummary = {
+                    val art = state.readerArticle
+                    if (art != null) {
+                        viewModel.requestArcSummary(art.title, art.domain, art.plainText)
+                    }
+                }
             )
         }
 
