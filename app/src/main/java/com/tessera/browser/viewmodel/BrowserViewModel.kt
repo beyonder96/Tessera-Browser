@@ -209,7 +209,12 @@ data class BrowserUiState(
     val isIncognitoMode: Boolean = false,
     val isReaderModeActive: Boolean = false,
     val isReaderModeAvailable: Boolean = false,
+    val isReaderLoading: Boolean = false,
     val readerArticle: ReaderArticle? = null,
+    val readerHighlights: Map<Int, String> = emptyMap(),
+    val isReaderHighlighterActive: Boolean = false,
+    val activeHighlightColor: String = "#FEF08A",
+    val isReaderAudioBarVisible: Boolean = false,
     val readerFontSizeSp: Int = 18,
     val readerTheme: ReaderTheme = ReaderTheme.SEPIA,
     val readerFontFamily: ReaderFontFamily = ReaderFontFamily.SERIF,
@@ -694,13 +699,159 @@ class BrowserViewModel : ViewModel() {
         _uiState.update { it.copy(isReaderModeActive = active) }
     }
 
+    fun startReaderLoading(initialTitle: String, initialDomain: String, initialUrl: String) {
+        val cleanDomain = initialDomain.ifBlank {
+            try { Uri.parse(initialUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+        }
+        val cleanTitle = initialTitle.ifBlank { "Carregando Documento..." }
+        val placeholderArticle = ReaderArticle(
+            title = cleanTitle,
+            domain = cleanDomain,
+            readingTimeMinutes = 1,
+            blocks = emptyList(),
+            plainText = ""
+        )
+        _uiState.update {
+            it.copy(
+                isReaderModeActive = true,
+                isReaderLoading = true,
+                readerArticle = placeholderArticle,
+                readerHighlights = emptyMap(),
+                isReaderHighlighterActive = false,
+                isReaderAudioBarVisible = false
+            )
+        }
+
+        // Safety fallback: se a extração demorar mais de 3 segundos, popula fallback
+        viewModelScope.launch {
+            delay(3200)
+            if (_uiState.value.isReaderLoading && _uiState.value.isReaderModeActive) {
+                if (_uiState.value.readerArticle?.blocks.isNullOrEmpty()) {
+                    fallbackReaderArticle(cleanTitle, cleanDomain)
+                } else {
+                    _uiState.update { it.copy(isReaderLoading = false) }
+                }
+            }
+        }
+    }
+
+    fun processExtractedArticleJson(jsonStr: String) {
+        try {
+            val json = JSONObject(jsonStr)
+            val title = json.optString("title", "").ifBlank { _uiState.value.readerArticle?.title ?: "Documento" }
+            val author = json.optString("author", "").takeIf { it.isNotBlank() }
+            val date = json.optString("publishDate", "").takeIf { it.isNotBlank() }
+            val domain = json.optString("domain", "").ifBlank { _uiState.value.readerArticle?.domain ?: "" }
+            val readTime = json.optInt("readingTimeMinutes", 1)
+            val plainText = json.optString("plainText", "")
+
+            val blocksArr = json.optJSONArray("blocks") ?: JSONArray()
+            val blocks = mutableListOf<ReaderBlock>()
+            for (i in 0 until blocksArr.length()) {
+                val bObj = blocksArr.getJSONObject(i)
+                val typeStr = bObj.optString("type", "PARAGRAPH")
+                val type = try { ReaderBlockType.valueOf(typeStr) } catch (e: Exception) { ReaderBlockType.PARAGRAPH }
+                val text = bObj.optString("text", "")
+                val imgUrl = bObj.optString("imageUrl", "").takeIf { it.isNotBlank() }
+                val caption = bObj.optString("caption", "").takeIf { it.isNotBlank() }
+                if (text.isNotBlank() || !imgUrl.isNullOrBlank()) {
+                    blocks.add(ReaderBlock(type, text, imgUrl, caption))
+                }
+            }
+
+            if (blocks.isEmpty() && plainText.isNotBlank()) {
+                val paragraphs = plainText.split("\n\n").map { it.trim() }.filter { it.isNotBlank() }
+                for (p in paragraphs) {
+                    blocks.add(ReaderBlock(ReaderBlockType.PARAGRAPH, p))
+                }
+            }
+
+            if (blocks.isEmpty()) {
+                blocks.add(ReaderBlock(ReaderBlockType.PARAGRAPH, "Documento renderizado para leitura imersiva em $domain."))
+            }
+
+            val article = ReaderArticle(
+                title = title,
+                author = author,
+                publishDate = date,
+                domain = domain,
+                readingTimeMinutes = if (readTime > 0) readTime else Math.max(1, blocks.size / 3),
+                blocks = blocks,
+                plainText = plainText
+            )
+
+            _uiState.update {
+                it.copy(
+                    isReaderModeActive = true,
+                    isReaderLoading = false,
+                    readerArticle = article
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao processar JSON extraído do leitor", e)
+            _uiState.update { it.copy(isReaderLoading = false) }
+        }
+    }
+
+    fun fallbackReaderArticle(title: String, domain: String) {
+        val cleanTitle = title.ifBlank { "Documento da Página" }
+        val fallbackBlocks = listOf(
+            ReaderBlock(ReaderBlockType.H1, cleanTitle),
+            ReaderBlock(ReaderBlockType.PARAGRAPH, "Conteúdo formatado no modo documento PDF para $domain.")
+        )
+        val fallbackArticle = ReaderArticle(
+            title = cleanTitle,
+            domain = domain,
+            readingTimeMinutes = 1,
+            blocks = fallbackBlocks,
+            plainText = cleanTitle
+        )
+        _uiState.update {
+            it.copy(
+                isReaderModeActive = true,
+                isReaderLoading = false,
+                readerArticle = fallbackArticle
+            )
+        }
+    }
+
     fun setReaderArticle(article: ReaderArticle?) {
         _uiState.update {
             it.copy(
                 readerArticle = article,
-                isReaderModeActive = article != null
+                isReaderModeActive = article != null,
+                isReaderLoading = false
             )
         }
+    }
+
+    fun toggleReaderHighlighterActive() {
+        _uiState.update { it.copy(isReaderHighlighterActive = !it.isReaderHighlighterActive) }
+    }
+
+    fun setActiveHighlightColor(colorHex: String) {
+        _uiState.update { it.copy(activeHighlightColor = colorHex) }
+    }
+
+    fun toggleHighlightBlock(blockIndex: Int, colorHex: String? = null) {
+        _uiState.update { state ->
+            val currentMap = state.readerHighlights.toMutableMap()
+            val targetColor = colorHex ?: state.activeHighlightColor
+            if (currentMap[blockIndex] == targetColor) {
+                currentMap.remove(blockIndex)
+            } else {
+                currentMap[blockIndex] = targetColor
+            }
+            state.copy(readerHighlights = currentMap)
+        }
+    }
+
+    fun clearAllReaderHighlights() {
+        _uiState.update { it.copy(readerHighlights = emptyMap()) }
+    }
+
+    fun toggleReaderAudioBar() {
+        _uiState.update { it.copy(isReaderAudioBarVisible = !it.isReaderAudioBarVisible) }
     }
 
     fun closeReaderMode() {
@@ -708,7 +859,10 @@ class BrowserViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 isReaderModeActive = false,
-                isReaderSettingsOpen = false
+                isReaderLoading = false,
+                isReaderSettingsOpen = false,
+                isReaderHighlighterActive = false,
+                isReaderAudioBarVisible = false
             )
         }
     }

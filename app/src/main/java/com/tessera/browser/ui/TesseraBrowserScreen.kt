@@ -254,7 +254,7 @@ private val READER_EXTRACTION_SCRIPT = """
             }
 
             if (!bestContainer) {
-                bestContainer = document.body;
+                bestContainer = document.body || document.documentElement;
             }
 
             var ignoreSelector = 'nav, footer, header, form, button, input, select, textarea, script, style, noscript, iframe, svg, canvas, .ad, .ads, .advertisement, [id*="google_ads"], [class*="google_ads"], [id*="banner"], [class*="banner"], .sidebar, .widget, .share, .social, .share-buttons, #comments, .comments, .cookie-banner, .cookie-notice, .cookie-consent, .modal, .popup, [role="navigation"], [role="banner"], [role="complementary"], [role="dialog"], [aria-hidden="true"]';
@@ -318,15 +318,29 @@ private val READER_EXTRACTION_SCRIPT = """
             }
 
             if (blocks.length < 2) {
-                var allP = document.body.querySelectorAll('p');
-                for (var p = 0; p < allP.length; p++) {
-                    var pel = allP[p];
+                var candidateDivs = (document.body || document.documentElement).querySelectorAll('p, div, section, li, [class*="text"], [class*="content"]');
+                for (var p = 0; p < candidateDivs.length; p++) {
+                    var pel = candidateDivs[p];
                     if (pel.closest(ignoreSelector)) continue;
+                    if (pel.tagName.toLowerCase() === 'div' && pel.querySelectorAll('div, p').length > 0) continue;
                     var pt = (pel.innerText || pel.textContent || '').trim();
-                    if (pt.length > 30 && !seenTexts.has(pt)) {
+                    if (pt.length > 25 && !seenTexts.has(pt)) {
                         seenTexts.add(pt);
                         blocks.push({ type: 'PARAGRAPH', text: pt });
                         plainTextParts.push(pt);
+                    }
+                }
+            }
+
+            if (blocks.length === 0) {
+                var rawBody = (document.body ? (document.body.innerText || document.body.textContent || '') : '').trim();
+                var lines = rawBody.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 25; });
+                for (var lIdx = 0; lIdx < Math.min(lines.length, 50); lIdx++) {
+                    var line = lines[lIdx];
+                    if (!seenTexts.has(line)) {
+                        seenTexts.add(line);
+                        blocks.push({ type: 'PARAGRAPH', text: line });
+                        plainTextParts.push(line);
                     }
                 }
             }
@@ -336,7 +350,7 @@ private val READER_EXTRACTION_SCRIPT = """
             var readTime = Math.max(1, Math.round(words / 190));
 
             var articleData = {
-                title: title,
+                title: title || document.title || 'Documento',
                 author: author,
                 publishDate: dateStr,
                 domain: domain,
@@ -348,10 +362,34 @@ private val READER_EXTRACTION_SCRIPT = """
             if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
                 window.TesseraBridge.onArticleExtracted(JSON.stringify(articleData));
             }
+            return JSON.stringify(articleData);
         } catch(err) {
-            if (window.TesseraBridge && window.TesseraBridge.onExtractionFailed) {
-                window.TesseraBridge.onExtractionFailed();
+            var fallbackText = '';
+            try {
+                var bEl = document.body || document.documentElement;
+                fallbackText = (bEl.innerText || bEl.textContent || '').trim();
+            } catch(e) {}
+            var fbLines = fallbackText.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 25; });
+            var fbBlocks = [];
+            for (var f = 0; f < Math.min(fbLines.length, 30); f++) {
+                fbBlocks.push({ type: 'PARAGRAPH', text: fbLines[f] });
             }
+            if (fbBlocks.length === 0) {
+                fbBlocks.push({ type: 'PARAGRAPH', text: 'Documento renderizado para leitura imersiva.' });
+            }
+            var fallbackData = {
+                title: document.title || 'Documento',
+                author: '',
+                publishDate: '',
+                domain: (window.location.hostname || '').replace(/^www\./, ''),
+                readingTimeMinutes: Math.max(1, Math.round(fallbackText.split(/\s+/).length / 190)),
+                blocks: fbBlocks,
+                plainText: fallbackText.substring(0, 8000)
+            };
+            if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
+                window.TesseraBridge.onArticleExtracted(JSON.stringify(fallbackData));
+            }
+            return JSON.stringify(fallbackData);
         }
     })();
 """.trimIndent()
@@ -658,6 +696,43 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     }
 
 
+    val launchReaderMode: () -> Unit = {
+        if (state.isReaderModeActive) {
+            viewModel.closeReaderMode()
+        } else if (state.isHomePage) {
+            Toast.makeText(context, "Abra uma página ou artigo para ativar o Modo Leitura.", Toast.LENGTH_SHORT).show()
+        } else {
+            val pageTitle = webViewInstance?.title?.takeIf { it.isNotBlank() } ?: "Documento"
+            val pageDomain = try {
+                Uri.parse(state.displayUrl.ifBlank { state.currentUrl }).host?.replace("www.", "") ?: ""
+            } catch (e: Exception) { "" }
+
+            // 1. Muda imediatamente a tela para o modo leitor PDF!
+            viewModel.startReaderLoading(
+                initialTitle = pageTitle,
+                initialDomain = pageDomain,
+                initialUrl = state.displayUrl.ifBlank { state.currentUrl }
+            )
+
+            // 2. Extrai dados via script resiliente com retorno direto
+            webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT) { result ->
+                if (!result.isNullOrBlank() && result != "null" && result != "\"\"") {
+                    try {
+                        val cleanJson = if (result.startsWith("\"") && result.endsWith("\"")) {
+                            org.json.JSONTokener(result).nextValue().toString()
+                        } else {
+                            result
+                        }
+                        viewModel.processExtractedArticleJson(cleanJson)
+                    } catch (e: Exception) {
+                        Log.e("TesseraBrowser", "Falha ao processar retorno direto do leitor", e)
+                        viewModel.fallbackReaderArticle(pageTitle, pageDomain)
+                    }
+                }
+            }
+        }
+    }
+
     val clipCurrentPageAction: (Boolean) -> Unit = { withAiSummary ->
         if (state.isHomePage) {
             Toast.makeText(context, "Abra uma página web para clipar conteúdos!", Toast.LENGTH_SHORT).show()
@@ -806,53 +881,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     },
                                     onArticleExtracted = { jsonStr ->
                                         android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                            try {
-                                                val json = JSONObject(jsonStr)
-                                                val title = json.optString("title", "Sem título")
-                                                val author = json.optString("author", "").takeIf { it.isNotBlank() }
-                                                val date = json.optString("publishDate", "").takeIf { it.isNotBlank() }
-                                                val domain = json.optString("domain", "")
-                                                val readTime = json.optInt("readingTimeMinutes", 1)
-                                                val plainText = json.optString("plainText", "")
-
-                                                val blocksArr = json.optJSONArray("blocks") ?: JSONArray()
-                                                val blocks = mutableListOf<ReaderBlock>()
-                                                for (i in 0 until blocksArr.length()) {
-                                                    val bObj = blocksArr.getJSONObject(i)
-                                                    val typeStr = bObj.optString("type", "PARAGRAPH")
-                                                    val type = try { ReaderBlockType.valueOf(typeStr) } catch (e: Exception) { ReaderBlockType.PARAGRAPH }
-                                                    val text = bObj.optString("text", "")
-                                                    val imgUrl = bObj.optString("imageUrl", "").takeIf { it.isNotBlank() }
-                                                    val caption = bObj.optString("caption", "").takeIf { it.isNotBlank() }
-                                                    blocks.add(ReaderBlock(type, text, imgUrl, caption))
-                                                }
-
-                                                if (blocks.isEmpty() && plainText.isBlank()) {
-                                                    Toast.makeText(context, "Não foi possível extrair texto legível desta página.", Toast.LENGTH_SHORT).show()
-                                                    viewModel.closeReaderMode()
-                                                } else {
-                                                    val article = ReaderArticle(
-                                                        title = title,
-                                                        author = author,
-                                                        publishDate = date,
-                                                        domain = domain,
-                                                        readingTimeMinutes = readTime,
-                                                        blocks = blocks,
-                                                        plainText = plainText
-                                                    )
-                                                    viewModel.setReaderArticle(article)
-                                                }
-                                            } catch (e: Exception) {
-                                                Log.e("TesseraBrowser", "Erro ao processar dados do leitor", e)
-                                                Toast.makeText(context, "Falha ao processar conteúdo da página.", Toast.LENGTH_SHORT).show()
-                                                viewModel.closeReaderMode()
-                                            }
+                                            viewModel.processExtractedArticleJson(jsonStr)
                                         }
                                     },
                                     onExtractionFailed = {
                                         android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                            Toast.makeText(context, "Não foi possível ativar o modo de leitura nesta página.", Toast.LENGTH_SHORT).show()
-                                            viewModel.closeReaderMode()
+                                            val currentTitle = webViewInstance?.title ?: "Documento"
+                                            val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                                            viewModel.fallbackReaderArticle(currentTitle, currentDomain)
                                         }
                                     },
                                     onSummaryExtracted = { jsonStr ->
@@ -1586,6 +1622,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
                         isIncognito = state.isIncognitoMode,
                         isDarkMode = state.isDarkMode,
+                        isHomePage = state.isHomePage,
                         isReaderModeActive = state.isReaderModeActive,
                         isReaderModeAvailable = state.isReaderModeAvailable,
                         favorites = state.currentSpaceFavorites,
@@ -1620,12 +1657,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         },
                         onToggleIncognito = { viewModel.toggleIncognitoMode() },
                         onToggleReaderMode = {
-                            if (state.isReaderModeActive) {
-                                viewModel.toggleReaderMode()
-                            } else {
-                                Toast.makeText(context, "Ativando modo leitura...", Toast.LENGTH_SHORT).show()
-                                webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
-                            }
+                            launchReaderMode()
                         },
                         onOpenTabs = { viewModel.toggleTabsModal() },
                         onOpenHistory = { viewModel.toggleHistoryModal() },
@@ -1993,8 +2025,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 },
                 onOpenReaderMode = {
                     viewModel.dismissQuickSettings()
-                    Toast.makeText(context, "Convertendo página em texto...", Toast.LENGTH_SHORT).show()
-                    webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT, null)
+                    launchReaderMode()
                 },
                 onOpenFullSettings = {
                     viewModel.openFullSettings()
@@ -2238,16 +2269,22 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             }
         }
 
-        // NATIVE IMMERSIVE TEXT-ONLY READER SCREEN
+        // NATIVE IMMERSIVE PDF / E-BOOK DOCUMENT READER SCREEN
         if (state.isReaderModeActive && state.readerArticle != null) {
             TesseraReaderScreen(
                 article = state.readerArticle!!,
+                isLoading = state.isReaderLoading,
                 fontSizeSp = state.readerFontSizeSp,
                 theme = state.readerTheme,
                 fontFamily = state.readerFontFamily,
                 showImages = state.readerShowImages,
                 isTtsPlaying = state.isReaderTtsPlaying,
                 isSettingsOpen = state.isReaderSettingsOpen,
+                readerHighlights = state.readerHighlights,
+                isHighlighterActive = state.isReaderHighlighterActive,
+                activeHighlightColor = state.activeHighlightColor,
+                isAudioBarVisible = state.isReaderAudioBarVisible,
+                podcastAudioState = state.podcastAudioState,
                 onClose = { viewModel.closeReaderMode() },
                 onToggleSettings = { viewModel.toggleReaderSettings() },
                 onUpdateFontSize = { delta -> viewModel.updateReaderFontSize(delta) },
@@ -2255,6 +2292,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSelectFontFamily = { family -> viewModel.setReaderFontFamily(family) },
                 onToggleShowImages = { viewModel.toggleReaderShowImages() },
                 onToggleTts = { viewModel.toggleReaderTts(context) },
+                onToggleHighlighterActive = { viewModel.toggleReaderHighlighterActive() },
+                onSelectHighlightColor = { color -> viewModel.setActiveHighlightColor(color) },
+                onToggleHighlightBlock = { idx, color -> viewModel.toggleHighlightBlock(idx, color) },
+                onClearHighlights = { viewModel.clearAllReaderHighlights() },
+                onToggleAudioBar = { viewModel.toggleReaderAudioBar() },
+                onSeekAudio = { deltaMs -> viewModel.seekPodcastBy(context, deltaMs) },
+                onCycleSpeed = { viewModel.cyclePodcastSpeed() },
                 onOpenArcSummary = {
                     val art = state.readerArticle
                     if (art != null) {

@@ -106,6 +106,7 @@ fun TesseraAirBar(
     isBookmarked: Boolean,
     isIncognito: Boolean = false,
     isDarkMode: Boolean = false,
+    isHomePage: Boolean = false,
     isReaderModeActive: Boolean = false,
     isReaderModeAvailable: Boolean = false,
     favorites: List<SpeedDialItem> = emptyList(),
@@ -641,15 +642,19 @@ fun TesseraAirBar(
                             )
                         }
 
-                        // Right: Reader mode button if available
-                        if (isReaderModeAvailable || isReaderModeActive) {
+                        // Right: Reader mode button whenever viewing a web page
+                        if (!isHomePage || isReaderModeAvailable || isReaderModeActive) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .shadow(4.dp, CircleShape)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isReaderModeActive) accentColor else Color(0xFF222222)
+                                        when {
+                                            isReaderModeActive -> accentColor
+                                            isReaderModeAvailable -> accentColor.copy(alpha = 0.25f)
+                                            else -> Color(0xFF222222)
+                                        }
                                     )
                                     .clickable {
                                         onToggleReaderMode()
@@ -659,7 +664,11 @@ fun TesseraAirBar(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                     contentDescription = if (isReaderModeActive) "Sair do Modo Leitura" else "Ativar Modo Leitura",
-                                    tint = if (isReaderModeActive) Color.White else accentColor,
+                                    tint = when {
+                                        isReaderModeActive -> Color.White
+                                        isReaderModeAvailable -> accentColor
+                                        else -> Color(0xFFCCCCCC)
+                                    },
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
