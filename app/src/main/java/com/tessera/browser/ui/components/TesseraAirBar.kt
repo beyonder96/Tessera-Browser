@@ -311,10 +311,6 @@ fun TesseraAirBar(
                         isEditing = false
                         onSearch(it)
                     },
-                    onBrowseForMe = {
-                        isEditing = false
-                        onBrowseForMe(it)
-                    },
                     onInsert = {
                         queryText = it
                         onQueryChange(it)
@@ -741,38 +737,31 @@ fun TesseraAirBar(
                         )
                     }
 
-                    // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb with Aurora Glow)
+                    // 3. Botão IA (Minimalista, Clean & Focado)
                     Box(
                         modifier = Modifier
                             .size(46.dp)
                             .shadow(
-                                elevation = 16.dp,
+                                elevation = 6.dp,
                                 shape = CircleShape,
-                                ambientColor = Color(0x6680D8FF),
-                                spotColor = Color(0x99B388FF)
+                                ambientColor = effectiveAccent.copy(alpha = 0.3f),
+                                spotColor = effectiveAccent.copy(alpha = 0.4f)
                             )
                             .clip(CircleShape)
-                            .graphicsLayer {
-                                rotationZ = aiGlowAngle
-                            }
                             .background(
-                                Brush.sweepGradient(
-                                    colors = listOf(
-                                        Color(0xFF80D8FF), // Vivid Soft Cyan
-                                        Color(0xFF82B1FF), // Soft Sky Blue
-                                        Color(0xFFB388FF), // Soft Lilac
-                                        Color(0xFFEA80FC), // Soft Rose Violet
-                                        Color(0xFFFF80AB), // Soft Coral Pink
-                                        Color(0xFF80D8FF)  // Back to Cyan
+                                Brush.linearGradient(
+                                    listOf(
+                                        effectiveAccent,
+                                        effectiveAccent.copy(alpha = 0.85f)
                                     )
                                 )
                             )
                             .border(
-                                width = 1.2.dp,
+                                width = 1.dp,
                                 brush = Brush.verticalGradient(
                                     listOf(
-                                        Color.White.copy(alpha = 0.95f),
-                                        Color.White.copy(alpha = 0.35f)
+                                        Color.White.copy(alpha = 0.6f),
+                                        Color.White.copy(alpha = 0.15f)
                                     )
                                 ),
                                 shape = CircleShape
@@ -787,29 +776,12 @@ fun TesseraAirBar(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Inner container to keep icon & specular highlight oriented upright
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { rotationZ = -aiGlowAngle },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // Soft specular glossy highlight on top of the orb
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 4.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.45f))
-                            )
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = "Tessera AI",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = "Tessera AI",
+                            tint = Color.White,
+                            modifier = Modifier.size(21.dp)
+                        )
                     }
 
                     // 4. Abas Button (Rounded square with border, number badge, and Space indicator)
@@ -899,11 +871,12 @@ private fun SearchSuggestionsFloatingCard(
     queryText: String,
     suggestions: List<String>,
     onSelect: (String) -> Unit,
-    onBrowseForMe: (String) -> Unit,
     onInsert: (String) -> Unit,
     accentColor: Color,
     isDarkMode: Boolean
 ) {
+    if (suggestions.isEmpty()) return
+
     val cardShape = RoundedCornerShape(20.dp)
     val cardBg = if (isDarkMode) Color(0xF0201A16) else Color(0xF8FFFFFF)
     val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1C1C1E)
@@ -924,91 +897,6 @@ private fun SearchSuggestionsFloatingCard(
             .border(1.dp, cardBorder, cardShape)
             .padding(vertical = 4.dp)
     ) {
-        // TOP BROWSE FOR ME ACTION ITEM (Arc Search Style)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onBrowseForMe(queryText) }
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            accentColor.copy(alpha = if (isDarkMode) 0.18f else 0.10f),
-                            Color(0xFF7C4DFF).copy(alpha = if (isDarkMode) 0.14f else 0.08f)
-                        )
-                    )
-                )
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF00E5FF), Color(0xFF7C4DFF))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "Navegue por Mim",
-                        color = if (isDarkMode) Color.White else Color(0xFF1E1E24),
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF7C4DFF).copy(alpha = 0.22f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "IA ✨",
-                            color = Color(0xFF7C4DFF),
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                Text(
-                    text = "Sintetizar: \"$queryText\"",
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF6B7280),
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = "Navegar com IA",
-                tint = accentColor,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-        if (suggestions.isNotEmpty()) {
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                modifier = Modifier.padding(horizontal = 14.dp)
-            )
-        }
         suggestions.take(5).forEachIndexed { index, suggestion ->
             Row(
                 modifier = Modifier

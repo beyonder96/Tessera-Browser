@@ -90,8 +90,7 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import android.webkit.SafeBrowsingResponse
 import com.tessera.browser.data.SafeBrowsingThreatInfo
-import com.tessera.browser.ui.components.AiActionsModal
-import com.tessera.browser.ui.components.ArcSummarySheet
+import com.tessera.browser.ai.AiProvider
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.NotebookModal
@@ -110,8 +109,8 @@ import com.tessera.browser.ui.components.SpaceQuickSwitcherModal
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraSettingsScreen
 import androidx.compose.material.icons.rounded.SmartDisplay
+import com.tessera.browser.ui.components.TesseraAiSheet
 import com.tessera.browser.ui.components.TesseraAirBar
-import com.tessera.browser.ui.components.TesseraBrowseForMeScreen
 import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
 import com.tessera.browser.ui.components.TranslateBar
@@ -644,7 +643,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showNotebookModal || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showNotebookModal || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
@@ -684,8 +683,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             viewModel.toggleSpaceSwitcherModal(false)
         } else if (state.showHistoryModal) {
             viewModel.dismissHistoryModal()
-        } else if (state.showAiActionModal) {
-            viewModel.dismissAiActionModal()
+        } else if (state.aiAssistantState.isVisible) {
+            viewModel.dismissAiAssistant()
         } else if (isAirBarExpanded) {
             isAirBarExpanded = false
         } else if (state.canGoBack) {
@@ -785,6 +784,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 favorites = state.currentSpaceFavorites,
                 searchSuggestions = state.searchSuggestions,
                 trendingTopics = state.trendingTopics,
+                digitalMinimalismMode = state.digitalMinimalismMode,
                 showWeatherWidget = state.showWeatherWidget,
                 showQuotesWidget = state.showQuotesWidget,
                 weatherData = state.weatherData,
@@ -792,7 +792,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onRefreshWeather = { viewModel.fetchWeather(context, forceRefresh = true) },
                 onSearchQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
                 onSearch = { query -> viewModel.openUrl(query) },
-                onOpenAi = { query -> viewModel.openAiQuery(query) },
+                onOpenAi = { query -> viewModel.openAiAssistant("Tessera AI", "", "", query) },
                 onOpenUrl = { url -> viewModel.openUrl(url) },
                 onOpenSettings = { viewModel.toggleQuickSettings() },
                 onSearchClick = { isSearchEditing = true },
@@ -898,16 +898,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 val title = json.optString("title", webViewInstance?.title ?: "Página Atual")
                                                 val domain = json.optString("domain", "")
                                                 val content = json.optString("content", "")
-                                                if (content.isNotBlank()) {
-                                                    viewModel.requestArcSummary(title, domain, content)
-                                                } else {
-                                                    Toast.makeText(context, "Conteúdo insuficiente para resumir.", Toast.LENGTH_SHORT).show()
-                                                    viewModel.dismissArcSummary()
-                                                }
+                                                viewModel.openAiAssistant(
+                                                    title = title,
+                                                    domain = domain,
+                                                    url = state.displayUrl,
+                                                    content = content
+                                                )
                                             } catch (e: Exception) {
                                                 Log.e("TesseraBrowser", "Erro ao processar extração de resumo", e)
                                                 Toast.makeText(context, "Falha ao extrair texto da página.", Toast.LENGTH_SHORT).show()
-                                                viewModel.dismissArcSummary()
+                                                viewModel.dismissAiAssistant()
                                             }
                                         }
                                     },
@@ -1633,18 +1633,44 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onReload = { webViewInstance?.reload() },
                         onSearch = { query -> viewModel.openUrl(query) },
                         onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
-                        onOpenAi = { query -> viewModel.openAiQuery(query) },
-                        onBrowseForMe = { query -> viewModel.browseForMe(query) },
+                        onOpenAi = { query ->
+                            viewModel.openAiAssistant(
+                                title = if (query.isNotBlank()) "Consulta IA" else "Tessera AI",
+                                domain = "",
+                                url = "",
+                                content = query
+                            )
+                        },
+                        onBrowseForMe = { query ->
+                            viewModel.openAiAssistant(
+                                title = "Tessera AI",
+                                domain = "",
+                                url = "",
+                                content = query
+                            )
+                        },
                         isEditingExternal = isSearchEditing,
                         onEditingChange = { isSearchEditing = it },
                         onFastAction = {
                             if (state.isHomePage) {
-                                viewModel.openAiQuery("")
+                                viewModel.openAiAssistant("Tessera AI", "", "", "")
                             } else {
                                 webViewInstance?.reload()
                             }
                         },
-                        onOpenAiAction = { viewModel.toggleAiActionModal() },
+                        onOpenAiAction = {
+                            if (state.isReaderModeActive && state.readerArticle != null) {
+                                val art = state.readerArticle!!
+                                viewModel.openAiAssistant(art.title, art.domain, state.displayUrl, art.plainText)
+                            } else if (!state.isHomePage) {
+                                val currentTitle = webViewInstance?.title ?: ""
+                                val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                                viewModel.prepareAiAssistant(currentTitle, currentDomain, state.displayUrl)
+                                webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                            } else {
+                                viewModel.openAiAssistant("Tessera AI", "", "", "")
+                            }
+                        },
                         onToggleBookmark = {
                             if (state.isHomePage) {
                                 viewModel.toggleHistoryModal()
@@ -1786,100 +1812,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             )
         }
 
-        // QUICK AI ACTIONS MODAL OVERLAY
-        if (state.showAiActionModal) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        viewModel.dismissAiActionModal()
-                    }
-            )
-        }
-
-        AnimatedVisibility(
-            visible = state.showAiActionModal,
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            AiActionsModal(
-                pageUrl = state.displayUrl,
-                onAction = { action ->
-                    if (action == "summarize") {
-                        viewModel.dismissAiActionModal()
-                        if (state.isHomePage) {
-                            Toast.makeText(context, "Abra um site ou artigo para gerar um resumo com IA!", Toast.LENGTH_SHORT).show()
-                        } else {
-                            val currentTitle = webViewInstance?.title ?: ""
-                            val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
-                            if (state.isReaderModeActive && state.readerArticle != null) {
-                                viewModel.requestArcSummary(state.readerArticle!!.title, state.readerArticle!!.domain, state.readerArticle!!.plainText)
-                            } else {
-                                viewModel.prepareArcSummary(currentTitle, currentDomain)
-                                webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
-                            }
-                        }
-                    } else if (action == "browse_for_me") {
-                        viewModel.dismissAiActionModal()
-                        val q = if (state.isHomePage) {
-                            "Destaques de tecnologia e inteligência artificial"
-                        } else {
-                            val title = webViewInstance?.title.orEmpty().trim()
-                            if (title.isNotBlank()) title else state.displayUrl
-                        }
-                        viewModel.browseForMe(q)
-                    } else if (action == "clip_with_summary") {
-                        viewModel.dismissAiActionModal()
-                        clipCurrentPageAction(true)
-                    } else {
-                        viewModel.openAiAction(action)
-                    }
-                },
-                onDismiss = { viewModel.dismissAiActionModal() }
-            )
-        }
-
-        // ARC PAGE SUMMARY OVERLAY & SHEET
-        AnimatedVisibility(
-            visible = state.showArcSummary,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(350)
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(280)
-            ),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            ArcSummarySheet(
-                isVisible = state.showArcSummary,
-                isGenerating = state.isGeneratingArcSummary,
-                summaryText = state.arcSummaryContent,
-                pageTitle = state.arcSummaryTitle,
-                pageDomain = state.arcSummaryDomain,
-                readingTimeSavedMinutes = state.arcSummaryReadTimeSaved,
-                error = state.arcSummaryError,
+        // TESSERA AI ASSISTANT SHEET (GROQ / GEMINI - SUMARIZAÇÃO & DÚVIDAS)
+        if (state.aiAssistantState.isVisible) {
+            TesseraAiSheet(
+                state = state.aiAssistantState,
+                geminiApiKey = state.geminiApiKey,
+                groqApiKey = state.groqApiKey,
                 isDarkMode = state.isDarkMode,
                 isSpeaking = state.isReaderTtsPlaying,
-                onSpeakSummary = { text -> viewModel.speakText(context, text) },
+                onSpeakText = { text -> viewModel.speakText(context, text) },
                 onStopSpeaking = { viewModel.stopReaderTts() },
-                onRetry = {
-                    val currentTitle = webViewInstance?.title ?: ""
-                    val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
-                    if (state.isReaderModeActive && state.readerArticle != null) {
-                        viewModel.requestArcSummary(state.readerArticle!!.title, state.readerArticle!!.domain, state.readerArticle!!.plainText)
+                onSelectProvider = { provider -> viewModel.setAiProvider(provider) },
+                onSaveKey = { provider, key ->
+                    if (provider == AiProvider.GROQ) {
+                        viewModel.setGroqApiKey(key)
                     } else {
-                        viewModel.prepareArcSummary(currentTitle, currentDomain)
-                        webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                        viewModel.setGeminiApiKey(key)
                     }
                 },
-                onDismiss = { viewModel.dismissArcSummary() }
+                onRegenerateSummary = { viewModel.regenerateAiSummary() },
+                onAskQuestion = { q -> viewModel.askAiAssistantQuestion(q) },
+                onDismiss = { viewModel.dismissAiAssistant() }
             )
         }
 
@@ -2077,6 +2030,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 cookieBlockerEnabled = state.cookieBlockerEnabled,
                 selectedSearchEngine = state.searchEngine,
                 geminiApiKey = state.geminiApiKey,
+                groqApiKey = state.groqApiKey,
+                aiProvider = state.aiProvider,
+                digitalMinimalismMode = state.digitalMinimalismMode,
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
@@ -2098,6 +2054,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onCookieBlockerChanged = { viewModel.toggleCookieBlocker() },
                 onSearchEngineSelected = { viewModel.setSearchEngine(it) },
                 onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
+                onGroqApiKeyChanged = { viewModel.setGroqApiKey(it) },
+                onAiProviderChanged = { viewModel.setAiProvider(it) },
+                onDigitalMinimalismModeChanged = { viewModel.setDigitalMinimalismMode(it) },
                 onClearBrowsingData = { clearHistory, clearCookies, clearCache ->
                     viewModel.clearBrowsingData(
                         context = context,
@@ -2302,7 +2261,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenArcSummary = {
                     val art = state.readerArticle
                     if (art != null) {
-                        viewModel.requestArcSummary(art.title, art.domain, art.plainText)
+                        viewModel.openAiAssistant(art.title, art.domain, state.displayUrl, art.plainText)
                     }
                 }
             )
@@ -2340,34 +2299,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     .fillMaxSize()
                     .statusBarsPadding()
                     .displayCutoutPadding()
-            )
-        }
-
-        // BROWSE FOR ME SCREEN (EDITORIAL AI SYNTHESIS - ARC SEARCH STYLE)
-        if (state.browseForMeState.isVisible) {
-            TesseraBrowseForMeScreen(
-                state = state.browseForMeState,
-                isDarkMode = state.isDarkMode,
-                accentColor = state.activeWallpaper.accentColor,
-                onOpenUrl = { url ->
-                    viewModel.dismissBrowseForMe()
-                    viewModel.openUrl(url)
-                },
-                onOpenWebSearch = { q ->
-                    viewModel.dismissBrowseForMe()
-                    viewModel.openUrl(q)
-                },
-                onRetry = {
-                    viewModel.browseForMe(state.browseForMeState.currentQuery)
-                },
-                onDismiss = {
-                    viewModel.dismissBrowseForMe()
-                },
-                onPlayAudio = {
-                    state.browseForMeState.result?.let { res ->
-                        viewModel.playBrowseForMeAsPodcast(context, res)
-                    }
-                }
             )
         }
 

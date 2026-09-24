@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.OfflinePin
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.tessera.browser.ai.AiProvider
 import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.WallpaperTheme
@@ -83,7 +85,7 @@ import com.tessera.browser.data.WallpaperTheme
  * 1. Mecanismo de Busca & Inicialização
  * 2. Aparência & Personalização (Temas, Papéis de Parede, Widgets, Barra Lateral)
  * 3. Privacidade & Segurança (AdBlock, Cookies/LGPD, Limpar Dados, Permissões, Safe Browsing)
- * 4. Inteligência Artificial (Chave Gemini API, Tessera AI, Botão de Barra, Pop-ups de Texto)
+ * 4. Inteligência Artificial & Minimalismo Digital (Groq, Gemini, Botão da Barra, Minimalismo)
  * 5. Downloads & Armazenamento (Hub de Downloads, Páginas Offline)
  * 6. Sobre o Tessera Browser
  */
@@ -106,6 +108,9 @@ fun TesseraSettingsScreen(
     cookieBlockerEnabled: Boolean,
     selectedSearchEngine: SearchEngine,
     geminiApiKey: String?,
+    groqApiKey: String? = null,
+    aiProvider: AiProvider = AiProvider.GROQ,
+    digitalMinimalismMode: Boolean = true,
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
     onShowWallpaperChanged: (Boolean) -> Unit,
@@ -123,6 +128,9 @@ fun TesseraSettingsScreen(
     onCookieBlockerChanged: (Boolean) -> Unit,
     onSearchEngineSelected: (SearchEngine) -> Unit,
     onGeminiApiKeyChanged: (String) -> Unit,
+    onGroqApiKeyChanged: (String) -> Unit = {},
+    onAiProviderChanged: (AiProvider) -> Unit = {},
+    onDigitalMinimalismModeChanged: (Boolean) -> Unit = {},
     onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -139,6 +147,9 @@ fun TesseraSettingsScreen(
 
     var showGeminiKeyDialog by remember { mutableStateOf(false) }
     var tempGeminiKey by remember(geminiApiKey) { mutableStateOf(geminiApiKey.orEmpty()) }
+
+    var showGroqKeyDialog by remember { mutableStateOf(false) }
+    var tempGroqKey by remember(groqApiKey) { mutableStateOf(groqApiKey.orEmpty()) }
 
     val screenBg = if (isDarkMode) Color(0xFF14100E) else Color(0xFFF7F8FA)
     val topBarBg = if (isDarkMode) Color(0xFF1A1513) else Color.White
@@ -782,14 +793,165 @@ fun TesseraSettingsScreen(
             }
 
             // ==========================================
-            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL
+            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL & MINIMALISMO DIGITAL
             // ==========================================
             SettingsSection(
-                title = "Inteligência Artificial (Tessera AI)",
+                title = "Inteligência Artificial & Minimalismo",
                 headerColor = sectionHeaderColor
             ) {
                 SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        // Modo Minimalismo Digital
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "Modo Minimalismo Digital",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary
+                                )
+                                Text(
+                                    text = "Oculta cotações e distrações para uma navegação focada e calma",
+                                    fontSize = 12.sp,
+                                    color = textSecondary
+                                )
+                            }
+                            TesseraSwitch(
+                                checked = digitalMinimalismMode,
+                                onCheckedChange = onDigitalMinimalismModeChanged,
+                                isDarkMode = isDarkMode
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Seleção de Provedor de IA
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Provedor Ativo de IA",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = textPrimary
+                            )
+                            Text(
+                                text = "Motor que processa a sumarização de páginas e responde dúvidas",
+                                fontSize = 12.sp,
+                                color = textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Chip Groq
+                                val isGroq = aiProvider == AiProvider.GROQ
+                                val groqColor = Color(0xFFF55036)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isGroq) groqColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f) else Color.Transparent)
+                                        .border(1.dp, if (isGroq) groqColor else dividerColor, RoundedCornerShape(10.dp))
+                                        .clickable { onAiProviderChanged(AiProvider.GROQ) }
+                                        .padding(vertical = 9.dp, horizontal = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "⚡ Groq Cloud",
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isGroq) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isGroq) groqColor else textPrimary
+                                        )
+                                        Text(
+                                            text = "Llama 3.3 70B",
+                                            fontSize = 11.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+
+                                // Chip Gemini
+                                val isGemini = aiProvider == AiProvider.GEMINI
+                                val geminiColor = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0078D4)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isGemini) geminiColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f) else Color.Transparent)
+                                        .border(1.dp, if (isGemini) geminiColor else dividerColor, RoundedCornerShape(10.dp))
+                                        .clickable { onAiProviderChanged(AiProvider.GEMINI) }
+                                        .padding(vertical = 9.dp, horizontal = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "✨ Google Gemini",
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isGemini) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isGemini) geminiColor else textPrimary
+                                        )
+                                        Text(
+                                            text = "Gemini 2.0 Flash",
+                                            fontSize = 11.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Chave Groq API Card
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showGroqKeyDialog = true }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Key,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF55036),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Chave Groq API (console.groq.com)",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = if (!groqApiKey.isNullOrBlank()) "Chave ativa (Llama 3.3 70B configurado)" else "Toque para configurar sua chave gratuita",
+                                        fontSize = 12.sp,
+                                        color = if (!groqApiKey.isNullOrBlank()) Color(0xFF81C784) else textSecondary
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
                         // Chave Gemini API Card
                         Row(
                             modifier = Modifier
@@ -819,7 +981,7 @@ fun TesseraSettingsScreen(
                                         color = textPrimary
                                     )
                                     Text(
-                                        text = if (!geminiApiKey.isNullOrBlank()) "Chave ativa (Gemini 2.0 Flash ativado)" else "Toque para configurar sua chave gratuita",
+                                        text = if (!geminiApiKey.isNullOrBlank()) "Chave ativa (Gemini 2.0 Flash configurado)" else "Toque para configurar sua chave gratuita",
                                         fontSize = 12.sp,
                                         color = if (!geminiApiKey.isNullOrBlank()) Color(0xFF81C784) else textSecondary
                                     )
@@ -1193,6 +1355,64 @@ fun TesseraSettingsScreen(
                         }
                     }
                     TextButton(onClick = { showGeminiKeyDialog = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            }
+        )
+    }
+
+    // DIÁLOGO DA CHAVE GROQ API
+    if (showGroqKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showGroqKeyDialog = false },
+            title = {
+                Text(
+                    text = "Chave da API Groq Cloud",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Gere sua chave gratuita em console.groq.com/keys para usar o modelo Llama 3.3 70B com velocidades de inferência extremas.\n\nO Tessera não compartilha sua chave com nenhum servidor intermediário.",
+                        fontSize = 13.sp,
+                        color = textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = tempGroqKey,
+                        onValueChange = { tempGroqKey = it },
+                        placeholder = { Text("Cole sua chave gsk_...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onGroqApiKeyChanged(tempGroqKey.trim())
+                        showGroqKeyDialog = false
+                    }
+                ) {
+                    Text("Salvar")
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (!groqApiKey.isNullOrBlank()) {
+                        TextButton(
+                            onClick = {
+                                tempGroqKey = ""
+                                onGroqApiKeyChanged("")
+                                showGroqKeyDialog = false
+                            }
+                        ) {
+                            Text("Remover", color = Color(0xFFE53935))
+                        }
+                    }
+                    TextButton(onClick = { showGroqKeyDialog = false }) {
                         Text("Cancelar")
                     }
                 }

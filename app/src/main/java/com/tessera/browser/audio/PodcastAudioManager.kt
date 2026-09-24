@@ -45,10 +45,7 @@ object PodcastAudioManager {
     private var currentTitle: String = ""
     private var currentSubtitle: String = ""
     private var currentAudioFile: File? = null
-    private var geminiApiKeyProvider: (() -> String?)? = null
-
-    fun initialize(context: Context, apiKeyProvider: () -> String?) {
-        geminiApiKeyProvider = apiKeyProvider
+    fun initialize(context: Context, apiKeyProvider: (() -> String?)? = null) {
         initTts(context)
     }
 
@@ -98,29 +95,8 @@ object PodcastAudioManager {
         startForegroundAudioService(context)
 
         synthesisJob?.cancel()
-        synthesisJob = scope.launch(Dispatchers.IO) {
-            val apiKey = geminiApiKeyProvider?.invoke()?.trim().orEmpty()
-
-            // Tenta síntese neural com Gemini se voz neural selecionada e chave disponível
-            var audioFile: File? = null
-            if (voice.isNeural && apiKey.isNotBlank()) {
-                audioFile = GeminiNeuralVoiceEngine.generateSpeechAudioFile(
-                    context = context,
-                    apiKey = apiKey,
-                    text = content,
-                    voice = voice
-                )
-            }
-
-            scope.launch(Dispatchers.Main) {
-                if (audioFile != null && audioFile.exists()) {
-                    currentAudioFile = audioFile
-                    playWavFile(context, audioFile)
-                } else {
-                    // Fallback para TTS Nativo (Garante 100% de funcionamento offline / sem chave)
-                    playViaTts(context, content)
-                }
-            }
+        synthesisJob = scope.launch(Dispatchers.Main) {
+            playViaTts(context, content)
         }
     }
 

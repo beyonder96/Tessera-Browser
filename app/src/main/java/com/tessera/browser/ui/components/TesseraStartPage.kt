@@ -95,6 +95,7 @@ fun TesseraStartPage(
     favorites: List<SpeedDialItem>,
     searchSuggestions: List<String> = emptyList(),
     trendingTopics: List<String> = emptyList(),
+    digitalMinimalismMode: Boolean = true,
     showWeatherWidget: Boolean = true,
     showQuotesWidget: Boolean = true,
     weatherData: WeatherData? = null,
@@ -299,12 +300,36 @@ fun TesseraStartPage(
             ) {
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Bento Row 1: Dual Cards (Weather & Quotes)
-                if (showWeatherWidget && weatherData != null && showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                // Bento Row 1: Dual Cards (Weather & Quotes - Omitidos no modo minimalista)
+                if (!digitalMinimalismMode) {
+                    if (showWeatherWidget && weatherData != null && showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            WeatherBentoCard(
+                                data = weatherData,
+                                isDarkMode = isDarkMode,
+                                accentColor = activeWallpaper.accentColor,
+                                onRefresh = onRefreshWeather,
+                                onClick = {
+                                    val city = weatherData.cityName
+                                    onSearch("previsão do tempo $city")
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            QuotesBentoCard(
+                                data = quotesData,
+                                isDarkMode = isDarkMode,
+                                accentColor = activeWallpaper.accentColor,
+                                onQuoteClick = { quote ->
+                                    onSearch("cotação ${quote.name.lowercase()} hoje")
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else if (showWeatherWidget && weatherData != null) {
                         WeatherBentoCard(
                             data = weatherData,
                             isDarkMode = isDarkMode,
@@ -314,9 +339,9 @@ fun TesseraStartPage(
                                 val city = weatherData.cityName
                                 onSearch("previsão do tempo $city")
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
-
+                    } else if (showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
                         QuotesBentoCard(
                             data = quotesData,
                             isDarkMode = isDarkMode,
@@ -324,31 +349,9 @@ fun TesseraStartPage(
                             onQuoteClick = { quote ->
                                 onSearch("cotação ${quote.name.lowercase()} hoje")
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                } else if (showWeatherWidget && weatherData != null) {
-                    WeatherBentoCard(
-                        data = weatherData,
-                        isDarkMode = isDarkMode,
-                        accentColor = activeWallpaper.accentColor,
-                        onRefresh = onRefreshWeather,
-                        onClick = {
-                            val city = weatherData.cityName
-                            onSearch("previsão do tempo $city")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else if (showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
-                    QuotesBentoCard(
-                        data = quotesData,
-                        isDarkMode = isDarkMode,
-                        accentColor = activeWallpaper.accentColor,
-                        onQuoteClick = { quote ->
-                            onSearch("cotação ${quote.name.lowercase()} hoje")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
 
                 // Bento Row 2: Favorites & Quick Shortcuts
