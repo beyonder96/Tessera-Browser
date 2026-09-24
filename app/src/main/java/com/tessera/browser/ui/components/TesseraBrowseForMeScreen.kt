@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Public
@@ -88,6 +89,7 @@ fun TesseraBrowseForMeScreen(
     onOpenWebSearch: (String) -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    onPlayAudio: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (!state.isVisible) return
@@ -163,7 +165,8 @@ fun TesseraBrowseForMeScreen(
                     },
                     onSearchExternal = {
                         onOpenWebSearch(state.currentQuery)
-                    }
+                    },
+                    onPlayAudio = onPlayAudio
                 )
 
                 // BODY CONTENT
@@ -205,7 +208,8 @@ private fun BrowseForMeTopBar(
     onBack: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
-    onSearchExternal: () -> Unit
+    onSearchExternal: () -> Unit,
+    onPlayAudio: (() -> Unit)? = null
 ) {
     val iconColor = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF1F2937)
 
@@ -277,6 +281,17 @@ private fun BrowseForMeTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            if (onPlayAudio != null) {
+                IconButton(onClick = onPlayAudio) {
+                    Icon(
+                        imageVector = Icons.Rounded.Headphones,
+                        contentDescription = "Ouvir Síntese (Podcastify)",
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
             IconButton(onClick = onCopy) {
                 Icon(
                     imageVector = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,

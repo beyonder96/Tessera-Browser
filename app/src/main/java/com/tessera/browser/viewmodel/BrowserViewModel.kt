@@ -28,6 +28,9 @@ import com.tessera.browser.data.BrowseForMeResult
 import com.tessera.browser.data.BrowseForMeState
 import com.tessera.browser.data.BrowseSection
 import com.tessera.browser.data.BrowseSource
+import com.tessera.browser.data.PodcastAudioState
+import com.tessera.browser.data.PodcastVoice
+import com.tessera.browser.audio.PodcastAudioManager
 import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
@@ -173,6 +176,9 @@ data class BrowserUiState(
     val readerShowImages: Boolean = false,
     val isReaderTtsPlaying: Boolean = false,
     val isReaderSettingsOpen: Boolean = false,
+
+    // Podcastify & Áudio em Segundo Plano (Estilo Bot Tessera)
+    val podcastAudioState: PodcastAudioState = PodcastAudioState(),
 
     // Recursos Avançados (Chrome, Opera & Arc)
     val isDesktopMode: Boolean = false,
@@ -362,6 +368,19 @@ class BrowserViewModel : ViewModel() {
 
     private var suggestionJob: Job? = null
     private var appContext: Context? = null
+
+    init {
+        viewModelScope.launch {
+            PodcastAudioManager.audioState.collect { audioState ->
+                _uiState.update {
+                    it.copy(
+                        podcastAudioState = audioState,
+                        isReaderTtsPlaying = audioState.isPlaying
+                    )
+                }
+            }
+        }
+    }
 
     fun openUrl(rawInput: String) {
         stopReaderTts()
@@ -648,130 +667,113 @@ class BrowserViewModel : ViewModel() {
         _uiState.update { it.copy(isReaderSettingsOpen = !it.isReaderSettingsOpen) }
     }
 
-    // TTS (Text to Speech)
-    private var tts: TextToSpeech? = null
-    private var isTtsInitialized: Boolean = false
+    // PODCASTIFY & ÁUDIO EM SEGUNDO PLANO (ESTILO BOT TESSERA)
+    fun playArticleAsPodcast(context: Context, article: ReaderArticle) {
+        PodcastAudioManager.initialize(context) { _uiState.value.geminiApiKey }
+        val subtitle = if (!article.author.isNullOrBlank()) "${article.domain} • Por ${article.author}" else article.domain
+        PodcastAudioManager.playArticleOrContent(
+            context = context,
+            title = article.title,
+            subtitle = subtitle,
+            content = "${article.title}. ${article.plainText}"
+        )
+    }
 
-    private fun initTts(context: Context) {
-        if (tts == null) {
-            tts = TextToSpeech(context.applicationContext) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    isTtsInitialized = true
-                    try {
-                        tts?.language = Locale.getDefault()
-                    } catch (e: Exception) {
-                        Log.e("BrowserViewModel", "Erro ao configurar idioma TTS", e)
-                    }
-                }
+    fun playSummaryAsPodcast(context: Context, title: String, domain: String, summaryText: String) {
+        PodcastAudioManager.initialize(context) { _uiState.value.geminiApiKey }
+        PodcastAudioManager.playArticleOrContent(
+            context = context,
+            title = title.ifBlank { "Resumo da Página" },
+            subtitle = "Síntese Arc • $domain",
+            content = summaryText
+        )
+    }
+
+    fun playBrowseForMeAsPodcast(context: Context, result: BrowseForMeResult) {
+        PodcastAudioManager.initialize(context) { _uiState.value.geminiApiKey }
+        val script = buildString {
+            append(result.headline).append(". ")
+            append(result.quickAnswer).append(". ")
+            if (result.keyTakeaways.isNotEmpty()) {
+                append("Pontos principais: ")
+                result.keyTakeaways.forEach { append(it).append(". ") }
+            }
+            result.sections.forEach { sec ->
+                append(sec.title).append(". ")
+                append(sec.content).append(". ")
             }
         }
+        PodcastAudioManager.playArticleOrContent(
+            context = context,
+            title = result.headline,
+            subtitle = "Síntese Editorial • ${result.sources.size} fontes",
+            content = script
+        )
     }
 
     fun toggleReaderTts(context: Context) {
-        val article = _uiState.value.readerArticle ?: return
-        if (_uiState.value.isReaderTtsPlaying) {
-            stopReaderTts()
-        } else {
-            startReaderTts(context, article)
+        val article = _uiState.value.readerArticle
+        if (_uiState.value.podcastAudioState.isPlaying) {
+            PodcastAudioManager.pause(context)
+        } else if (article != null) {
+            playArticleAsPodcast(context, article)
         }
     }
 
     fun startReaderTts(context: Context, article: ReaderArticle) {
-        initTts(context)
-        val textToRead = buildString {
-            append(article.title)
-            append(". ")
-            if (!article.author.isNullOrBlank()) {
-                append("Por ").append(article.author).append(". ")
-            }
-            append(article.plainText)
-        }
-        if (textToRead.isBlank()) return
-
-        _uiState.update { it.copy(isReaderTtsPlaying = true) }
-
-        viewModelScope.launch(Dispatchers.Main) {
-            try {
-                if (!isTtsInitialized) {
-                    withTimeoutOrNull(2500) {
-                        while (!isTtsInitialized) {
-                            delay(60)
-                        }
-                    }
-                }
-                tts?.stop()
-                val chunks = textToRead.chunked(3000)
-                chunks.forEachIndexed { index, chunk ->
-                    val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-                    tts?.speak(chunk, queueMode, null, "reader_chunk_$index")
-                }
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) {
-                        val lastId = "reader_chunk_${chunks.size - 1}"
-                        if (utteranceId == lastId) {
-                            _uiState.update { it.copy(isReaderTtsPlaying = false) }
-                        }
-                    }
-                    override fun onError(utteranceId: String?) {
-                        _uiState.update { it.copy(isReaderTtsPlaying = false) }
-                    }
-                })
-            } catch (e: Exception) {
-                Log.e("BrowserViewModel", "Erro no TTS", e)
-                _uiState.update { it.copy(isReaderTtsPlaying = false) }
-            }
-        }
+        playArticleAsPodcast(context, article)
     }
 
     fun stopReaderTts() {
-        try {
-            tts?.stop()
-        } catch (e: Exception) {
-            Log.e("BrowserViewModel", "Erro ao parar TTS", e)
-        }
         _uiState.update { it.copy(isReaderTtsPlaying = false) }
     }
 
     fun speakText(context: Context, text: String) {
-        initTts(context)
-        val clean = text.replace("**", "").replace(Regex("^#+\\s*", RegexOption.MULTILINE), "").trim()
-        if (clean.isBlank()) return
+        val title = _uiState.value.arcSummaryTitle.ifBlank { "Resumo Arc" }
+        val domain = _uiState.value.arcSummaryDomain.ifBlank { "Tessera AI" }
+        playSummaryAsPodcast(context, title, domain, text)
+    }
 
-        _uiState.update { it.copy(isReaderTtsPlaying = true) }
+    fun togglePodcastPlayPause(context: Context) {
+        PodcastAudioManager.togglePlayPause(context)
+    }
 
-        viewModelScope.launch(Dispatchers.Main) {
-            try {
-                if (!isTtsInitialized) {
-                    withTimeoutOrNull(2500) {
-                        while (!isTtsInitialized) {
-                            delay(60)
-                        }
-                    }
-                }
-                tts?.stop()
-                val chunks = clean.chunked(3000)
-                chunks.forEachIndexed { index, chunk ->
-                    val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-                    tts?.speak(chunk, queueMode, null, "summary_chunk_$index")
-                }
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) {
-                        val lastId = "summary_chunk_${chunks.size - 1}"
-                        if (utteranceId == lastId) {
-                            _uiState.update { it.copy(isReaderTtsPlaying = false) }
-                        }
-                    }
-                    override fun onError(utteranceId: String?) {
-                        _uiState.update { it.copy(isReaderTtsPlaying = false) }
-                    }
-                })
-            } catch (e: Exception) {
-                Log.e("BrowserViewModel", "Erro no TTS", e)
-                _uiState.update { it.copy(isReaderTtsPlaying = false) }
-            }
+    fun seekPodcastBy(context: Context, deltaMs: Long) {
+        PodcastAudioManager.seekBy(context, deltaMs)
+    }
+
+    fun seekPodcastToFraction(fraction: Float) {
+        val duration = _uiState.value.podcastAudioState.durationMs
+        if (duration > 0) {
+            PodcastAudioManager.seekToPosition((duration * fraction).toLong())
         }
+    }
+
+    fun setPodcastSpeed(speed: Float) {
+        PodcastAudioManager.setSpeed(speed)
+    }
+
+    fun cyclePodcastSpeed() {
+        val speeds = listOf(1.0f, 1.25f, 1.5f, 2.0f, 0.75f)
+        val current = _uiState.value.podcastAudioState.playbackSpeed
+        val next = speeds.getOrNull(speeds.indexOf(current) + 1) ?: speeds.first()
+        PodcastAudioManager.setSpeed(next)
+    }
+
+    fun selectPodcastVoice(context: Context, voice: PodcastVoice) {
+        PodcastAudioManager.selectVoice(context, voice)
+    }
+
+    fun openPodcastFullPlayer() {
+        PodcastAudioManager.setFullPlayerOpen(true)
+    }
+
+    fun dismissPodcastFullPlayer() {
+        PodcastAudioManager.setFullPlayerOpen(false)
+    }
+
+    fun dismissPodcastPlayer(context: Context) {
+        PodcastAudioManager.dismissPlayer(context)
     }
 
     fun togglePinTab(tabId: String) {
@@ -3313,11 +3315,5 @@ class BrowserViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         stopReaderTts()
-        try {
-            tts?.shutdown()
-        } catch (e: Exception) {
-            Log.e("BrowserViewModel", "Erro ao finalizar TTS", e)
-        }
-        tts = null
     }
 }

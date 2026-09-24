@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.media:media:1.7.0")
 
     // Compose BOM
     implementation(platform(libs.compose.bom))

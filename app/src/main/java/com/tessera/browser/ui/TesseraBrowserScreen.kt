@@ -92,6 +92,8 @@ import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
+import com.tessera.browser.ui.components.PodcastFullPlayerModal
+import com.tessera.browser.ui.components.PodcastMiniPlayerCapsule
 import com.tessera.browser.ui.components.TesseraSettingsScreen
 import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.SiteSettingsModal
@@ -1478,6 +1480,20 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         )
                     }
 
+                    // Podcastify & Áudio em Segundo Plano Mini Player Capsule
+                    if (state.podcastAudioState.isMiniPlayerVisible) {
+                        PodcastMiniPlayerCapsule(
+                            state = state.podcastAudioState,
+                            isDarkMode = state.isDarkMode,
+                            accentColor = state.activeWallpaper.accentColor,
+                            onTogglePlayPause = { viewModel.togglePodcastPlayPause(context) },
+                            onOpenFullPlayer = { viewModel.openPodcastFullPlayer() },
+                            onCycleSpeed = { viewModel.cyclePodcastSpeed() },
+                            onClose = { viewModel.dismissPodcastPlayer(context) },
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+
                     TesseraAirBar(
                         progress = state.progress,
                         displayUrl = if (state.isHomePage) "" else state.displayUrl,
@@ -2145,7 +2161,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 },
                 onDismiss = {
                     viewModel.dismissBrowseForMe()
+                },
+                onPlayAudio = {
+                    state.browseForMeState.result?.let { res ->
+                        viewModel.playBrowseForMeAsPodcast(context, res)
+                    }
                 }
+            )
+        }
+
+        // PODCASTIFY FULL PLAYER MODAL (ESTILO BOT TESSERA)
+        if (state.podcastAudioState.isFullPlayerOpen) {
+            PodcastFullPlayerModal(
+                state = state.podcastAudioState,
+                isDarkMode = state.isDarkMode,
+                accentColor = state.activeWallpaper.accentColor,
+                onTogglePlayPause = { viewModel.togglePodcastPlayPause(context) },
+                onSeekBy = { delta -> viewModel.seekPodcastBy(context, delta) },
+                onSeekToFraction = { fraction -> viewModel.seekPodcastToFraction(fraction) },
+                onSelectSpeed = { speed -> viewModel.setPodcastSpeed(speed) },
+                onSelectVoice = { voice -> viewModel.selectPodcastVoice(context, voice) },
+                onDismiss = { viewModel.dismissPodcastFullPlayer() }
             )
         }
     }
