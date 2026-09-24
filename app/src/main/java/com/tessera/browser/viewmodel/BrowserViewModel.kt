@@ -21,6 +21,7 @@ import android.webkit.URLUtil
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.FileProvider
 import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.DownloadItem
@@ -273,6 +274,7 @@ data class BrowserUiState(
     // Configuração Fácil
     val isDarkMode: Boolean = false,
     val forceDarkPages: Boolean = false,
+    val siteThemeColor: Color? = null,
     val showWallpaper: Boolean = true,
     val selectedWallpaperId: String = "summer_villa",
     val customWallpaperUri: String? = null,
@@ -479,7 +481,8 @@ class BrowserViewModel : ViewModel() {
                 progress = 0f,
                 tabs = updatedTabs,
                 searchSuggestions = emptyList(),
-                pageError = null
+                pageError = null,
+                siteThemeColor = null
             )
         }
     }
@@ -501,6 +504,7 @@ class BrowserViewModel : ViewModel() {
                     readerArticle = null,
                     isReaderSettingsOpen = false,
                     pageError = null,
+                    siteThemeColor = null,
                     translationState = state.translationState.copy(
                         isBannerVisible = false,
                         isTranslating = false,
@@ -508,6 +512,12 @@ class BrowserViewModel : ViewModel() {
                     )
                 )
             }
+        }
+    }
+
+    fun setSiteThemeColor(color: Color?) {
+        if (_uiState.value.siteThemeColor != color) {
+            _uiState.update { it.copy(siteThemeColor = color) }
         }
     }
 

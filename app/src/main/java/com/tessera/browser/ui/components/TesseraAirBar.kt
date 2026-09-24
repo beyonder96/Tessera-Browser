@@ -2,8 +2,14 @@ package com.tessera.browser.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -23,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -68,7 +75,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -120,6 +131,7 @@ fun TesseraAirBar(
     isEditingExternal: Boolean = false,
     onEditingChange: (Boolean) -> Unit = {},
     accentColor: Color = Color(0xFF0288D1),
+    siteThemeColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
     var queryText by remember { mutableStateOf(displayUrl) }
@@ -131,6 +143,7 @@ fun TesseraAirBar(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(displayUrl) {
         if (!isEditing) {
@@ -167,16 +180,102 @@ fun TesseraAirBar(
         label = "airbar_progress"
     )
 
-    val omniBg = if (isDarkMode) Color(0xE0282422) else Color(0xEEFFFFFF)
+    // Dynamic Tinted Glass - Smooth transition to site brand color
+    val animatedTintColor by animateColorAsState(
+        targetValue = siteThemeColor ?: Color.Transparent,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "airbar_tint"
+    )
+
+    // Infinite rotating shimmer for Aurora AI Orb
+    val infiniteTransition = rememberInfiniteTransition(label = "airbar_ai_infinite")
+    val aiGlowAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ai_glow_angle"
+    )
+
+    val baseDarkOmni = Color(0xE0282422)
+    val baseLightOmni = Color(0xEEFFFFFF)
+
+    val omniBg = if (isDarkMode) {
+        if (animatedTintColor != Color.Transparent) {
+            lerp(baseDarkOmni, animatedTintColor.copy(alpha = 0.94f), 0.22f)
+        } else {
+            baseDarkOmni
+        }
+    } else {
+        if (animatedTintColor != Color.Transparent) {
+            lerp(baseLightOmni, animatedTintColor.copy(alpha = 0.96f), 0.14f)
+        } else {
+            baseLightOmni
+        }
+    }
+
     val dockBg = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0x00120E0D), Color(0xAA120E0D), Color(0xEE120E0D))
+        if (animatedTintColor != Color.Transparent) {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0x00120E0D),
+                    lerp(Color(0x88120E0D), animatedTintColor.copy(alpha = 0.35f), 0.28f),
+                    lerp(Color(0xEE120E0D), animatedTintColor.copy(alpha = 0.55f), 0.28f)
+                )
+            )
+        } else {
+            Brush.verticalGradient(
+                listOf(Color(0x00120E0D), Color(0xAA120E0D), Color(0xEE120E0D))
+            )
+        }
+    } else {
+        if (animatedTintColor != Color.Transparent) {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0x00FFFFFF),
+                    lerp(Color(0xCCFFFFFF), animatedTintColor.copy(alpha = 0.20f), 0.25f),
+                    lerp(Color(0xFAFFFFFF), animatedTintColor.copy(alpha = 0.35f), 0.25f)
+                )
+            )
+        } else {
+            Brush.verticalGradient(
+                listOf(Color(0x00FFFFFF), Color(0xCCFFFFFF), Color(0xFAFFFFFF))
+            )
+        }
+    }
+
+    val effectiveAccent = if (animatedTintColor != Color.Transparent) {
+        animatedTintColor
+    } else {
+        accentColor
+    }
+
+    val omniBorderBrush = if (animatedTintColor != Color.Transparent) {
+        Brush.horizontalGradient(
+            colors = if (isDarkMode) {
+                listOf(
+                    Color.White.copy(alpha = 0.25f),
+                    animatedTintColor.copy(alpha = 0.65f),
+                    Color.White.copy(alpha = 0.12f),
+                    animatedTintColor.copy(alpha = 0.40f)
+                )
+            } else {
+                listOf(
+                    Color.White.copy(alpha = 0.95f),
+                    animatedTintColor.copy(alpha = 0.55f),
+                    Color.White.copy(alpha = 0.70f),
+                    animatedTintColor.copy(alpha = 0.35f)
+                )
+            }
         )
     } else {
-        Brush.verticalGradient(
-            listOf(Color(0x00FFFFFF), Color(0xCCFFFFFF), Color(0xFAFFFFFF))
+        SolidColor(
+            if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.85f)
         )
     }
+
     val contentColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
     val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.35f) else Color(0xFF8E8E93)
 
@@ -204,7 +303,7 @@ fun TesseraAirBar(
                         queryText = it
                         onQueryChange(it)
                     },
-                    accentColor = accentColor,
+                    accentColor = effectiveAccent,
                     isDarkMode = isDarkMode
                 )
             }
@@ -217,7 +316,7 @@ fun TesseraAirBar(
                         .fillMaxWidth()
                         .height(2.5.dp)
                         .clip(RoundedCornerShape(1.dp)),
-                    color = accentColor,
+                    color = effectiveAccent,
                     trackColor = Color.Transparent
                 )
             }
@@ -238,7 +337,7 @@ fun TesseraAirBar(
                     .background(omniBg)
                     .border(
                         width = 1.dp,
-                        color = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.85f),
+                        brush = omniBorderBrush,
                         shape = omniShape
                     )
                     .draggable(
@@ -527,19 +626,22 @@ fun TesseraAirBar(
                             .size(44.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isIncognito) accentColor.copy(alpha = 0.15f) else Color.Transparent
+                                if (isIncognito) effectiveAccent.copy(alpha = 0.15f) else Color.Transparent
                             )
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = onToggleIncognito
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onToggleIncognito()
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_incognito),
                             contentDescription = "Navegação Anônima",
-                            tint = if (isIncognito) accentColor else contentColor,
+                            tint = if (isIncognito) effectiveAccent else contentColor,
                             modifier = Modifier.size(23.dp)
                         )
                     }
@@ -552,7 +654,10 @@ fun TesseraAirBar(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = onToggleBookmark
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onToggleBookmark()
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -564,7 +669,7 @@ fun TesseraAirBar(
                         )
                     }
 
-                    // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb)
+                    // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb with Aurora Glow)
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -575,13 +680,18 @@ fun TesseraAirBar(
                                 spotColor = Color(0x99B388FF)
                             )
                             .clip(CircleShape)
+                            .graphicsLayer {
+                                rotationZ = aiGlowAngle
+                            }
                             .background(
-                                Brush.linearGradient(
+                                Brush.sweepGradient(
                                     colors = listOf(
                                         Color(0xFF80D8FF), // Vivid Soft Cyan
                                         Color(0xFF82B1FF), // Soft Sky Blue
                                         Color(0xFFB388FF), // Soft Lilac
-                                        Color(0xFFEA80FC)  // Soft Rose Violet
+                                        Color(0xFFEA80FC), // Soft Rose Violet
+                                        Color(0xFFFF80AB), // Soft Coral Pink
+                                        Color(0xFF80D8FF)  // Back to Cyan
                                     )
                                 )
                             )
@@ -598,19 +708,36 @@ fun TesseraAirBar(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = onOpenAiAction
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenAiAction()
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Soft specular glossy highlight on top of the orb
+                        // Inner container to keep icon & specular highlight oriented upright
                         Box(
                             modifier = Modifier
-                                .size(16.dp)
-                                .align(Alignment.TopCenter)
-                                .padding(top = 4.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.45f))
-                        )
+                                .fillMaxSize()
+                                .graphicsLayer { rotationZ = -aiGlowAngle },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Soft specular glossy highlight on top of the orb
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.45f))
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.AutoAwesome,
+                                contentDescription = "Tessera AI",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
 
                     // 4. Abas Button (Rounded square with border and number badge)
@@ -621,7 +748,10 @@ fun TesseraAirBar(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = onOpenTabs
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenTabs()
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -655,7 +785,10 @@ fun TesseraAirBar(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = onOpenSettings
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenSettings()
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {

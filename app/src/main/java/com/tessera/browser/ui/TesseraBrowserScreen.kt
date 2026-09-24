@@ -1067,6 +1067,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 viewModel.onPageLanguageDetected(detected, url)
                                             }
                                         }
+
+                                        // Extract dynamic site theme-color / brand accent for Dynamic Tinted Glass
+                                        view?.evaluateJavascript(
+                                            """
+                                            (function() {
+                                                var meta = document.querySelector('meta[name="theme-color"]') || 
+                                                           document.querySelector('meta[name="msapplication-TileColor"]') ||
+                                                           document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+                                                if (meta && meta.content) return meta.content.trim();
+                                                var header = document.querySelector('header') || document.querySelector('nav');
+                                                if (header) {
+                                                    var bg = window.getComputedStyle(header).backgroundColor;
+                                                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+                                                }
+                                                return '';
+                                            })()
+                                            """.trimIndent()
+                                        ) { colorResult ->
+                                            val parsedColor = parseCssColor(colorResult)
+                                            viewModel.setSiteThemeColor(parsedColor)
+                                        }
                                     }
                                 }
                             }
@@ -1513,7 +1534,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onOpenFavorite = { url -> viewModel.openUrl(url) },
                         onNextTab = { viewModel.selectNextTab() },
                         onPreviousTab = { viewModel.selectPreviousTab() },
-                        accentColor = state.activeWallpaper.accentColor
+                        accentColor = state.activeWallpaper.accentColor,
+                        siteThemeColor = state.siteThemeColor
                     )
                 }
             }
@@ -2107,3 +2129,40 @@ private fun applyForceDark(settings: android.webkit.WebSettings, forceDark: Bool
         )
     }
 }
+
+private fun parseCssColor(cssColor: String?): Color? {
+    if (cssColor.isNullOrBlank()) return null
+    val trimmed = cssColor.trim().removeSurrounding("\"").removeSurrounding("'").trim()
+    if (trimmed.isEmpty() || trimmed.equals("null", ignoreCase = true) || trimmed.equals("transparent", ignoreCase = true)) return null
+
+    return try {
+        if (trimmed.startsWith("#")) {
+            val hex = when (trimmed.length) {
+                4 -> "#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}"
+                5 -> "#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}${trimmed[4]}${trimmed[4]}"
+                else -> trimmed
+            }
+            Color(android.graphics.Color.parseColor(hex))
+        } else if (trimmed.startsWith("rgb", ignoreCase = true)) {
+            val inner = trimmed.substringAfter("(").substringBefore(")")
+            val parts = if (inner.contains(",")) inner.split(",") else inner.split(" ")
+            val nums = parts.mapNotNull { it.trim().removeSuffix("%").toFloatOrNull() }
+            if (nums.size >= 3) {
+                val r = nums[0].toInt().coerceIn(0, 255)
+                val g = nums[1].toInt().coerceIn(0, 255)
+                val b = nums[2].toInt().coerceIn(0, 255)
+                val a = if (nums.size >= 4) {
+                    val alphaVal = nums[3]
+                    if (alphaVal <= 1.0f) (alphaVal * 255).toInt().coerceIn(0, 255) else alphaVal.toInt().coerceIn(0, 255)
+                } else 255
+                if (a == 0) return null
+                Color(android.graphics.Color.argb(a, r, g, b))
+            } else null
+        } else {
+            Color(android.graphics.Color.parseColor(trimmed))
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+

@@ -31,7 +31,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -73,6 +75,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -168,39 +171,41 @@ fun TesseraStartPage(
             )
         }
 
-        // Minimalist Home Widgets (Weather & Quotes) - Floating cleanly without wrapping box
-        if (showWeatherWidget || showQuotesWidget) {
-            HomeWidgetsContainer(
-                showWeather = showWeatherWidget,
-                showQuotes = showQuotesWidget,
-                weatherData = weatherData,
-                quotesData = quotesData,
-                isDarkMode = isDarkMode,
-                accentColor = activeWallpaper.accentColor,
-                onRefreshWeather = onRefreshWeather,
-                onQuoteClick = { quote ->
-                    onSearch("cotação ${quote.name.lowercase()} hoje")
-                },
-                onWeatherClick = {
-                    val city = weatherData?.cityName ?: "São Paulo"
-                    onSearch("previsão do tempo $city")
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .displayCutoutPadding()
-                    .padding(top = 16.dp)
-            )
-        }
-
-        // Top-Right: Tema & Cores / Configurações Rápidas Shortcut
-        Box(
+        // 1. Top Header Row: Brand wordmark on left + Theme & Colors Pill on right
+        Row(
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
                 .displayCutoutPadding()
-                .padding(top = 16.dp, end = 16.dp)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Brand Wordmark
+            Text(
+                text = "TESSERA",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 4.sp,
+                style = TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.65f),
+                        offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                        blurRadius = 8f
+                    )
+                ),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onSearchClick
+                    )
+            )
+
+            // Theme & Colors Pill
             val pillShape = RoundedCornerShape(20.dp)
             val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
             val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.08f)
@@ -235,151 +240,240 @@ fun TesseraStartPage(
             }
         }
 
-        // Center Hero: Modern Uppercase Typography "TESSERA"
+        // 2. Central Bento Grid Container (Smoothly scrollable)
+        val bentoScrollState = rememberScrollState()
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .displayCutoutPadding()
+                .padding(top = 56.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
-            CentralBrandHero(
-                accentColor = activeWallpaper.accentColor,
-                onClick = onSearchClick
-            )
-        }
-
-        // BARRA DE FAVORITOS NO RODAPÉ (Uso com uma mão, flutuando acima da barra inferior)
-        if (favorites.isNotEmpty()) {
-            BottomFavoritesBar(
-                items = favorites,
-                isDarkMode = isDarkMode,
-                onItemClick = onOpenUrl,
+            Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 122.dp)
-                    .padding(horizontal = 16.dp)
-            )
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .verticalScroll(bentoScrollState)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Bento Row 1: Dual Cards (Weather & Quotes)
+                if (showWeatherWidget && weatherData != null && showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        WeatherBentoCard(
+                            data = weatherData,
+                            isDarkMode = isDarkMode,
+                            accentColor = activeWallpaper.accentColor,
+                            onRefresh = onRefreshWeather,
+                            onClick = {
+                                val city = weatherData.cityName
+                                onSearch("previsão do tempo $city")
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        QuotesBentoCard(
+                            data = quotesData,
+                            isDarkMode = isDarkMode,
+                            accentColor = activeWallpaper.accentColor,
+                            onQuoteClick = { quote ->
+                                onSearch("cotação ${quote.name.lowercase()} hoje")
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                } else if (showWeatherWidget && weatherData != null) {
+                    WeatherBentoCard(
+                        data = weatherData,
+                        isDarkMode = isDarkMode,
+                        accentColor = activeWallpaper.accentColor,
+                        onRefresh = onRefreshWeather,
+                        onClick = {
+                            val city = weatherData.cityName
+                            onSearch("previsão do tempo $city")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else if (showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
+                    QuotesBentoCard(
+                        data = quotesData,
+                        isDarkMode = isDarkMode,
+                        accentColor = activeWallpaper.accentColor,
+                        onQuoteClick = { quote ->
+                            onSearch("cotação ${quote.name.lowercase()} hoje")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Bento Row 2: Favorites & Quick Shortcuts
+                if (favorites.isNotEmpty()) {
+                    FavoritesBentoCard(
+                        items = favorites,
+                        isDarkMode = isDarkMode,
+                        accentColor = activeWallpaper.accentColor,
+                        onItemClick = onOpenUrl,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Bento Row 3: Privacy & Security Shield Pill
+                PrivacyShieldBentoCard(
+                    isDarkMode = isDarkMode,
+                    accentColor = activeWallpaper.accentColor,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Bottom padding to clear floating AirBar
+                Spacer(modifier = Modifier.height(130.dp))
+            }
         }
     }
 }
 
+/**
+ * Bento Box tile displaying Favorites / Speed Dial in a clean modern grid.
+ */
 @Composable
-private fun CentralBrandHero(
-    accentColor: Color,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "TESSERA",
-            color = Color.White,
-            fontSize = 38.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 8.sp,
-            style = TextStyle(
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color.Black.copy(alpha = 0.5f),
-                    offset = androidx.compose.ui.geometry.Offset(0f, 4f),
-                    blurRadius = 14f
-                )
-            )
-        )
-    }
-}
-
-@Composable
-private fun BottomFavoritesBar(
+fun FavoritesBentoCard(
     items: List<SpeedDialItem>,
     isDarkMode: Boolean,
+    accentColor: Color,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(26.dp)
-    val scrollState = rememberScrollState()
-
-    val containerBg = if (isDarkMode) {
+    val bentoShape = RoundedCornerShape(24.dp)
+    val cardBg = if (isDarkMode) {
         Brush.verticalGradient(
-            listOf(Color(0xEE221B17), Color(0xF815100E))
+            listOf(Color(0xCC201A18), Color(0xDD161210))
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF7F7FA))
+            listOf(Color(0xEEFFFFFF), Color(0xF2F5F7FA))
         )
     }
-
-    val containerBorder = if (isDarkMode) {
+    val cardBorder = if (isDarkMode) {
         Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+            listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.05f))
         )
     } else {
         Brush.verticalGradient(
             listOf(Color.Black.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.04f))
         )
     }
-
-    val itemBg = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0x0C000000)
-    val itemTextColor = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1C1C1E)
-    val bookmarkTint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4)
+    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF6E6E73)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (isDarkMode) 20.dp else 12.dp,
-                shape = shape,
-                spotColor = if (isDarkMode) Color.Black else Color(0x30000000)
+                elevation = if (isDarkMode) 12.dp else 4.dp,
+                shape = bentoShape,
+                ambientColor = Color.Black.copy(alpha = 0.15f),
+                spotColor = Color.Black.copy(alpha = 0.08f)
             )
-            .clip(shape)
-            .background(containerBg)
-            .border(
-                width = 1.dp,
-                brush = containerBorder,
-                shape = shape
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .clip(bentoShape)
+            .background(cardBg)
+            .border(1.dp, cardBorder, bentoShape)
+            .padding(16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Bookmark,
-                contentDescription = "Favoritos",
-                tint = bookmarkTint,
-                modifier = Modifier.size(18.dp)
-            )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Bookmark,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(15.dp)
+                )
+                Text(
+                    text = "Favoritos Rápidos",
+                    color = mutedColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
 
-            items.forEach { item ->
+            Spacer(modifier = Modifier.height(14.dp))
+
+            val chunkedItems = items.chunked(4)
+            chunkedItems.forEachIndexed { rowIndex, rowItems ->
+                if (rowIndex > 0) Spacer(modifier = Modifier.height(12.dp))
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(itemBg)
-                        .clickable { onItemClick(item.url) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    ShortcutIcon(item = item, size = 18.dp)
-                    Text(
-                        text = item.title,
-                        color = itemTextColor,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
+                    rowItems.forEach { item ->
+                        BentoShortcutItem(
+                            item = item,
+                            isDarkMode = isDarkMode,
+                            onClick = { onItemClick(item.url) }
+                        )
+                    }
+                    repeat(4 - rowItems.size) {
+                        Spacer(modifier = Modifier.width(64.dp))
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun BentoShortcutItem(
+    item: SpeedDialItem,
+    isDarkMode: Boolean,
+    onClick: () -> Unit
+) {
+    val squircleShape = RoundedCornerShape(16.dp)
+    val tileBg = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0x0A000000)
+    val tileBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.90f) else Color(0xFF1E1E1E)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(66.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(squircleShape)
+                .background(tileBg)
+                .border(1.dp, tileBorder, squircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            ShortcutIcon(item = item, size = 26.dp)
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = item.title,
+            color = textColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
