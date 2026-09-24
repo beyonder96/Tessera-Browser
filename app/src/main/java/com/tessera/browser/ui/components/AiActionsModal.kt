@@ -101,13 +101,25 @@ fun AiActionsModal(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Action 1: Resumo da Página Estilo Arc
+        // Action 1: Navegue por Mim (Arc Search Style)
+        AiActionCard(
+            icon = Icons.Rounded.AutoAwesome,
+            title = "Navegue por Mim com IA",
+            description = "Síntese visual estilo Arc Search com respostas diretas, tópicos e fontes.",
+            badge = "Novo ✨",
+            isFeatured = true,
+            onClick = { onAction("browse_for_me") }
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Action 2: Resumo da Página Estilo Arc
         AiActionCard(
             icon = Icons.Rounded.AutoAwesome,
             title = "Resumir Página Atual",
             description = "Síntese instantânea com IA gratuita, tópicos-chave e efeito visual do Arc.",
             badge = "Efeito Arc ✨",
-            isFeatured = true,
+            isFeatured = false,
             onClick = { onAction("summarize") }
         )
 

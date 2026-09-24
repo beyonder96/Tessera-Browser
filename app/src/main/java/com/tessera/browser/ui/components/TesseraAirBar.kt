@@ -292,12 +292,17 @@ fun TesseraAirBar(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Floating search suggestions card (appears above the search bar while typing)
-            if (isEditing && queryText.isNotBlank() && searchSuggestions.isNotEmpty()) {
+            if (isEditing && queryText.isNotBlank()) {
                 SearchSuggestionsFloatingCard(
+                    queryText = queryText,
                     suggestions = searchSuggestions,
                     onSelect = {
                         isEditing = false
                         onSearch(it)
+                    },
+                    onBrowseForMe = {
+                        isEditing = false
+                        onBrowseForMe(it)
                     },
                     onInsert = {
                         queryText = it
@@ -807,8 +812,10 @@ fun TesseraAirBar(
 
 @Composable
 private fun SearchSuggestionsFloatingCard(
+    queryText: String,
     suggestions: List<String>,
     onSelect: (String) -> Unit,
+    onBrowseForMe: (String) -> Unit,
     onInsert: (String) -> Unit,
     accentColor: Color,
     isDarkMode: Boolean
@@ -833,6 +840,91 @@ private fun SearchSuggestionsFloatingCard(
             .border(1.dp, cardBorder, cardShape)
             .padding(vertical = 4.dp)
     ) {
+        // TOP BROWSE FOR ME ACTION ITEM (Arc Search Style)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onBrowseForMe(queryText) }
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            accentColor.copy(alpha = if (isDarkMode) 0.18f else 0.10f),
+                            Color(0xFF7C4DFF).copy(alpha = if (isDarkMode) 0.14f else 0.08f)
+                        )
+                    )
+                )
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF00E5FF), Color(0xFF7C4DFF))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Navegue por Mim",
+                        color = if (isDarkMode) Color.White else Color(0xFF1E1E24),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF7C4DFF).copy(alpha = 0.22f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "IA ✨",
+                            color = Color(0xFF7C4DFF),
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Text(
+                    text = "Sintetizar: \"$queryText\"",
+                    color = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF6B7280),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = "Navegar com IA",
+                tint = accentColor,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        if (suggestions.isNotEmpty()) {
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                modifier = Modifier.padding(horizontal = 14.dp)
+            )
+        }
         suggestions.take(5).forEachIndexed { index, suggestion ->
             Row(
                 modifier = Modifier

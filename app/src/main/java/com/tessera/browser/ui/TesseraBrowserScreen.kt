@@ -97,6 +97,7 @@ import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.SiteSettingsModal
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
+import com.tessera.browser.ui.components.TesseraBrowseForMeScreen
 import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
 import com.tessera.browser.ui.components.TranslateBar
@@ -1673,6 +1674,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
                             }
                         }
+                    } else if (action == "browse_for_me") {
+                        viewModel.dismissAiActionModal()
+                        val q = if (state.isHomePage) {
+                            "Destaques de tecnologia e inteligência artificial"
+                        } else {
+                            val title = webViewInstance?.title.orEmpty().trim()
+                            if (title.isNotBlank()) title else state.displayUrl
+                        }
+                        viewModel.browseForMe(q)
                     } else {
                         viewModel.openAiAction(action)
                     }
@@ -2113,6 +2123,29 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     .fillMaxSize()
                     .statusBarsPadding()
                     .displayCutoutPadding()
+            )
+        }
+
+        // BROWSE FOR ME SCREEN (EDITORIAL AI SYNTHESIS - ARC SEARCH STYLE)
+        if (state.browseForMeState.isVisible) {
+            TesseraBrowseForMeScreen(
+                state = state.browseForMeState,
+                isDarkMode = state.isDarkMode,
+                accentColor = state.activeWallpaper.accentColor,
+                onOpenUrl = { url ->
+                    viewModel.dismissBrowseForMe()
+                    viewModel.openUrl(url)
+                },
+                onOpenWebSearch = { q ->
+                    viewModel.dismissBrowseForMe()
+                    viewModel.openUrl(q)
+                },
+                onRetry = {
+                    viewModel.browseForMe(state.browseForMeState.currentQuery)
+                },
+                onDismiss = {
+                    viewModel.dismissBrowseForMe()
+                }
             )
         }
     }

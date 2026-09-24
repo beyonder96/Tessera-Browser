@@ -24,6 +24,10 @@ import android.widget.Toast
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.FileProvider
 import com.tessera.browser.data.AvailableWallpapers
+import com.tessera.browser.data.BrowseForMeResult
+import com.tessera.browser.data.BrowseForMeState
+import com.tessera.browser.data.BrowseSection
+import com.tessera.browser.data.BrowseSource
 import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
@@ -214,6 +218,9 @@ data class BrowserUiState(
 
     // Quick AI Actions Modal
     val showAiActionModal: Boolean = false,
+
+    // Browse for Me (Arc Search Style Editorial Synthesis)
+    val browseForMeState: BrowseForMeState = BrowseForMeState(),
 
     // Arc Page Summary (IA Gratuita & Efeito Arc)
     val showArcSummary: Boolean = false,
@@ -2025,8 +2032,487 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    // BROWSE FOR ME (ARC SEARCH STYLE EDITORIAL SYNTHESIS)
+    private var browseForMeJob: Job? = null
+
+    fun dismissBrowseForMe() {
+        browseForMeJob?.cancel()
+        _uiState.update {
+            it.copy(browseForMeState = it.browseForMeState.copy(isVisible = false))
+        }
+    }
+
     fun browseForMe(query: String) {
-        // Deprecated - Navegue por mim removido da barra
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return
+
+        browseForMeJob?.cancel()
+        _uiState.update {
+            it.copy(
+                browseForMeState = BrowseForMeState(
+                    isVisible = true,
+                    isLoading = true,
+                    currentQuery = cleanQuery,
+                    loadingStep = "Consultando fontes e índices...",
+                    result = null,
+                    error = null
+                ),
+                showAiActionModal = false
+            )
+        }
+
+        browseForMeJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Step 1: Extração de Fontes e Conteúdo Real da Web (DuckDuckGo Instant Answer + Wikipedia)
+                val (extractedSources, rawContentText) = fetchWebSourcesForQuery(cleanQuery)
+
+                _uiState.update {
+                    it.copy(
+                        browseForMeState = it.browseForMeState.copy(
+                            loadingStep = "Sintetizando inteligência editorial..."
+                        )
+                    )
+                }
+
+                var finalResult: BrowseForMeResult? = null
+
+                // TIER 1: Gemini Oficial (se API key configurada)
+                val geminiKey = _uiState.value.geminiApiKey?.trim().orEmpty()
+                if (geminiKey.isNotBlank()) {
+                    try {
+                        val aiJson = callGeminiForBrowseForMe(geminiKey, cleanQuery, rawContentText)
+                        if (aiJson != null) {
+                            finalResult = parseBrowseForMeJson(cleanQuery, aiJson, extractedSources)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("TesseraBrowser", "Falha no Gemini para BrowseForMe, tentando fallback", e)
+                    }
+                }
+
+                // TIER 2: Free AI Endpoint (se Tier 1 não configurado ou falhou)
+                if (finalResult == null) {
+                    try {
+                        val freeAiJson = callFreeAiForBrowseForMe(cleanQuery, rawContentText)
+                        if (freeAiJson != null) {
+                            finalResult = parseBrowseForMeJson(cleanQuery, freeAiJson, extractedSources)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("TesseraBrowser", "Falha no Free AI para BrowseForMe, usando fallback local resiliente", e)
+                    }
+                }
+
+                // TIER 3: Motor Editorial Local Resiliente (Garante funcionamento 100% offline / sem API)
+                if (finalResult == null) {
+                    finalResult = buildLocalEditorialResult(cleanQuery, rawContentText, extractedSources)
+                }
+
+                val resultToEmit = finalResult
+                _uiState.update {
+                    it.copy(
+                        browseForMeState = it.browseForMeState.copy(
+                            isLoading = false,
+                            result = resultToEmit,
+                            error = null
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("TesseraBrowser", "Erro ao executar Browse for Me", e)
+                _uiState.update {
+                    it.copy(
+                        browseForMeState = it.browseForMeState.copy(
+                            isLoading = false,
+                            error = "Não foi possível sintetizar fontes para esta pesquisa. Tente novamente ou abra na busca web."
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun fetchWebSourcesForQuery(query: String): Pair<List<BrowseSource>, String> {
+        val sources = mutableListOf<BrowseSource>()
+        val contentParts = mutableListOf<String>()
+
+        // 1. DuckDuckGo Instant Answer API
+        try {
+            val ddgUrl = URL("https://api.duckduckgo.com/?q=${URLEncoder.encode(query, "UTF-8")}&format=json&no_html=1&skip_disambig=1")
+            val conn = (ddgUrl.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4000
+                readTimeout = 4000
+                setRequestProperty("User-Agent", "TesseraBrowser/1.5.0")
+            }
+            if (conn.responseCode in 200..299) {
+                val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(jsonText)
+                val heading = root.optString("Heading", "")
+                val abstractText = root.optString("AbstractText", "")
+                val abstractSource = root.optString("AbstractSource", "")
+                val abstractUrl = root.optString("AbstractURL", "")
+
+                if (abstractText.isNotBlank()) {
+                    contentParts.add(abstractText)
+                    if (abstractUrl.isNotBlank()) {
+                        val domain = try { Uri.parse(abstractUrl).host?.replace("www.", "") ?: abstractSource } catch (e: Exception) { abstractSource }
+                        sources.add(
+                            BrowseSource(
+                                title = heading.ifBlank { abstractSource }.ifBlank { "Fonte Principal" },
+                                url = abstractUrl,
+                                domain = domain.ifBlank { "duckduckgo.com" },
+                                snippet = abstractText.take(140) + "..."
+                            )
+                        )
+                    }
+                }
+
+                // Related topics
+                val related = root.optJSONArray("RelatedTopics")
+                if (related != null) {
+                    for (i in 0 until minOf(related.length(), 6)) {
+                        val item = related.optJSONObject(i) ?: continue
+                        val text = item.optString("Text", "")
+                        val firstUrl = item.optString("FirstURL", "")
+                        if (text.isNotBlank()) {
+                            contentParts.add(text)
+                            if (firstUrl.isNotBlank() && sources.none { it.url == firstUrl }) {
+                                val domain = try { Uri.parse(firstUrl).host?.replace("www.", "") ?: "web" } catch (e: Exception) { "web" }
+                                val title = text.substringBefore(" - ").substringBefore(" – ").take(45)
+                                sources.add(
+                                    BrowseSource(
+                                        title = title.ifBlank { "Referência ${i + 1}" },
+                                        url = firstUrl,
+                                        domain = domain,
+                                        snippet = text.take(130)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("TesseraBrowser", "DDG API query falhou", e)
+        }
+
+        // 2. Wikipedia Search API
+        try {
+            val wikiUrl = URL("https://pt.wikipedia.org/w/api.php?action=query&list=search&srsearch=${URLEncoder.encode(query, "UTF-8")}&utf8=&format=json&srlimit=4")
+            val conn = (wikiUrl.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4000
+                readTimeout = 4000
+                setRequestProperty("User-Agent", "TesseraBrowser/1.5.0")
+            }
+            if (conn.responseCode in 200..299) {
+                val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(jsonText)
+                val search = root.optJSONObject("query")?.optJSONArray("search")
+                if (search != null) {
+                    for (i in 0 until search.length()) {
+                        val item = search.getJSONObject(i)
+                        val title = item.optString("title", "")
+                        val rawSnippet = item.optString("snippet", "")
+                        val cleanSnippet = rawSnippet.replace(Regex("<[^>]*>"), "").replace("&quot;", "\"")
+                        if (title.isNotBlank()) {
+                            val pageUrl = "https://pt.wikipedia.org/wiki/${URLEncoder.encode(title.replace(" ", "_"), "UTF-8")}"
+                            if (sources.none { it.url == pageUrl }) {
+                                sources.add(
+                                    BrowseSource(
+                                        title = "$title — Wikipédia",
+                                        url = pageUrl,
+                                        domain = "pt.wikipedia.org",
+                                        snippet = cleanSnippet.take(130)
+                                    )
+                                )
+                            }
+                            if (cleanSnippet.isNotBlank()) {
+                                contentParts.add(cleanSnippet)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("TesseraBrowser", "Wikipedia API query falhou", e)
+        }
+
+        // Fontes de fallback de busca web direta
+        if (sources.none { it.domain.contains("google") }) {
+            sources.add(
+                BrowseSource(
+                    title = "Resultados Google: \"$query\"",
+                    url = "https://www.google.com/search?q=${URLEncoder.encode(query, "UTF-8")}",
+                    domain = "google.com",
+                    snippet = "Índice web abrangente e resultados em tempo real"
+                )
+            )
+        }
+        if (sources.none { it.domain.contains("duckduckgo") }) {
+            sources.add(
+                BrowseSource(
+                    title = "Resultados DuckDuckGo: \"$query\"",
+                    url = "https://duckduckgo.com/?q=${URLEncoder.encode(query, "UTF-8")}",
+                    domain = "duckduckgo.com",
+                    snippet = "Navegação segura e resultados globais"
+                )
+            )
+        }
+
+        val consolidatedContent = contentParts.joinToString("\n\n").ifBlank {
+            "Assunto pesquisado: $query. Coletando síntese dos principais resultados da web."
+        }
+
+        return Pair(sources.take(6), consolidatedContent)
+    }
+
+    private fun callGeminiForBrowseForMe(apiKey: String, query: String, contextText: String): String? {
+        val systemPrompt = "Você é o motor editorial 'Browse for Me' do navegador Tessera estilo Arc Search. Crie uma síntese inteligente, visual e completa sobre a consulta em Português do Brasil.\n" +
+                "Responda SOMENTE em JSON válido, sem bloco de código markdown e sem texto antes ou depois. Estrutura:\n" +
+                "{\n" +
+                "  \"headline\": \"Título jornalístico conciso e atraente\",\n" +
+                "  \"quickAnswer\": \"Resposta direta e completa em 2 a 3 frases explicando o cerne.\",\n" +
+                "  \"keyTakeaways\": [\"💡 Ponto 1...\", \"🚀 Ponto 2...\", \"📌 Ponto 3...\"],\n" +
+                "  \"sections\": [\n" +
+                "    {\"title\": \"Subtítulo 1\", \"content\": \"Texto explicativo...\", \"bulletPoints\": [\"Detalhe A\", \"Detalhe B\"]},\n" +
+                "    {\"title\": \"Subtítulo 2\", \"content\": \"Mais informações...\", \"bulletPoints\": []}\n" +
+                "  ]\n" +
+                "}"
+
+        val userPrompt = "Consulta: $query\n\nInformações coletadas da web:\n$contextText"
+
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey"
+        val payload = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", "$systemPrompt\n\n$userPrompt")
+                        })
+                    })
+                })
+            })
+            put("generationConfig", JSONObject().apply {
+                put("temperature", 0.3)
+                put("maxOutputTokens", 1200)
+                put("responseMimeType", "application/json")
+            })
+        }
+
+        val url = URL(endpoint)
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+        }
+
+        OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(payload.toString()) }
+
+        if (conn.responseCode in 200..299) {
+            val responseStr = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).use { it.readText() }
+            val root = JSONObject(responseStr)
+            val candidates = root.optJSONArray("candidates")
+            if (candidates != null && candidates.length() > 0) {
+                val first = candidates.getJSONObject(0)
+                val contentObj = first.optJSONObject("content")
+                val parts = contentObj?.optJSONArray("parts")
+                if (parts != null && parts.length() > 0) {
+                    return parts.getJSONObject(0).optString("text", "")
+                }
+            }
+        }
+        return null
+    }
+
+    private fun callFreeAiForBrowseForMe(query: String, contextText: String): String? {
+        val systemPrompt = "Você é o motor editorial 'Browse for Me' do navegador Tessera estilo Arc Search. Crie uma síntese inteligente e visual em Português do Brasil.\n" +
+                "Responda SOMENTE em formato JSON válido:\n" +
+                "{\n" +
+                "  \"headline\": \"Título elegante sobre o tema\",\n" +
+                "  \"quickAnswer\": \"Resposta direta e concisa em 2 a 3 frases.\",\n" +
+                "  \"keyTakeaways\": [\"💡 Ponto 1...\", \"🚀 Ponto 2...\", \"📌 Ponto 3...\"],\n" +
+                "  \"sections\": [\n" +
+                "    {\"title\": \"Subtítulo 1\", \"content\": \"Texto explicativo...\", \"bulletPoints\": [\"Detalhe A\"]},\n" +
+                "    {\"title\": \"Subtítulo 2\", \"content\": \"Mais detalhes...\", \"bulletPoints\": []}\n" +
+                "  ]\n" +
+                "}"
+
+        val userPrompt = "Consulta: $query\nInformações:\n$contextText"
+
+        val messagesArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "system")
+                put("content", systemPrompt)
+            })
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", userPrompt)
+            })
+        }
+
+        val reqJson = JSONObject().apply {
+            put("messages", messagesArr)
+            put("model", "openai")
+            put("seed", 42)
+        }
+
+        val url = URL("https://text.pollinations.ai/")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 7000
+            readTimeout = 14000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            setRequestProperty("User-Agent", "TesseraBrowser/1.5.0")
+        }
+
+        OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(reqJson.toString()) }
+
+        if (conn.responseCode in 200..299) {
+            val response = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).use { it.readText() }
+            val clean = response.trim()
+            if (clean.isNotBlank() && isValidAiSummary(clean)) {
+                return clean
+            }
+        }
+        return null
+    }
+
+    private fun parseBrowseForMeJson(query: String, rawJson: String, sources: List<BrowseSource>): BrowseForMeResult? {
+        return try {
+            val trimmed = rawJson.trim()
+            val jsonStr = if (trimmed.startsWith("```")) {
+                trimmed.substringAfter("\n").substringBeforeLast("```").trim()
+            } else trimmed
+
+            val root = JSONObject(jsonStr)
+            val headline = root.optString("headline", "").ifBlank {
+                query.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+            }
+            val quickAnswer = root.optString("quickAnswer", "")
+            if (quickAnswer.isBlank()) return null
+
+            val takeaways = mutableListOf<String>()
+            val takeawaysArr = root.optJSONArray("keyTakeaways")
+            if (takeawaysArr != null) {
+                for (i in 0 until takeawaysArr.length()) {
+                    val item = takeawaysArr.optString(i, "").trim()
+                    if (item.isNotBlank()) takeaways.add(item)
+                }
+            }
+
+            val sections = mutableListOf<BrowseSection>()
+            val sectionsArr = root.optJSONArray("sections")
+            if (sectionsArr != null) {
+                for (i in 0 until sectionsArr.length()) {
+                    val secObj = sectionsArr.getJSONObject(i)
+                    val secTitle = secObj.optString("title", "Seção ${i + 1}")
+                    val secContent = secObj.optString("content", "")
+                    val secBullets = mutableListOf<String>()
+                    val secBulletsArr = secObj.optJSONArray("bulletPoints")
+                    if (secBulletsArr != null) {
+                        for (b in 0 until secBulletsArr.length()) {
+                            val bText = secBulletsArr.optString(b, "").trim()
+                            if (bText.isNotBlank()) secBullets.add(bText)
+                        }
+                    }
+                    sections.add(BrowseSection(title = secTitle, content = secContent, bulletPoints = secBullets))
+                }
+            }
+
+            BrowseForMeResult(
+                query = query,
+                headline = headline,
+                quickAnswer = quickAnswer,
+                sections = sections,
+                keyTakeaways = takeaways,
+                sources = sources
+            )
+        } catch (e: Exception) {
+            Log.w("TesseraBrowser", "Falha ao fazer parse do JSON do Browse for Me", e)
+            null
+        }
+    }
+
+    private fun buildLocalEditorialResult(
+        query: String,
+        rawContentText: String,
+        sources: List<BrowseSource>
+    ): BrowseForMeResult {
+        val formattedHeadline = query.trim().replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+
+        val paragraphs = rawContentText.split("\n\n")
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it.length > 20 }
+
+        val quickAnswer = if (paragraphs.isNotEmpty()) {
+            paragraphs.first()
+        } else {
+            "Síntese consolidada das principais referências e artigos sobre \"$query\" extraídos das principais fontes da web."
+        }
+
+        val keyTakeaways = mutableListOf<String>()
+        if (paragraphs.size > 1) {
+            for (i in 1 until minOf(paragraphs.size, 4)) {
+                val sentence = paragraphs[i].split(".").firstOrNull { it.trim().length > 15 }?.trim()
+                if (!sentence.isNullOrBlank()) {
+                    val emoji = when (i) {
+                        1 -> "💡"
+                        2 -> "📌"
+                        else -> "⚡"
+                    }
+                    keyTakeaways.add("$emoji $sentence.")
+                }
+            }
+        }
+        if (keyTakeaways.isEmpty()) {
+            keyTakeaways.add("💡 Principais tópicos sobre \"$query\" consolidados para leitura rápida.")
+            keyTakeaways.add("📌 Fontes verificadas listadas abaixo para conferência integral.")
+            keyTakeaways.add("⚡ Navegue diretamente pelas fontes ou expanda na busca web.")
+        }
+
+        val sections = mutableListOf<BrowseSection>()
+        if (paragraphs.size > 2) {
+            sections.add(
+                BrowseSection(
+                    title = "Visão Geral & Conceitos",
+                    content = paragraphs.getOrNull(1) ?: quickAnswer,
+                    bulletPoints = sources.take(3).map { "Fonte: ${it.title} (${it.domain})" }
+                )
+            )
+            if (paragraphs.size > 3) {
+                sections.add(
+                    BrowseSection(
+                        title = "Detalhes & Contexto",
+                        content = paragraphs.drop(2).take(2).joinToString(" "),
+                        bulletPoints = emptyList()
+                    )
+                )
+            }
+        } else {
+            sections.add(
+                BrowseSection(
+                    title = "Resumo dos Resultados",
+                    content = "Informações extraídas das principais plataformas e bancos de dados da internet sobre $query.",
+                    bulletPoints = listOf(
+                        "Artigos e referências consolidadas",
+                        "Acesso rápido às fontes originais abaixo",
+                        "Pesquisa contínua através do Tessera Browser"
+                    )
+                )
+            )
+        }
+
+        return BrowseForMeResult(
+            query = query,
+            headline = formattedHeadline,
+            quickAnswer = quickAnswer,
+            sections = sections,
+            keyTakeaways = keyTakeaways,
+            sources = sources
+        )
     }
 
     fun setGeminiApiKey(key: String) {
