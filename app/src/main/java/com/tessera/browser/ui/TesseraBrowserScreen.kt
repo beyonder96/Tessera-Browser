@@ -90,6 +90,7 @@ import com.tessera.browser.ui.components.ArcSummarySheet
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
+import com.tessera.browser.ui.components.PrivacyDashboardModal
 import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
 import com.tessera.browser.ui.components.PodcastFullPlayerModal
@@ -675,7 +676,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenAi = { query -> viewModel.openAiQuery(query) },
                 onOpenUrl = { url -> viewModel.openUrl(url) },
                 onOpenSettings = { viewModel.toggleQuickSettings() },
-                onSearchClick = { isSearchEditing = true }
+                onSearchClick = { isSearchEditing = true },
+                totalBlockedCount = state.privacyState.totalBlockedCount,
+                onOpenPrivacyDashboard = { viewModel.togglePrivacyDashboard(true) }
             )
         } else {
             // WEBVIEW BROWSER VIEW
@@ -921,6 +924,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 urlString.contains("/adservice/") ||
                                                 urlString.contains("/ads/")
                                         if (isAd) {
+                                            viewModel.recordBlockedTracker(host, urlString)
                                             return WebResourceResponse(
                                                 "text/plain",
                                                 "UTF-8",
@@ -961,6 +965,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     if (!url.isNullOrBlank()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageStarted(url)
+                                        viewModel.resetPageTrackers(url)
                                         viewModel.setReaderModeAvailable(false)
                                         if (state.isReaderModeActive) {
                                             viewModel.toggleReaderMode()
@@ -1548,6 +1553,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onOpenHistory = { viewModel.toggleHistoryModal() },
                         onOpenSettings = { viewModel.toggleQuickSettings() },
                         onOpenSiteSettings = { viewModel.openSiteSettings(state.displayUrl) },
+                        privacyBlockedCount = state.privacyState.pageBlockedCount,
+                        onOpenPrivacyDashboard = { viewModel.togglePrivacyDashboard(true) },
                         onOpenFavorite = { url -> viewModel.openUrl(url) },
                         onNextTab = { viewModel.selectNextTab() },
                         onPreviousTab = { viewModel.selectPreviousTab() },
@@ -1874,6 +1881,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.dismissQuickSettings()
                     viewModel.openSiteSettings(state.displayUrl)
                 },
+                onOpenPrivacyDashboard = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.togglePrivacyDashboard(true)
+                },
                 onOpenHistory = {
                     viewModel.dismissQuickSettings()
                     viewModel.openHistoryModal(0)
@@ -2184,6 +2195,38 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onDismiss = { viewModel.dismissPodcastFullPlayer() }
             )
         }
+
+        // PRIVACY DASHBOARD SCRIM OVERLAY
+        AnimatedVisibility(
+            visible = state.privacyState.isVisible,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        viewModel.dismissPrivacyDashboard()
+                    }
+            )
+        }
+
+        // PRIVACY DASHBOARD MODAL (ESCUDO ATIVO & DETALHAMENTO DE RASTREADORES)
+        PrivacyDashboardModal(
+            state = state.privacyState,
+            adBlockEnabled = state.adBlockEnabled,
+            cookieBlockerEnabled = state.cookieBlockerEnabled,
+            isDarkMode = state.isDarkMode,
+            accentColor = state.activeWallpaper.accentColor,
+            onToggleAdBlock = { viewModel.setAdBlockEnabled(it) },
+            onToggleCookieBlocker = { viewModel.setCookieBlockerEnabled(it) },
+            onDismiss = { viewModel.dismissPrivacyDashboard() },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 

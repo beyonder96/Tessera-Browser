@@ -43,6 +43,9 @@ import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.data.PrivacyDashboardState
+import com.tessera.browser.data.BlockedTrackerItem
+import com.tessera.browser.privacy.PrivacyTrackerEngine
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -238,8 +241,9 @@ data class BrowserUiState(
     val arcSummaryError: String? = null,
     val geminiApiKey: String? = null,
 
-    // AdBlocker
+    // AdBlocker & Privacy Shield
     val adBlockEnabled: Boolean = true,
+    val privacyState: PrivacyDashboardState = PrivacyDashboardState(),
 
     // Mecanismo de Busca
     val searchEngine: SearchEngine = SearchEngine.GOOGLE,
@@ -1780,6 +1784,7 @@ class BrowserViewModel : ViewModel() {
                 } else null
                 val readerShowImages = if (prefs.contains("reader_show_images")) prefs.getBoolean("reader_show_images", false) else null
                 val loadedGeminiKey = prefs.getString("gemini_api_key", null)
+                val savedTotalBlocked = prefs.getInt("total_blocked_trackers", 0)
 
                 // Saved Pages (Offline)
                 val savedPagesJson = prefs.getString("saved_pages_list", null)
@@ -1839,7 +1844,12 @@ class BrowserViewModel : ViewModel() {
                         readerTheme = readerTheme ?: current.readerTheme,
                         readerFontFamily = readerFont ?: current.readerFontFamily,
                         readerShowImages = readerShowImages ?: current.readerShowImages,
-                        geminiApiKey = loadedGeminiKey ?: current.geminiApiKey
+                        geminiApiKey = loadedGeminiKey ?: current.geminiApiKey,
+                        privacyState = current.privacyState.copy(
+                            totalBlockedCount = savedTotalBlocked,
+                            dataSavedBytes = savedTotalBlocked.toLong() * PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST,
+                            estimatedTimeSavedMs = savedTotalBlocked.toLong() * PrivacyTrackerEngine.TIME_SAVED_PER_BLOCKED_MS
+                        )
                     )
                 }
             } catch (e: Exception) {
@@ -2891,6 +2901,82 @@ class BrowserViewModel : ViewModel() {
 
     fun clearSearchSuggestions() {
         _uiState.update { it.copy(searchSuggestions = emptyList()) }
+    }
+
+    // PRIVACY & TRACKER SHIELD SUBSYSTEM
+    fun recordBlockedTracker(host: String, url: String) {
+        val (entityName, category) = PrivacyTrackerEngine.identifyTracker(host, url)
+        _uiState.update { current ->
+            val prevItems = current.privacyState.pageBlockedItems
+            val existingIndex = prevItems.indexOfFirst { it.domain.equals(host, ignoreCase = true) }
+            val updatedItems = if (existingIndex != -1) {
+                prevItems.mapIndexed { idx, item ->
+                    if (idx == existingIndex) item.copy(count = item.count + 1) else item
+                }
+            } else {
+                listOf(BlockedTrackerItem(domain = host, entityName = entityName, category = category, count = 1)) + prevItems
+            }
+
+            val newPageCount = current.privacyState.pageBlockedCount + 1
+            val newSessionCount = current.privacyState.sessionBlockedCount + 1
+            val newTotalCount = current.privacyState.totalBlockedCount + 1
+            val newDataSaved = current.privacyState.dataSavedBytes + PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST
+            val newTimeSaved = current.privacyState.estimatedTimeSavedMs + PrivacyTrackerEngine.TIME_SAVED_PER_BLOCKED_MS
+
+            current.copy(
+                privacyState = current.privacyState.copy(
+                    pageBlockedCount = newPageCount,
+                    sessionBlockedCount = newSessionCount,
+                    totalBlockedCount = newTotalCount,
+                    pageBlockedItems = updatedItems,
+                    dataSavedBytes = newDataSaved,
+                    estimatedTimeSavedMs = newTimeSaved
+                )
+            )
+        }
+
+        val app = appContext
+        if (app != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val total = _uiState.value.privacyState.totalBlockedCount
+                app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putInt("total_blocked_trackers", total)
+                    .apply()
+            }
+        }
+    }
+
+    fun resetPageTrackers(url: String) {
+        val domain = try {
+            val uri = java.net.URI(url)
+            val h = uri.host ?: url
+            if (h.startsWith("www.")) h.substring(4) else h
+        } catch (e: Exception) {
+            url
+        }
+        val isSecure = url.startsWith("https://", ignoreCase = true)
+        _uiState.update { current ->
+            current.copy(
+                privacyState = current.privacyState.copy(
+                    currentDomain = domain,
+                    isCurrentSiteSecure = isSecure,
+                    pageBlockedCount = 0,
+                    pageBlockedItems = emptyList()
+                )
+            )
+        }
+    }
+
+    fun togglePrivacyDashboard(visible: Boolean? = null) {
+        _uiState.update { current ->
+            val newVis = visible ?: !current.privacyState.isVisible
+            current.copy(privacyState = current.privacyState.copy(isVisible = newVis))
+        }
+    }
+
+    fun dismissPrivacyDashboard() {
+        togglePrivacyDashboard(false)
     }
 
     // Settings mutators

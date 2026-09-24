@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.HorizontalDivider
@@ -122,6 +123,8 @@ fun TesseraAirBar(
     onOpenHistory: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenSiteSettings: () -> Unit = {},
+    privacyBlockedCount: Int = 0,
+    onOpenPrivacyDashboard: () -> Unit = {},
     onOpenFavorite: (String) -> Unit = {},
     onFastAction: () -> Unit = {},
     onNextTab: () -> Unit = {},
@@ -558,6 +561,54 @@ fun TesseraAirBar(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(3.dp))
+
+                                // Privacy Shield Badge / Live Counter
+                                if (privacyBlockedCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF00E676).copy(alpha = 0.15f))
+                                            .border(0.5.dp, Color(0xFF00E676).copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                            .clickable { onOpenPrivacyDashboard() }
+                                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Shield,
+                                                contentDescription = "Escudo de Privacidade",
+                                                tint = Color(0xFF00E676),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Text(
+                                                text = "$privacyBlockedCount",
+                                                color = Color(0xFF00E676),
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .clickable { onOpenPrivacyDashboard() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Shield,
+                                            contentDescription = "Painel de Privacidade",
+                                            tint = mutedColor,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                }
                             }
 
                             val hostText = if (displayUrl.isNotBlank()) {

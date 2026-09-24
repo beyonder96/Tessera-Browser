@@ -119,6 +119,7 @@ fun QuickSettingsPanel(
     onShowQrCode: () -> Unit = {},
     onTranslatePage: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {},
+    onOpenPrivacyDashboard: () -> Unit = {},
     selectedSearchEngine: SearchEngine = SearchEngine.GOOGLE,
     onSearchEngineSelected: (SearchEngine) -> Unit = {},
     onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit = { _, _, _ -> },
@@ -410,6 +411,10 @@ fun QuickSettingsPanel(
                 PageActionItem(Icons.Rounded.Lock, "Permissões do Site", Color(0xFFEF5350)) {
                     onDismiss()
                     onOpenSiteSettings()
+                },
+                PageActionItem(Icons.Rounded.Shield, "Escudo de Privacidade", Color(0xFF00E676)) {
+                    onDismiss()
+                    onOpenPrivacyDashboard()
                 }
             )
 

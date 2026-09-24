@@ -579,6 +579,8 @@ fun QuotesBentoCard(
 fun PrivacyShieldBentoCard(
     isDarkMode: Boolean,
     accentColor: Color,
+    totalBlockedCount: Int = 0,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val bentoShape = RoundedCornerShape(20.dp)
@@ -610,6 +612,7 @@ fun PrivacyShieldBentoCard(
             .clip(bentoShape)
             .background(cardBg)
             .border(1.dp, cardBorder, bentoShape)
+            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -625,7 +628,11 @@ fun PrivacyShieldBentoCard(
                     .background(Color(0xFF69F0AE))
             )
             Text(
-                text = "Navegação Segura & AdBlock Ativo",
+                text = if (totalBlockedCount > 0) {
+                    "Escudo Ativo • $totalBlockedCount itens bloqueados"
+                } else {
+                    "Navegação Segura & AdBlock Ativo"
+                },
                 color = textColor,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium

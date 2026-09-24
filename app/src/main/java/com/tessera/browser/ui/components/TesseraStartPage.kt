@@ -106,6 +106,8 @@ fun TesseraStartPage(
     onOpenUrl: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onSearchClick: () -> Unit = {},
+    totalBlockedCount: Int = 0,
+    onOpenPrivacyDashboard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -328,6 +330,8 @@ fun TesseraStartPage(
                 PrivacyShieldBentoCard(
                     isDarkMode = isDarkMode,
                     accentColor = activeWallpaper.accentColor,
+                    totalBlockedCount = totalBlockedCount,
+                    onClick = onOpenPrivacyDashboard,
                     modifier = Modifier.fillMaxWidth()
                 )
 
