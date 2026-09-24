@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -227,7 +228,9 @@ fun TesseraAirBar(
         }
     }
 
-    val dockBg = if (isDarkMode) {
+    val dockBg = if (isHomePage) {
+        SolidColor(Color.Transparent)
+    } else if (isDarkMode) {
         if (animatedTintColor != Color.Transparent) {
             Brush.verticalGradient(
                 listOf(
@@ -294,7 +297,7 @@ fun TesseraAirBar(
         modifier = modifier
             .fillMaxWidth()
             .background(dockBg)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = if (isHomePage) 8.dp else 6.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
@@ -333,9 +336,19 @@ fun TesseraAirBar(
                 )
             }
 
-            // 1. TOP ELEMENT: CAPSULE SEARCH BAR (Omnibar)
-            val omniShape = RoundedCornerShape(26.dp)
-            Box(
+            if (isHomePage && !isEditing) {
+                // Sleek Minimalist Home Dock (Exact design from user screenshot)
+                TesseraHomeBottomDock(
+                    tabCount = tabCount,
+                    isDarkMode = isDarkMode,
+                    onSearchClick = { isEditing = true },
+                    onOpenTabs = onOpenTabs,
+                    onOpenAiAction = onOpenAiAction
+                )
+            } else {
+                // 1. TOP ELEMENT: CAPSULE SEARCH BAR (Omnibar)
+                val omniShape = RoundedCornerShape(26.dp)
+                Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -674,8 +687,10 @@ fun TesseraAirBar(
                     }
                 }
             }
+        }
 
-            // 2. BOTTOM ELEMENT: EXACT 5 BUTTONS IN ORDER (Smoothly hides during editing)
+        // 2. BOTTOM ELEMENT: EXACT 5 BUTTONS IN ORDER (Smoothly hides during editing or on Home)
+        if (!isHomePage) {
             AnimatedVisibility(
                 visible = !isEditing,
                 enter = fadeIn(tween(160)) + expandVertically(),
@@ -861,6 +876,176 @@ fun TesseraAirBar(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+}
+
+/**
+ * Minimalist floating dock for Tessera Browser Home screen.
+ * Displays: [ 🔍 Pesquisar ou digitar endereço ] [ 1 ] ( ✨ )
+ * Faithfully matches the user design mockup.
+ */
+@Composable
+fun TesseraHomeBottomDock(
+    tabCount: Int,
+    isDarkMode: Boolean,
+    onSearchClick: () -> Unit,
+    onOpenTabs: () -> Unit,
+    onOpenAiAction: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+
+    val homePillShape = RoundedCornerShape(26.dp)
+    val squircleShape = RoundedCornerShape(14.dp)
+
+    // Translucent frosted glass effect matching screenshot
+    val pillBg = Color.White.copy(alpha = 0.22f)
+    val pillBorder = Color.White.copy(alpha = 0.42f)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 1. Search Pill
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(52.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = homePillShape,
+                    ambientColor = Color.Black.copy(alpha = 0.15f),
+                    spotColor = Color.Black.copy(alpha = 0.10f)
+                )
+                .clip(homePillShape)
+                .background(pillBg)
+                .border(1.dp, pillBorder, homePillShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onSearchClick
+                )
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = "Pesquisar",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Pesquisar ou digitar endereço",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 14.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 2. Tab Count Button
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = squircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.15f),
+                    spotColor = Color.Black.copy(alpha = 0.10f)
+                )
+                .clip(squircleShape)
+                .background(pillBg)
+                .border(1.dp, pillBorder, squircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenTabs()
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(23.dp)
+                    .border(1.5.dp, Color.White.copy(alpha = 0.90f), RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$tabCount",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // 3. AI Sparkle Button with Ambient Sparkle Accent
+        Box(
+            modifier = Modifier.size(52.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Ambient decorative sparkle star accent at bottom-left of AI button
+            Icon(
+                imageVector = Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .size(17.dp)
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-4).dp, y = 8.dp)
+            )
+
+            // Circular iridescent pastel button
+            val aiGradient = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFFF7ED), // champagne ivory
+                    Color(0xFFFFD6E0), // pastel blush
+                    Color(0xFFE8DEF8), // pastel lavender
+                    Color(0xFFD2F1FE)  // pastel sky opal
+                )
+            )
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        ambientColor = Color(0xFFFFD6E0).copy(alpha = 0.5f),
+                        spotColor = Color(0xFFD2F1FE).copy(alpha = 0.5f)
+                    )
+                    .clip(CircleShape)
+                    .background(aiGradient)
+                    .border(1.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onOpenAiAction()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = "Tessera AI",
+                    tint = Color(0xFF5A3846),
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }

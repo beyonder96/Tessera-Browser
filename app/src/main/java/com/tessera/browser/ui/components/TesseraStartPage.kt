@@ -127,7 +127,7 @@ fun TesseraStartPage(
                         scaleX = 1.08f
                         scaleY = 1.08f
                     }
-                    .blur(radius = 10.dp)
+                    .blur(radius = 14.dp)
             ) {
                 if (activeWallpaper.id == "custom" && !customWallpaperUri.isNullOrBlank()) {
                     SubcomposeAsyncImage(
@@ -180,29 +180,27 @@ fun TesseraStartPage(
             )
         }
 
-        // 1. Top Header Row: Brand wordmark on left + Theme & Colors Pill on right
-        Row(
+        // 1. Top Centered Brand Wordmark (T E S S E R A)
+        Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .displayCutoutPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 42.dp),
+            contentAlignment = Alignment.Center
         ) {
-            // Brand Wordmark
             Text(
                 text = "TESSERA",
                 color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 4.sp,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 8.sp,
                 style = TextStyle(
                     shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color.Black.copy(alpha = 0.65f),
+                        color = Color.Black.copy(alpha = 0.55f),
                         offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                        blurRadius = 8f
+                        blurRadius = 10f
                     )
                 ),
                 modifier = Modifier
@@ -210,73 +208,9 @@ fun TesseraStartPage(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onSearchClick
+                        onClick = onOpenSettings
                     )
             )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Space Switcher Pill (Arc Spaces)
-                val spacePillShape = RoundedCornerShape(20.dp)
-                Row(
-                    modifier = Modifier
-                        .clip(spacePillShape)
-                        .background(if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f))
-                        .border(1.dp, currentSpaceColor.copy(alpha = 0.65f), spacePillShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onOpenSpaces
-                        )
-                        .padding(horizontal = 11.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Text(text = currentSpaceEmoji, fontSize = 13.sp)
-                    Text(
-                        text = currentSpaceName,
-                        color = if (isDarkMode) Color.White else Color(0xFF1E1E1E),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Theme & Colors Pill
-                val pillShape = RoundedCornerShape(20.dp)
-                val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
-                val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.08f)
-                val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1E1E1E)
-
-                Row(
-                    modifier = Modifier
-                        .clip(pillShape)
-                        .background(pillBg)
-                        .border(1.dp, pillBorder, pillShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onOpenSettings
-                        )
-                        .padding(horizontal = 11.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Palette,
-                        contentDescription = "Tema & Configurações",
-                        tint = activeWallpaper.accentColor,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = "Tema",
-                        color = textColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
         }
 
         // 2. Central Bento Grid Container (Smoothly scrollable)
@@ -286,7 +220,7 @@ fun TesseraStartPage(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .displayCutoutPadding()
-                .padding(top = 56.dp),
+                .padding(top = 110.dp),
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
@@ -300,8 +234,9 @@ fun TesseraStartPage(
             ) {
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Bento Row 1: Dual Cards (Weather & Quotes - Omitidos no modo minimalista)
+                // Bento Cards are cleanly hidden in digital minimalism mode (default)
                 if (!digitalMinimalismMode) {
+                    // Bento Row 1: Dual Cards (Weather & Quotes)
                     if (showWeatherWidget && weatherData != null && showQuotesWidget && quotesData != null && quotesData.items.isNotEmpty()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -352,38 +287,38 @@ fun TesseraStartPage(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
 
-                // Bento Row 2: Favorites & Quick Shortcuts
-                if (favorites.isNotEmpty()) {
-                    FavoritesBentoCard(
-                        items = favorites,
+                    // Bento Row 2: Favorites & Quick Shortcuts
+                    if (favorites.isNotEmpty()) {
+                        FavoritesBentoCard(
+                            items = favorites,
+                            isDarkMode = isDarkMode,
+                            accentColor = activeWallpaper.accentColor,
+                            onItemClick = onOpenUrl,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Bento Row 3: Privacy & Security Shield Pill
+                    PrivacyShieldBentoCard(
                         isDarkMode = isDarkMode,
                         accentColor = activeWallpaper.accentColor,
-                        onItemClick = onOpenUrl,
+                        totalBlockedCount = totalBlockedCount,
+                        onClick = onOpenPrivacyDashboard,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Bento Row 4: Caderno de Notas & Web Clipper Pill
+                    NotebookBentoCard(
+                        isDarkMode = isDarkMode,
+                        accentColor = activeWallpaper.accentColor,
+                        notesCount = notesCount,
+                        onClick = onOpenNotebook,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                // Bento Row 3: Privacy & Security Shield Pill
-                PrivacyShieldBentoCard(
-                    isDarkMode = isDarkMode,
-                    accentColor = activeWallpaper.accentColor,
-                    totalBlockedCount = totalBlockedCount,
-                    onClick = onOpenPrivacyDashboard,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Bento Row 4: Caderno de Notas & Web Clipper Pill
-                NotebookBentoCard(
-                    isDarkMode = isDarkMode,
-                    accentColor = activeWallpaper.accentColor,
-                    notesCount = notesCount,
-                    onClick = onOpenNotebook,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Bottom padding to clear floating AirBar
+                // Bottom padding to clear floating dock
                 Spacer(modifier = Modifier.height(130.dp))
             }
         }
