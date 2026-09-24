@@ -2,14 +2,18 @@ package com.tessera.browser
 
 import android.app.SearchManager
 import android.content.Intent
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
+import com.tessera.browser.pip.PipManager
 import com.tessera.browser.ui.TesseraBrowserScreen
 import com.tessera.browser.ui.theme.TesseraTheme
 import com.tessera.browser.viewmodel.BrowserViewModel
@@ -31,6 +35,27 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val state by viewModel.uiState.collectAsState()
+
+            // On Android 12+, keep autoEnterEnabled in sync with video playback state
+            LaunchedEffect(state.isVideoPlaying, state.isInFullscreenVideo, state.isAutoPipEnabled, state.videoWidth, state.videoHeight) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && PipManager.isPipSupported(this@MainActivity)) {
+                    val hasPerm = PipManager.hasOverlayOrPipPermission(this@MainActivity)
+                    val shouldAutoEnter = state.isAutoPipEnabled && (state.isInFullscreenVideo || state.isVideoPlaying) && hasPerm
+                    val params = PipManager.buildPipParams(
+                        width = state.videoWidth,
+                        height = state.videoHeight,
+                        autoEnter = shouldAutoEnter
+                    )
+                    if (params != null) {
+                        try {
+                            setPictureInPictureParams(params)
+                        } catch (e: Exception) {
+                            // Ignora se não puder atualizar no momento
+                        }
+                    }
+                }
+            }
+
             TesseraTheme(isDarkMode = state.isDarkMode) {
                 TesseraBrowserScreen(viewModel = viewModel)
             }
@@ -43,15 +68,25 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        viewModel.setInPictureInPictureMode(isInPictureInPictureMode)
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (viewModel.uiState.value.isInFullscreenVideo) {
-                try {
-                    enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
-                } catch (e: Exception) {
-                    // Ignora se PiP não estiver disponível
-                }
+        val state = viewModel.uiState.value
+        val shouldPip = state.isAutoPipEnabled && (state.isInFullscreenVideo || state.isVideoPlaying)
+
+        if (shouldPip && PipManager.isPipSupported(this)) {
+            if (PipManager.hasOverlayOrPipPermission(this)) {
+                PipManager.enterPip(
+                    activity = this,
+                    width = state.videoWidth,
+                    height = state.videoHeight
+                )
+            } else {
+                viewModel.showPipPermissionDialog(true)
             }
         }
     }

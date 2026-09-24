@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -127,6 +128,9 @@ fun QuickSettingsPanel(
     onOpenDownloads: () -> Unit = {},
     onOpenReaderMode: () -> Unit = {},
     onOpenFullSettings: () -> Unit = {},
+    isAutoPipEnabled: Boolean = true,
+    onAutoPipChanged: (Boolean) -> Unit = {},
+    onEnterPip: () -> Unit = {},
     geminiApiKey: String? = null,
     onGeminiApiKeyChanged: (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -359,6 +363,20 @@ fun QuickSettingsPanel(
             )
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Card: PiP Automático ao Sair
+        QuickToggleMiniCard(
+            icon = Icons.Rounded.SmartDisplay,
+            iconTint = if (isAutoPipEnabled) Color(0xFF26A69A) else sectionHeaderColor,
+            title = "PiP Automático",
+            subtitle = if (isAutoPipEnabled) "Janela flutuante ao sair" else "Desativado",
+            checked = isAutoPipEnabled,
+            onCheckedChange = onAutoPipChanged,
+            isDarkMode = isDarkMode,
+            modifier = Modifier.fillMaxWidth()
+        )
+
         // 2. SEÇÃO: FERRAMENTAS DA PÁGINA (Somente quando navegando)
         if (isWebPageActive) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -415,6 +433,10 @@ fun QuickSettingsPanel(
                 PageActionItem(Icons.Rounded.Shield, "Escudo de Privacidade", Color(0xFF00E676)) {
                     onDismiss()
                     onOpenPrivacyDashboard()
+                },
+                PageActionItem(Icons.Rounded.SmartDisplay, "Janela Flutuante", Color(0xFF42A5F5)) {
+                    onDismiss()
+                    onEnterPip()
                 }
             )
 

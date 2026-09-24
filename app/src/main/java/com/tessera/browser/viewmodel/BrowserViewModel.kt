@@ -10,8 +10,10 @@ import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Activity
 import android.app.DownloadManager
 import android.content.Intent
+import com.tessera.browser.pip.PipManager
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
@@ -220,6 +222,12 @@ data class BrowserUiState(
     val isDesktopMode: Boolean = false,
     val cookieBlockerEnabled: Boolean = true,
     val isInFullscreenVideo: Boolean = false,
+    val isInPipMode: Boolean = false,
+    val isAutoPipEnabled: Boolean = true,
+    val isVideoPlaying: Boolean = false,
+    val videoWidth: Int = 16,
+    val videoHeight: Int = 9,
+    val showPipPermissionDialog: Boolean = false,
     val showFindInPage: Boolean = false,
     val findQuery: String = "",
     val findMatchIndex: Int = 0,
@@ -2028,6 +2036,7 @@ class BrowserViewModel : ViewModel() {
                     try { ReaderFontFamily.valueOf(readerFontName) } catch (e: Exception) { null }
                 } else null
                 val readerShowImages = if (prefs.contains("reader_show_images")) prefs.getBoolean("reader_show_images", false) else null
+                val autoPip = if (prefs.contains("auto_pip_enabled")) prefs.getBoolean("auto_pip_enabled", true) else null
                 val loadedGeminiKey = prefs.getString("gemini_api_key", null)
                 val savedTotalBlocked = prefs.getInt("total_blocked_trackers", 0)
 
@@ -2115,6 +2124,7 @@ class BrowserViewModel : ViewModel() {
                         readerTheme = readerTheme ?: current.readerTheme,
                         readerFontFamily = readerFont ?: current.readerFontFamily,
                         readerShowImages = readerShowImages ?: current.readerShowImages,
+                        isAutoPipEnabled = autoPip ?: current.isAutoPipEnabled,
                         geminiApiKey = loadedGeminiKey ?: current.geminiApiKey,
                         privacyState = current.privacyState.copy(
                             totalBlockedCount = savedTotalBlocked,
@@ -2296,6 +2306,56 @@ class BrowserViewModel : ViewModel() {
 
     fun setFullscreenVideo(active: Boolean) {
         _uiState.update { it.copy(isInFullscreenVideo = active) }
+    }
+
+    fun setInPictureInPictureMode(inPip: Boolean) {
+        _uiState.update { it.copy(isInPipMode = inPip) }
+    }
+
+    fun setVideoPlaybackState(isPlaying: Boolean, width: Int, height: Int) {
+        _uiState.update {
+            it.copy(
+                isVideoPlaying = isPlaying,
+                videoWidth = if (width > 0) width else it.videoWidth,
+                videoHeight = if (height > 0) height else it.videoHeight
+            )
+        }
+    }
+
+    fun setAutoPipEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(isAutoPipEnabled = enabled) }
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("auto_pip_enabled", enabled).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar auto_pip_enabled", e)
+            }
+        }
+    }
+
+    fun toggleAutoPip() {
+        setAutoPipEnabled(!_uiState.value.isAutoPipEnabled)
+    }
+
+    fun showPipPermissionDialog(show: Boolean = true) {
+        _uiState.update { it.copy(showPipPermissionDialog = show) }
+    }
+
+    fun requestEnterPip(activity: Activity) {
+        if (PipManager.hasOverlayOrPipPermission(activity)) {
+            val success = PipManager.enterPip(
+                activity = activity,
+                width = _uiState.value.videoWidth,
+                height = _uiState.value.videoHeight
+            )
+            if (!success) {
+                _uiState.update { it.copy(showPipPermissionDialog = true) }
+            }
+        } else {
+            _uiState.update { it.copy(showPipPermissionDialog = true) }
+        }
     }
 
     fun openFindInPage() {

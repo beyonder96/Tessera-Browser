@@ -42,12 +42,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
-
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,8 +56,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +73,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -90,16 +95,19 @@ import com.tessera.browser.ui.components.ArcSummarySheet
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.ui.components.PeekPreviewModal
+import com.tessera.browser.pip.PipManager
+import com.tessera.browser.ui.components.PipPermissionDialog
+import com.tessera.browser.ui.components.PodcastFullPlayerModal
+import com.tessera.browser.ui.components.PodcastMiniPlayerCapsule
 import com.tessera.browser.ui.components.PrivacyDashboardModal
 import com.tessera.browser.ui.components.QrCodeShareModal
 import com.tessera.browser.ui.components.QuickSettingsPanel
-import com.tessera.browser.ui.components.PodcastFullPlayerModal
-import com.tessera.browser.ui.components.PodcastMiniPlayerCapsule
-import com.tessera.browser.ui.components.TesseraSettingsScreen
 import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.SiteSettingsModal
 import com.tessera.browser.ui.components.SpaceQuickSwitcherModal
 import com.tessera.browser.ui.components.TabsModal
+import com.tessera.browser.ui.components.TesseraSettingsScreen
+import androidx.compose.material.icons.rounded.SmartDisplay
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraBrowseForMeScreen
 import com.tessera.browser.ui.components.TesseraReaderScreen
@@ -441,7 +449,8 @@ class TesseraWebBridge(
     private val onReaderExit: () -> Unit,
     private val onArticleExtracted: (String) -> Unit,
     private val onExtractionFailed: () -> Unit,
-    private val onSummaryExtracted: (String) -> Unit = {}
+    private val onSummaryExtracted: (String) -> Unit = {},
+    private val onVideoPlaybackChanged: (Boolean, Int, Int) -> Unit = { _, _, _ -> }
 ) {
     @JavascriptInterface
     fun onReaderModeExited() {
@@ -461,6 +470,11 @@ class TesseraWebBridge(
     @JavascriptInterface
     fun onSummaryExtracted(json: String) {
         onSummaryExtracted(json)
+    }
+
+    @JavascriptInterface
+    fun onVideoPlaybackStateChanged(isPlaying: Boolean, width: Int, height: Int) {
+        onVideoPlaybackChanged(isPlaying, width, height)
     }
 }
 
@@ -590,11 +604,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
             if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
+        } else if (state.showPipPermissionDialog) {
+            viewModel.showPipPermissionDialog(false)
         } else if (state.showFullSettings) {
             viewModel.dismissFullSettings()
         } else if (state.showQrCodeModal) {
@@ -695,11 +711,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     .nestedScroll(nestedScrollConnection)
             ) {
                 AndroidView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .displayCutoutPadding()
-                        .padding(top = 6.dp),
+                    modifier = if (state.isInPipMode) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .displayCutoutPadding()
+                            .padding(top = 6.dp)
+                    },
                     factory = { ctx ->
                         WebView(ctx).apply {
                             isNestedScrollingEnabled = true
@@ -827,9 +847,31 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 viewModel.dismissArcSummary()
                                             }
                                         }
+                                    },
+                                    onVideoPlaybackChanged = { isPlaying, width, height ->
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            viewModel.setVideoPlaybackState(isPlaying, width, height)
+                                        }
                                     }
                                 ),
                                 "TesseraBridge"
+                            )
+                            addJavascriptInterface(
+                                TesseraWebBridge(
+                                    onReaderExit = {
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            viewModel.closeReaderMode()
+                                        }
+                                    },
+                                    onArticleExtracted = {},
+                                    onExtractionFailed = {},
+                                    onVideoPlaybackChanged = { isPlaying, width, height ->
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            viewModel.setVideoPlaybackState(isPlaying, width, height)
+                                        }
+                                    }
+                                ),
+                                "TesseraNativeBridge"
                             )
 
                             webViewClient = object : WebViewClient() {
@@ -1103,6 +1145,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             val parsedColor = parseCssColor(colorResult)
                                             viewModel.setSiteThemeColor(parsedColor)
                                         }
+                                        // Inject Picture-in-Picture HTML5 Video Observer
+                                        view?.evaluateJavascript(PipManager.VIDEO_DETECTION_SCRIPT, null)
                                     }
                                 }
                             }
@@ -1383,7 +1427,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
             // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
             AnimatedVisibility(
-                visible = state.isBarVisible,
+                visible = state.isBarVisible && !state.isInPipMode,
                 enter = slideInVertically(
                     initialOffsetY = { it },
                     animationSpec = tween(280)
@@ -1919,6 +1963,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenFullSettings = {
                     viewModel.openFullSettings()
                 },
+                isAutoPipEnabled = state.isAutoPipEnabled,
+                onAutoPipChanged = { viewModel.setAutoPipEnabled(it) },
+                onEnterPip = {
+                    val activity = context as? Activity
+                    if (activity != null) {
+                        viewModel.requestEnterPip(activity)
+                    }
+                },
                 geminiApiKey = state.geminiApiKey,
                 onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
                 onDismiss = { viewModel.dismissQuickSettings() }
@@ -2102,12 +2154,44 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
         // HTML5 FULLSCREEN VIDEO OVERLAY
         if (customView != null) {
-            AndroidView(
-                factory = { customView!! },
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-            )
+            ) {
+                AndroidView(
+                    factory = { customView!! },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Quick Floating PiP button in fullscreen video
+                if (!state.isInPipMode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(top = 16.dp, end = 16.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                            .clickable {
+                                val activity = context as? Activity
+                                if (activity != null) {
+                                    viewModel.requestEnterPip(activity)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SmartDisplay,
+                            contentDescription = "Janela Flutuante (PiP)",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
         }
 
         // NATIVE IMMERSIVE TEXT-ONLY READER SCREEN
@@ -2283,6 +2367,20 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.toggleTabsModal()
                 },
                 onDismiss = { viewModel.toggleSpaceSwitcherModal(false) }
+            )
+        }
+
+        // PICTURE-IN-PICTURE & OVERLAY PERMISSION DIALOG
+        if (state.showPipPermissionDialog) {
+            PipPermissionDialog(
+                isDarkMode = state.isDarkMode,
+                accentColor = state.activeWallpaper.accentColor,
+                onOpenSettings = {
+                    PipManager.openPipOrOverlaySettings(context)
+                },
+                onDismiss = {
+                    viewModel.showPipPermissionDialog(false)
+                }
             )
         }
     }
