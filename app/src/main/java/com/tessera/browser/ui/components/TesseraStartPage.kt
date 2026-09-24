@@ -112,6 +112,8 @@ fun TesseraStartPage(
     currentSpaceName: String = "Geral",
     currentSpaceColor: Color = Color(0xFF0288D1),
     onOpenSpaces: () -> Unit = {},
+    notesCount: Int = 0,
+    onOpenNotebook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -366,6 +368,15 @@ fun TesseraStartPage(
                     accentColor = activeWallpaper.accentColor,
                     totalBlockedCount = totalBlockedCount,
                     onClick = onOpenPrivacyDashboard,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Bento Row 4: Caderno de Notas & Web Clipper Pill
+                NotebookBentoCard(
+                    isDarkMode = isDarkMode,
+                    accentColor = activeWallpaper.accentColor,
+                    notesCount = notesCount,
+                    onClick = onOpenNotebook,
                     modifier = Modifier.fillMaxWidth()
                 )
 

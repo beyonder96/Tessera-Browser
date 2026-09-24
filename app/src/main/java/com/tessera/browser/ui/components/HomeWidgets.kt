@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Refresh
@@ -646,4 +647,80 @@ fun PrivacyShieldBentoCard(
         )
     }
 }
+
+/**
+ * Bento Box tile for Notebook & Web Clipper status (2x1 slender pill).
+ */
+@Composable
+fun NotebookBentoCard(
+    isDarkMode: Boolean,
+    accentColor: Color,
+    notesCount: Int = 0,
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val bentoShape = RoundedCornerShape(20.dp)
+    val cardBg = if (isDarkMode) {
+        Brush.verticalGradient(
+            listOf(Color(0xBB1E1A18), Color(0xDD14100E))
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(Color(0xEEFFFFFF), Color(0xF2F7F8FA))
+        )
+    }
+    val cardBorder = if (isDarkMode) {
+        Color.White.copy(alpha = 0.10f)
+    } else {
+        Color.Black.copy(alpha = 0.06f)
+    }
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1E1E1E)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = if (isDarkMode) 6.dp else 2.dp,
+                shape = bentoShape,
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.05f)
+            )
+            .clip(bentoShape)
+            .background(cardBg)
+            .border(1.dp, cardBorder, bentoShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFB300))
+            )
+            Text(
+                text = if (notesCount > 0) {
+                    "Caderno & Web Clipper • $notesCount anotações salvas"
+                } else {
+                    "Caderno de Notas & Web Clipper"
+                },
+                color = textColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.EditNote,
+            contentDescription = "Caderno",
+            tint = Color(0xFFFFB300),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
 

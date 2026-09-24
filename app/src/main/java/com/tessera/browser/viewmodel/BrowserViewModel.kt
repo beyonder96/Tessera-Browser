@@ -46,6 +46,8 @@ import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.data.NoteItem
+import com.tessera.browser.data.NoteType
 import com.tessera.browser.data.PrivacyDashboardState
 import com.tessera.browser.data.BlockedTrackerItem
 import com.tessera.browser.privacy.PrivacyTrackerEngine
@@ -263,6 +265,14 @@ data class BrowserUiState(
     val downloads: List<DownloadItem> = emptyList(),
     val savedPages: List<SavedPageItem> = emptyList(),
 
+    // Caderno de Notas & Web Clipper
+    val notes: List<NoteItem> = emptyList(),
+    val showNotebookModal: Boolean = false,
+    val editingNote: NoteItem? = null,
+    val notebookFilterTag: String? = null,
+    val notebookSearchQuery: String = "",
+    val summarizingNoteId: String? = null,
+
     // Modal de Compartilhamento QR Code
     val showQrCodeModal: Boolean = false,
 
@@ -420,6 +430,9 @@ data class BrowserUiState(
 
     val currentSpaceHistory: List<HistoryEntry>
         get() = history.filter { it.spaceId == null || it.spaceId == activeSpaceId }
+
+    val currentSpaceNotes: List<NoteItem>
+        get() = notes.filter { it.spaceId == null || it.spaceId == activeSpaceId }
 }
 
 class BrowserViewModel : ViewModel() {
@@ -2097,6 +2110,17 @@ class BrowserViewModel : ViewModel() {
                     map
                 } else null
 
+                // Caderno de Notas & Web Clipper
+                val notesJson = prefs.getString("notebook_notes_list", null)
+                val loadedNotes = if (!notesJson.isNullOrBlank()) {
+                    val arr = JSONArray(notesJson)
+                    val list = mutableListOf<NoteItem>()
+                    for (i in 0 until arr.length()) {
+                        list.add(NoteItem.fromJson(arr.getJSONObject(i)))
+                    }
+                    list
+                } else null
+
                 _uiState.update { current ->
                     current.copy(
                         spaces = loadedSpaces ?: current.spaces,
@@ -2105,6 +2129,7 @@ class BrowserViewModel : ViewModel() {
                         speedDialItems = loadedBookmarks ?: current.speedDialItems,
                         history = loadedHistory ?: current.history,
                         savedPages = loadedSavedPages ?: current.savedPages,
+                        notes = loadedNotes ?: current.notes,
                         tabGroups = loadedGroups ?: current.tabGroups,
                         siteSettings = loadedSiteSettings ?: current.siteSettings,
                         isDarkMode = isDark ?: current.isDarkMode,
@@ -2214,6 +2239,22 @@ class BrowserViewModel : ViewModel() {
                 prefs.edit().putString("saved_pages_list", arr.toString()).apply()
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao salvar páginas offline", e)
+            }
+        }
+    }
+
+    private fun saveNotes() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.notes.forEach { item ->
+                    arr.put(item.toJson())
+                }
+                prefs.edit().putString("notebook_notes_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar anotações do caderno", e)
             }
         }
     }
@@ -2355,6 +2396,152 @@ class BrowserViewModel : ViewModel() {
             }
         } else {
             _uiState.update { it.copy(showPipPermissionDialog = true) }
+        }
+    }
+
+    // --- CADERNO DE NOTAS & WEB CLIPPER ---
+
+    fun openNotebook(noteToEdit: NoteItem? = null) {
+        _uiState.update { it.copy(showNotebookModal = true, editingNote = noteToEdit) }
+    }
+
+    fun dismissNotebook() {
+        _uiState.update { it.copy(showNotebookModal = false, editingNote = null) }
+    }
+
+    fun setEditingNote(note: NoteItem?) {
+        _uiState.update { it.copy(editingNote = note) }
+    }
+
+    fun setNotebookSearchQuery(query: String) {
+        _uiState.update { it.copy(notebookSearchQuery = query) }
+    }
+
+    fun setNotebookFilterTag(tag: String?) {
+        _uiState.update { it.copy(notebookFilterTag = tag) }
+    }
+
+    fun saveNote(note: NoteItem) {
+        _uiState.update { state ->
+            val existingIndex = state.notes.indexOfFirst { it.id == note.id }
+            val updated = if (existingIndex >= 0) {
+                state.notes.toMutableList().apply {
+                    this[existingIndex] = note.copy(updatedAt = System.currentTimeMillis())
+                }
+            } else {
+                listOf(note) + state.notes
+            }
+            state.copy(notes = updated, editingNote = null)
+        }
+        saveNotes()
+    }
+
+    fun deleteNote(noteId: String) {
+        _uiState.update { state ->
+            state.copy(notes = state.notes.filter { it.id != noteId })
+        }
+        saveNotes()
+    }
+
+    fun togglePinNote(noteId: String) {
+        _uiState.update { state ->
+            val updated = state.notes.map {
+                if (it.id == noteId) it.copy(isPinned = !it.isPinned, updatedAt = System.currentTimeMillis()) else it
+            }
+            state.copy(notes = updated)
+        }
+        saveNotes()
+    }
+
+    fun clipPageContent(
+        title: String,
+        url: String,
+        content: String,
+        isCode: Boolean = false,
+        withAiSummary: Boolean = false
+    ) {
+        if (content.isBlank()) return
+        val currentSpaceId = _uiState.value.activeSpaceId
+        val noteType = if (isCode) NoteType.CODE_SNIPPET else NoteType.TEXT_CLIP
+        val defaultTag = if (isCode) "Código" else "Pesquisa"
+
+        val newNote = NoteItem(
+            title = title.ifBlank { "Clipe da Web" },
+            content = content,
+            sourceUrl = url,
+            sourceTitle = title,
+            type = noteType,
+            tags = listOf(defaultTag),
+            spaceId = currentSpaceId,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+
+        saveNote(newNote)
+
+        if (withAiSummary) {
+            summarizeNote(newNote.id)
+        }
+    }
+
+    fun summarizeNote(noteId: String) {
+        val note = _uiState.value.notes.find { it.id == noteId } ?: return
+        _uiState.update { it.copy(summarizingNoteId = noteId) }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val contentToSummarize = note.content
+                val cleanContent = if (contentToSummarize.length > 5000) contentToSummarize.take(5000) + "..." else contentToSummarize
+                val domain = try { Uri.parse(note.sourceUrl).host.orEmpty() } catch (e: Exception) { "" }
+
+                var summaryResult: String? = null
+
+                // Tier 1: Gemini API
+                val geminiKey = _uiState.value.geminiApiKey?.trim().orEmpty()
+                if (geminiKey.isNotBlank()) {
+                    try {
+                        summaryResult = callGeminiApi(geminiKey, note.title, domain, cleanContent)
+                    } catch (e: Exception) {
+                        Log.w("BrowserViewModel", "Gemini summary fallback", e)
+                    }
+                }
+
+                // Tier 2: Free AI API
+                if (summaryResult.isNullOrBlank() || !isValidAiSummary(summaryResult)) {
+                    try {
+                        summaryResult = callFreeAiApi(note.title, domain, cleanContent)
+                    } catch (e: Exception) {
+                        Log.w("BrowserViewModel", "Free AI summary fallback", e)
+                    }
+                }
+
+                // Tier 3: Local synthesis
+                if (summaryResult.isNullOrBlank() || !isValidAiSummary(summaryResult)) {
+                    summaryResult = generateLocalArcSummary(note.title, domain, cleanContent)
+                }
+
+                if (!summaryResult.isNullOrBlank()) {
+                    val finalSummary = summaryResult.trim()
+                    _uiState.update { state ->
+                        val updatedNotes = state.notes.map {
+                            if (it.id == noteId) {
+                                it.copy(
+                                    aiSummary = finalSummary,
+                                    type = if (it.type == NoteType.TEXT_CLIP) NoteType.AI_SUMMARY else it.type,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            } else it
+                        }
+                        state.copy(notes = updatedNotes, summarizingNoteId = null)
+                    }
+                    saveNotes()
+                } else {
+                    _uiState.update { it.copy(summarizingNoteId = null) }
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao resumir anotação", e)
+                _uiState.update { it.copy(summarizingNoteId = null) }
+            }
         }
     }
 

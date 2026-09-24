@@ -3,6 +3,8 @@ package com.tessera.browser.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +28,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.FolderZip
+import com.tessera.browser.data.NoteItem
+import com.tessera.browser.data.NoteType
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
@@ -67,6 +72,7 @@ fun HistoryBookmarksModal(
     history: List<HistoryEntry>,
     downloads: List<DownloadItem> = emptyList(),
     savedPages: List<SavedPageItem> = emptyList(),
+    notes: List<NoteItem> = emptyList(),
     initialTab: Int = 0,
     onTabSelected: ((Int) -> Unit)? = null,
     onSelectUrl: (String) -> Unit,
@@ -78,6 +84,8 @@ fun HistoryBookmarksModal(
     onClearDownloads: () -> Unit = {},
     onOpenSavedPage: (SavedPageItem) -> Unit = {},
     onDeleteSavedPage: (SavedPageItem) -> Unit = {},
+    onOpenNotebook: () -> Unit = {},
+    onDeleteNote: (String) -> Unit = {},
     onDismiss: () -> Unit,
     accentColor: Color = Color(0xFF64B5F6),
     modifier: Modifier = Modifier
@@ -114,6 +122,9 @@ fun HistoryBookmarksModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -211,6 +222,43 @@ fun HistoryBookmarksModal(
                         fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal
                     )
+                }
+
+                // Tab Notas (Caderno)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selectedTab == 4) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .border(
+                            1.dp,
+                            if (selectedTab == 4) accentColor else Color.White.copy(alpha = 0.1f),
+                            RoundedCornerShape(16.dp)
+                        )
+                        .clickable {
+                            selectedTab = 4
+                            onTabSelected?.invoke(4)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Notas",
+                            color = if (selectedTab == 4) accentColor else Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.5.sp,
+                            fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal
+                        )
+                        if (notes.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(accentColor)
+                                    .size(6.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -681,6 +729,137 @@ fun HistoryBookmarksModal(
                                     contentDescription = "Excluir página offline",
                                     tint = Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (selectedTab == 4) {
+            // NOTAS / CADERNO TAB
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${notes.size} anotações salvas",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentColor.copy(alpha = 0.18f))
+                        .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .clickable {
+                            onDismiss()
+                            onOpenNotebook()
+                        }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = "Abrir Caderno ✨",
+                        color = accentColor,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (notes.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.EditNote,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = "Nenhuma anotação salva",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Use o Web Clipper para salvar artigos e trechos.",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(notes, key = { it.id }) { note ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                                .clickable {
+                                    if (note.sourceUrl.isNotBlank()) {
+                                        onSelectUrl(note.sourceUrl)
+                                    } else {
+                                        onDismiss()
+                                        onOpenNotebook()
+                                    }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = note.type.iconEmoji,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = note.title,
+                                        color = Color.White,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = note.content,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 11.5.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { onDeleteNote(note.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Excluir anotação",
+                                    tint = Color.White.copy(alpha = 0.45f),
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }

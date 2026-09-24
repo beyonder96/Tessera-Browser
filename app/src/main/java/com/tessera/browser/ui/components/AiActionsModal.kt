@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.ShortText
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -141,6 +142,17 @@ fun AiActionsModal(
             title = "Perguntas Livres com IA",
             description = "Faça qualquer pergunta diretamente ao assistente gratuito.",
             onClick = { onAction("chat") }
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Action 4: Clipar e Resumir no Caderno
+        AiActionCard(
+            icon = Icons.Rounded.EditNote,
+            title = "Clipar & Resumir no Caderno",
+            description = "Salva o artigo ou trecho no seu Caderno com síntese e tópicos automáticos.",
+            badge = "Novo 📝",
+            onClick = { onAction("clip_with_summary") }
         )
 
         Spacer(modifier = Modifier.height(20.dp))

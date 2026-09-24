@@ -94,6 +94,8 @@ import com.tessera.browser.ui.components.AiActionsModal
 import com.tessera.browser.ui.components.ArcSummarySheet
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
+import com.tessera.browser.ui.components.NotebookModal
+import com.tessera.browser.util.WebClipperHelper
 import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.pip.PipManager
 import com.tessera.browser.ui.components.PipPermissionDialog
@@ -604,13 +606,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showNotebookModal || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
             if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
         } else if (state.showPipPermissionDialog) {
             viewModel.showPipPermissionDialog(false)
+        } else if (state.showNotebookModal) {
+            viewModel.dismissNotebook()
         } else if (state.showFullSettings) {
             viewModel.dismissFullSettings()
         } else if (state.showQrCodeModal) {
@@ -653,6 +657,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
+
+    val clipCurrentPageAction: (Boolean) -> Unit = { withAiSummary ->
+        if (state.isHomePage) {
+            Toast.makeText(context, "Abra uma página web para clipar conteúdos!", Toast.LENGTH_SHORT).show()
+        } else {
+            webViewInstance?.evaluateJavascript(WebClipperHelper.CLIP_PAGE_SCRIPT) { rawResult ->
+                val note = WebClipperHelper.parseClippingResult(rawResult, state.activeSpaceId)
+                if (note != null) {
+                    viewModel.saveNote(note)
+                    if (withAiSummary) {
+                        viewModel.summarizeNote(note.id)
+                        Toast.makeText(context, "Clipado e gerando resumo com IA ✨", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Salvo no Caderno de Notas 📝", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Não foi possível extrair o conteúdo da página.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     // Scroll detector to show/hide AirBar when browsing
     val nestedScrollConnection = remember {
@@ -701,7 +726,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 currentSpaceEmoji = state.currentSpace.iconEmoji,
                 currentSpaceName = state.currentSpace.name,
                 currentSpaceColor = Color(state.currentSpace.colorArgb),
-                onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
+                onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) },
+                notesCount = state.notes.size,
+                onOpenNotebook = { viewModel.openNotebook() }
             )
         } else {
             // WEBVIEW BROWSER VIEW
@@ -1711,11 +1738,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onRemoveDownload = { viewModel.removeDownload(context, it) },
                 onClearDownloads = { viewModel.clearDownloads(context) },
                 savedPages = state.savedPages,
+                notes = state.notes,
                 onOpenSavedPage = {
                     viewModel.dismissHistoryModal()
                     viewModel.openSavedPage(it)
                 },
                 onDeleteSavedPage = { viewModel.deleteSavedPage(it) },
+                onOpenNotebook = {
+                    viewModel.dismissHistoryModal()
+                    viewModel.openNotebook()
+                },
+                onDeleteNote = { viewModel.deleteNote(it) },
                 onDismiss = { viewModel.dismissHistoryModal() },
                 accentColor = state.activeWallpaper.accentColor
             )
@@ -1768,6 +1801,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             if (title.isNotBlank()) title else state.displayUrl
                         }
                         viewModel.browseForMe(q)
+                    } else if (action == "clip_with_summary") {
+                        viewModel.dismissAiActionModal()
+                        clipCurrentPageAction(true)
                     } else {
                         viewModel.openAiAction(action)
                     }
@@ -1970,6 +2006,14 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     if (activity != null) {
                         viewModel.requestEnterPip(activity)
                     }
+                },
+                onOpenNotebook = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.openNotebook()
+                },
+                onClipPage = {
+                    viewModel.dismissQuickSettings()
+                    clipCurrentPageAction(false)
                 },
                 geminiApiKey = state.geminiApiKey,
                 onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
@@ -2367,6 +2411,54 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.toggleTabsModal()
                 },
                 onDismiss = { viewModel.toggleSpaceSwitcherModal(false) }
+            )
+        }
+
+        // NOTEBOOK & WEB CLIPPER MODAL
+        AnimatedVisibility(
+            visible = state.showNotebookModal,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        viewModel.dismissNotebook()
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showNotebookModal,
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(320)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(280)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            NotebookModal(
+                notes = state.notes,
+                spaces = state.spaces,
+                activeSpaceId = state.activeSpaceId,
+                searchQuery = state.notebookSearchQuery,
+                selectedTag = state.notebookFilterTag,
+                isDarkMode = state.isDarkMode,
+                accentColor = Color(state.currentSpace.colorArgb),
+                summarizingNoteId = state.summarizingNoteId,
+                onSearchQueryChanged = { viewModel.setNotebookSearchQuery(it) },
+                onTagSelected = { viewModel.setNotebookFilterTag(it) },
+                onOpenSourceUrl = { url ->
+                    viewModel.openUrl(url)
+                    viewModel.dismissNotebook()
+                },
+                onTogglePinNote = { id -> viewModel.togglePinNote(id) },
+                onDeleteNote = { id -> viewModel.deleteNote(id) },
+                onSaveNote = { note -> viewModel.saveNote(note) },
+                onSummarizeNote = { id -> viewModel.summarizeNote(id) },
+                onDismiss = { viewModel.dismissNotebook() }
             )
         }
 
