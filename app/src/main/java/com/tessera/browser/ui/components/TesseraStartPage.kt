@@ -108,6 +108,10 @@ fun TesseraStartPage(
     onSearchClick: () -> Unit = {},
     totalBlockedCount: Int = 0,
     onOpenPrivacyDashboard: () -> Unit = {},
+    currentSpaceEmoji: String = "🌐",
+    currentSpaceName: String = "Geral",
+    currentSpaceColor: Color = Color(0xFF0288D1),
+    onOpenSpaces: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -207,38 +211,68 @@ fun TesseraStartPage(
                     )
             )
 
-            // Theme & Colors Pill
-            val pillShape = RoundedCornerShape(20.dp)
-            val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
-            val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.08f)
-            val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1E1E1E)
-
             Row(
-                modifier = Modifier
-                    .clip(pillShape)
-                    .background(pillBg)
-                    .border(1.dp, pillBorder, pillShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onOpenSettings
-                    )
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Palette,
-                    contentDescription = "Tema & Configurações",
-                    tint = activeWallpaper.accentColor,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = "Tema & Cores",
-                    color = textColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                // Space Switcher Pill (Arc Spaces)
+                val spacePillShape = RoundedCornerShape(20.dp)
+                Row(
+                    modifier = Modifier
+                        .clip(spacePillShape)
+                        .background(if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f))
+                        .border(1.dp, currentSpaceColor.copy(alpha = 0.65f), spacePillShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onOpenSpaces
+                        )
+                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(text = currentSpaceEmoji, fontSize = 13.sp)
+                    Text(
+                        text = currentSpaceName,
+                        color = if (isDarkMode) Color.White else Color(0xFF1E1E1E),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Theme & Colors Pill
+                val pillShape = RoundedCornerShape(20.dp)
+                val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
+                val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.08f)
+                val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1E1E1E)
+
+                Row(
+                    modifier = Modifier
+                        .clip(pillShape)
+                        .background(pillBg)
+                        .border(1.dp, pillBorder, pillShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onOpenSettings
+                        )
+                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Palette,
+                        contentDescription = "Tema & Configurações",
+                        tint = activeWallpaper.accentColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "Tema",
+                        color = textColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 

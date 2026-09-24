@@ -24,6 +24,7 @@ import android.widget.Toast
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.FileProvider
 import com.tessera.browser.data.AvailableWallpapers
+import com.tessera.browser.data.BrowserSpace
 import com.tessera.browser.data.BrowseForMeResult
 import com.tessera.browser.data.BrowseForMeState
 import com.tessera.browser.data.BrowseSection
@@ -104,20 +105,51 @@ data class BrowserTab(
     val canGoForward: Boolean = false,
     val isPinned: Boolean = false,
     val lastAccessedTimestamp: Long = System.currentTimeMillis(),
-    val groupId: String? = null
-)
+    val groupId: String? = null,
+    val spaceId: String = "space_general"
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("url", url)
+        put("title", title)
+        put("isHomePage", isHomePage)
+        put("canGoBack", canGoBack)
+        put("canGoForward", canGoForward)
+        put("isPinned", isPinned)
+        put("lastAccessedTimestamp", lastAccessedTimestamp)
+        put("groupId", groupId ?: "")
+        put("spaceId", spaceId)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): BrowserTab = BrowserTab(
+            id = json.optString("id", UUID.randomUUID().toString()),
+            url = json.optString("url", "https://duckduckgo.com"),
+            title = json.optString("title", "Nova Guia"),
+            isHomePage = json.optBoolean("isHomePage", true),
+            canGoBack = json.optBoolean("canGoBack", false),
+            canGoForward = json.optBoolean("canGoForward", false),
+            isPinned = json.optBoolean("isPinned", false),
+            lastAccessedTimestamp = json.optLong("lastAccessedTimestamp", System.currentTimeMillis()),
+            groupId = json.optString("groupId", "").let { if (it.isNotBlank()) it else null },
+            spaceId = json.optString("spaceId", "space_general").ifBlank { "space_general" }
+        )
+    }
+}
 
 data class HistoryEntry(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "",
     val url: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val spaceId: String? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         put("title", title)
         put("url", url)
         put("timestamp", timestamp)
+        put("spaceId", spaceId ?: "")
     }
 
     companion object {
@@ -125,7 +157,8 @@ data class HistoryEntry(
             id = json.optString("id", UUID.randomUUID().toString()),
             title = json.optString("title", ""),
             url = json.optString("url", ""),
-            timestamp = json.optLong("timestamp", System.currentTimeMillis())
+            timestamp = json.optLong("timestamp", System.currentTimeMillis()),
+            spaceId = json.optString("spaceId", "").let { if (it.isNotBlank()) it else null }
         )
     }
 }
@@ -195,9 +228,12 @@ data class BrowserUiState(
     val peekTitle: String? = null,
     val showPeekModal: Boolean = false,
 
-    // Multi-tabs & Grupos
+    // Espaços de Navegação Isolados (Arc Spaces) & Multi-tabs
+    val spaces: List<BrowserSpace> = BrowserSpace.DEFAULT_SPACES,
+    val activeSpaceId: String = "space_general",
+    val showSpaceSwitcherModal: Boolean = false,
     val tabs: List<BrowserTab> = listOf(
-        BrowserTab(id = "default-tab", url = "https://duckduckgo.com", title = "Início", isHomePage = true)
+        BrowserTab(id = "default-tab", url = "https://duckduckgo.com", title = "Início", isHomePage = true, spaceId = "space_general")
     ),
     val activeTabId: String = "default-tab",
     val showTabsModal: Boolean = false,
@@ -364,6 +400,18 @@ data class BrowserUiState(
 
     val isCurrentPageBookmarked: Boolean
         get() = speedDialItems.any { it.url.equals(displayUrl, ignoreCase = true) || it.url.equals(currentUrl, ignoreCase = true) }
+
+    val currentSpace: BrowserSpace
+        get() = spaces.find { it.id == activeSpaceId } ?: spaces.firstOrNull() ?: BrowserSpace.DEFAULT_SPACES.first()
+
+    val currentSpaceTabs: List<BrowserTab>
+        get() = tabs.filter { it.spaceId == activeSpaceId }
+
+    val currentSpaceFavorites: List<SpeedDialItem>
+        get() = speedDialItems.filter { it.spaceId == null || it.spaceId == activeSpaceId }
+
+    val currentSpaceHistory: List<HistoryEntry>
+        get() = history.filter { it.spaceId == null || it.spaceId == activeSpaceId }
 }
 
 class BrowserViewModel : ViewModel() {
@@ -872,19 +920,22 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    // MULTI-TABS MANAGEMENT
-    fun addNewTab(url: String = "https://duckduckgo.com", isHome: Boolean = true) {
+    // MULTI-TABS & SPACES MANAGEMENT
+    fun addNewTab(url: String = "https://duckduckgo.com", isHome: Boolean = true, spaceId: String? = null) {
+        val effectiveSpaceId = spaceId ?: _uiState.value.activeSpaceId
         val newId = UUID.randomUUID().toString()
         val newTab = BrowserTab(
             id = newId,
             url = url,
             title = if (isHome) "Nova Guia" else extractDomain(url),
-            isHomePage = isHome
+            isHomePage = isHome,
+            spaceId = effectiveSpaceId
         )
         _uiState.update { state ->
             state.copy(
                 tabs = state.tabs + newTab,
                 activeTabId = newId,
+                activeSpaceId = effectiveSpaceId,
                 isHomePage = isHome,
                 currentUrl = url,
                 displayUrl = if (isHome) "" else url,
@@ -892,6 +943,7 @@ class BrowserViewModel : ViewModel() {
                 showTabsModal = false
             )
         }
+        saveTabs()
     }
 
     fun selectTab(tabId: String) {
@@ -904,6 +956,7 @@ class BrowserViewModel : ViewModel() {
             state.copy(
                 tabs = updatedTabs,
                 activeTabId = tabId,
+                activeSpaceId = targetTab.spaceId,
                 isHomePage = targetTab.isHomePage,
                 currentUrl = targetTab.url,
                 displayUrl = if (targetTab.isHomePage) "" else targetTab.url,
@@ -911,10 +964,11 @@ class BrowserViewModel : ViewModel() {
                 showTabsModal = false
             )
         }
+        saveTabs()
     }
 
     fun selectNextTab() {
-        val currentTabs = _uiState.value.tabs
+        val currentTabs = _uiState.value.currentSpaceTabs
         if (currentTabs.size <= 1) return
         val currentIndex = currentTabs.indexOfFirst { it.id == _uiState.value.activeTabId }
         val nextIndex = if (currentIndex == -1 || currentIndex >= currentTabs.size - 1) 0 else currentIndex + 1
@@ -922,7 +976,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun selectPreviousTab() {
-        val currentTabs = _uiState.value.tabs
+        val currentTabs = _uiState.value.currentSpaceTabs
         if (currentTabs.size <= 1) return
         val currentIndex = currentTabs.indexOfFirst { it.id == _uiState.value.activeTabId }
         val prevIndex = if (currentIndex <= 0) currentTabs.size - 1 else currentIndex - 1
@@ -931,29 +985,44 @@ class BrowserViewModel : ViewModel() {
 
     fun closeTab(tabId: String) {
         val currentTabs = _uiState.value.tabs
-        if (currentTabs.size <= 1) {
-            // If closing only tab, reset to home
-            goHome()
-            return
-        }
+        val tabToClose = currentTabs.find { it.id == tabId }
+        val effectiveSpaceId = tabToClose?.spaceId ?: _uiState.value.activeSpaceId
+        val remainingInSpace = currentTabs.filter { it.spaceId == effectiveSpaceId && it.id != tabId }
 
         val remainingTabs = currentTabs.filterNot { it.id == tabId }
-        val nextActiveTab = if (_uiState.value.activeTabId == tabId) {
-            remainingTabs.last()
-        } else {
-            remainingTabs.find { it.id == _uiState.value.activeTabId } ?: remainingTabs.last()
-        }
 
-        _uiState.update { state ->
-            state.copy(
-                tabs = remainingTabs,
-                activeTabId = nextActiveTab.id,
-                isHomePage = nextActiveTab.isHomePage,
-                currentUrl = nextActiveTab.url,
-                displayUrl = if (nextActiveTab.isHomePage) "" else nextActiveTab.url,
-                canGoBack = nextActiveTab.canGoBack
-            )
+        if (remainingInSpace.isEmpty()) {
+            val newId = UUID.randomUUID().toString()
+            val freshTab = BrowserTab(id = newId, isHomePage = true, spaceId = effectiveSpaceId)
+            val updatedTabs = remainingTabs + freshTab
+            _uiState.update { state ->
+                state.copy(
+                    tabs = updatedTabs,
+                    activeTabId = newId,
+                    isHomePage = true,
+                    currentUrl = "https://duckduckgo.com",
+                    displayUrl = "",
+                    canGoBack = false
+                )
+            }
+        } else {
+            val nextActiveTab = if (_uiState.value.activeTabId == tabId) {
+                remainingInSpace.last()
+            } else {
+                remainingTabs.find { it.id == _uiState.value.activeTabId } ?: remainingInSpace.last()
+            }
+            _uiState.update { state ->
+                state.copy(
+                    tabs = remainingTabs,
+                    activeTabId = nextActiveTab.id,
+                    isHomePage = nextActiveTab.isHomePage,
+                    currentUrl = nextActiveTab.url,
+                    displayUrl = if (nextActiveTab.isHomePage) "" else nextActiveTab.url,
+                    canGoBack = nextActiveTab.canGoBack
+                )
+            }
         }
+        saveTabs()
     }
 
     fun archiveInactiveTabs(thresholdHours: Long = 24) {
@@ -982,6 +1051,182 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissTabsModal() {
         _uiState.update { it.copy(showTabsModal = false) }
+    }
+
+    // SPACES MANAGEMENT SUBSYSTEM (Arc Spaces)
+    fun selectSpace(spaceId: String) {
+        val targetSpace = _uiState.value.spaces.find { it.id == spaceId } ?: return
+        if (_uiState.value.activeSpaceId == spaceId) return
+
+        _uiState.update { state ->
+            val spaceTabs = state.tabs.filter { it.spaceId == spaceId }
+            val (updatedTabs, activeTab) = if (spaceTabs.isEmpty()) {
+                val newTab = BrowserTab(
+                    id = UUID.randomUUID().toString(),
+                    url = "https://duckduckgo.com",
+                    title = "Início",
+                    isHomePage = true,
+                    spaceId = spaceId
+                )
+                Pair(state.tabs + newTab, newTab)
+            } else {
+                val mostRecent = spaceTabs.maxByOrNull { it.lastAccessedTimestamp } ?: spaceTabs.first()
+                Pair(state.tabs, mostRecent)
+            }
+
+            state.copy(
+                activeSpaceId = spaceId,
+                tabs = updatedTabs,
+                activeTabId = activeTab.id,
+                isHomePage = activeTab.isHomePage,
+                currentUrl = activeTab.url,
+                displayUrl = if (activeTab.isHomePage) "" else activeTab.url,
+                canGoBack = activeTab.canGoBack,
+                canGoForward = activeTab.canGoForward,
+                showSpaceSwitcherModal = false
+            )
+        }
+        saveSpaces()
+        saveTabs()
+    }
+
+    fun createSpace(name: String, iconEmoji: String, colorArgb: Long) {
+        val newSpace = BrowserSpace(
+            id = UUID.randomUUID().toString(),
+            name = name.ifBlank { "Novo Espaço" },
+            iconEmoji = iconEmoji.ifBlank { "🌐" },
+            colorArgb = colorArgb,
+            isDefault = false
+        )
+        val initialTab = BrowserTab(
+            id = UUID.randomUUID().toString(),
+            url = "https://duckduckgo.com",
+            title = "Início",
+            isHomePage = true,
+            spaceId = newSpace.id
+        )
+        _uiState.update { state ->
+            state.copy(
+                spaces = state.spaces + newSpace,
+                activeSpaceId = newSpace.id,
+                tabs = state.tabs + initialTab,
+                activeTabId = initialTab.id,
+                isHomePage = true,
+                currentUrl = "https://duckduckgo.com",
+                displayUrl = "",
+                showSpaceSwitcherModal = false
+            )
+        }
+        saveSpaces()
+        saveTabs()
+    }
+
+    fun updateSpace(spaceId: String, name: String, iconEmoji: String, colorArgb: Long) {
+        _uiState.update { state ->
+            val updated = state.spaces.map { s ->
+                if (s.id == spaceId) {
+                    s.copy(
+                        name = name.ifBlank { s.name },
+                        iconEmoji = iconEmoji.ifBlank { s.iconEmoji },
+                        colorArgb = colorArgb
+                    )
+                } else s
+            }
+            state.copy(spaces = updated)
+        }
+        saveSpaces()
+    }
+
+    fun deleteSpace(spaceId: String) {
+        val currentSpaces = _uiState.value.spaces
+        if (currentSpaces.size <= 1) return // Do not delete last remaining space
+
+        val remainingSpaces = currentSpaces.filterNot { it.id == spaceId }
+        val fallbackSpace = remainingSpaces.first()
+
+        _uiState.update { state ->
+            val updatedTabs = state.tabs.map { tab ->
+                if (tab.spaceId == spaceId) tab.copy(spaceId = fallbackSpace.id) else tab
+            }
+            val needSwitch = state.activeSpaceId == spaceId
+            val nextSpaceId = if (needSwitch) fallbackSpace.id else state.activeSpaceId
+            val nextTabs = updatedTabs.filter { it.spaceId == nextSpaceId }
+            val nextActive = nextTabs.maxByOrNull { it.lastAccessedTimestamp } ?: nextTabs.firstOrNull()
+
+            state.copy(
+                spaces = remainingSpaces,
+                activeSpaceId = nextSpaceId,
+                tabs = updatedTabs,
+                activeTabId = nextActive?.id ?: state.activeTabId,
+                isHomePage = nextActive?.isHomePage ?: state.isHomePage,
+                currentUrl = nextActive?.url ?: state.currentUrl,
+                displayUrl = if (nextActive?.isHomePage == true) "" else nextActive?.url ?: state.displayUrl
+            )
+        }
+        saveSpaces()
+        saveTabs()
+    }
+
+    fun moveTabToSpace(tabId: String, targetSpaceId: String) {
+        _uiState.update { state ->
+            val updatedTabs = state.tabs.map { tab ->
+                if (tab.id == tabId) tab.copy(spaceId = targetSpaceId) else tab
+            }
+
+            val isCurrentTab = state.activeTabId == tabId
+            val currentSpaceTabs = updatedTabs.filter { it.spaceId == state.activeSpaceId }
+
+            if (isCurrentTab) {
+                if (currentSpaceTabs.isNotEmpty()) {
+                    val nextActive = currentSpaceTabs.last()
+                    state.copy(
+                        tabs = updatedTabs,
+                        activeTabId = nextActive.id,
+                        isHomePage = nextActive.isHomePage,
+                        currentUrl = nextActive.url,
+                        displayUrl = if (nextActive.isHomePage) "" else nextActive.url
+                    )
+                } else {
+                    val newTab = BrowserTab(
+                        id = UUID.randomUUID().toString(),
+                        url = "https://duckduckgo.com",
+                        title = "Início",
+                        isHomePage = true,
+                        spaceId = state.activeSpaceId
+                    )
+                    state.copy(
+                        tabs = updatedTabs + newTab,
+                        activeTabId = newTab.id,
+                        isHomePage = true,
+                        currentUrl = "https://duckduckgo.com",
+                        displayUrl = ""
+                    )
+                }
+            } else {
+                state.copy(tabs = updatedTabs)
+            }
+        }
+        saveTabs()
+    }
+
+    fun cycleNextSpace() {
+        val spaces = _uiState.value.spaces
+        if (spaces.size <= 1) return
+        val currentIdx = spaces.indexOfFirst { it.id == _uiState.value.activeSpaceId }
+        val nextIdx = if (currentIdx == -1 || currentIdx >= spaces.size - 1) 0 else currentIdx + 1
+        selectSpace(spaces[nextIdx].id)
+    }
+
+    fun cyclePreviousSpace() {
+        val spaces = _uiState.value.spaces
+        if (spaces.size <= 1) return
+        val currentIdx = spaces.indexOfFirst { it.id == _uiState.value.activeSpaceId }
+        val prevIdx = if (currentIdx <= 0) spaces.size - 1 else currentIdx - 1
+        selectSpace(spaces[prevIdx].id)
+    }
+
+    fun toggleSpaceSwitcherModal(visible: Boolean? = null) {
+        _uiState.update { it.copy(showSpaceSwitcherModal = visible ?: !it.showSpaceSwitcherModal) }
     }
 
     // TAB GROUPS SUBSYSTEM
@@ -1808,6 +2053,29 @@ class BrowserViewModel : ViewModel() {
                     list
                 } else null
 
+                // Spaces
+                val spacesJson = prefs.getString("spaces_list", null)
+                val loadedSpaces = if (!spacesJson.isNullOrBlank()) {
+                    val arr = JSONArray(spacesJson)
+                    val list = mutableListOf<BrowserSpace>()
+                    for (i in 0 until arr.length()) {
+                        list.add(BrowserSpace.fromJson(arr.getJSONObject(i)))
+                    }
+                    if (list.isNotEmpty()) list else null
+                } else null
+                val savedActiveSpaceId = prefs.getString("active_space_id", null)
+
+                // Tabs
+                val tabsJson = prefs.getString("tabs_list", null)
+                val loadedTabs = if (!tabsJson.isNullOrBlank()) {
+                    val arr = JSONArray(tabsJson)
+                    val list = mutableListOf<BrowserTab>()
+                    for (i in 0 until arr.length()) {
+                        list.add(BrowserTab.fromJson(arr.getJSONObject(i)))
+                    }
+                    if (list.isNotEmpty()) list else null
+                } else null
+
                 // Site Settings
                 val siteSettingsJson = prefs.getString("site_settings_list", null)
                 val loadedSiteSettings = if (!siteSettingsJson.isNullOrBlank()) {
@@ -1822,6 +2090,9 @@ class BrowserViewModel : ViewModel() {
 
                 _uiState.update { current ->
                     current.copy(
+                        spaces = loadedSpaces ?: current.spaces,
+                        activeSpaceId = savedActiveSpaceId ?: current.activeSpaceId,
+                        tabs = loadedTabs ?: current.tabs,
                         speedDialItems = loadedBookmarks ?: current.speedDialItems,
                         history = loadedHistory ?: current.history,
                         savedPages = loadedSavedPages ?: current.savedPages,
@@ -1854,6 +2125,37 @@ class BrowserViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao carregar preferências", e)
+            }
+        }
+    }
+
+    private fun saveSpaces() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.spaces.forEach { s -> arr.put(s.toJson()) }
+                prefs.edit()
+                    .putString("spaces_list", arr.toString())
+                    .putString("active_space_id", _uiState.value.activeSpaceId)
+                    .apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar espaços", e)
+            }
+        }
+    }
+
+    private fun saveTabs() {
+        val app = appContext ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
+                val arr = JSONArray()
+                _uiState.value.tabs.forEach { t -> arr.put(t.toJson()) }
+                prefs.edit().putString("tabs_list", arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao salvar abas", e)
             }
         }
     }

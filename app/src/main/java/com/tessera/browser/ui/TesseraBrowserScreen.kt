@@ -98,6 +98,7 @@ import com.tessera.browser.ui.components.PodcastMiniPlayerCapsule
 import com.tessera.browser.ui.components.TesseraSettingsScreen
 import com.tessera.browser.ui.components.SafeBrowsingWarningView
 import com.tessera.browser.ui.components.SiteSettingsModal
+import com.tessera.browser.ui.components.SpaceQuickSwitcherModal
 import com.tessera.browser.ui.components.TabsModal
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraBrowseForMeScreen
@@ -589,7 +590,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = state.safeBrowsingThreat != null || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.showAiActionModal || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
@@ -621,6 +622,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             viewModel.dismissQuickSettings()
         } else if (state.showTabsModal) {
             viewModel.dismissTabsModal()
+        } else if (state.showSpaceSwitcherModal) {
+            viewModel.toggleSpaceSwitcherModal(false)
         } else if (state.showHistoryModal) {
             viewModel.dismissHistoryModal()
         } else if (state.showAiActionModal) {
@@ -663,7 +666,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 showWallpaper = state.showWallpaper,
                 customWallpaperUri = state.customWallpaperUri,
                 isDarkMode = state.isDarkMode,
-                favorites = state.speedDialItems,
+                favorites = state.currentSpaceFavorites,
                 searchSuggestions = state.searchSuggestions,
                 trendingTopics = state.trendingTopics,
                 showWeatherWidget = state.showWeatherWidget,
@@ -678,7 +681,11 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenSettings = { viewModel.toggleQuickSettings() },
                 onSearchClick = { isSearchEditing = true },
                 totalBlockedCount = state.privacyState.totalBlockedCount,
-                onOpenPrivacyDashboard = { viewModel.togglePrivacyDashboard(true) }
+                onOpenPrivacyDashboard = { viewModel.togglePrivacyDashboard(true) },
+                currentSpaceEmoji = state.currentSpace.iconEmoji,
+                currentSpaceName = state.currentSpace.name,
+                currentSpaceColor = Color(state.currentSpace.colorArgb),
+                onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
             )
         } else {
             // WEBVIEW BROWSER VIEW
@@ -1504,13 +1511,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         displayUrl = if (state.isHomePage) "" else state.displayUrl,
                         canGoBack = if (state.isHomePage) false else state.canGoBack,
                         canGoForward = if (state.isHomePage) false else state.canGoForward,
-                        tabCount = state.tabs.size,
+                        tabCount = state.currentSpaceTabs.size,
                         isBookmarked = if (state.isHomePage) false else state.isCurrentPageBookmarked,
                         isIncognito = state.isIncognitoMode,
                         isDarkMode = state.isDarkMode,
                         isReaderModeActive = state.isReaderModeActive,
                         isReaderModeAvailable = state.isReaderModeAvailable,
-                        favorites = state.speedDialItems,
+                        favorites = state.currentSpaceFavorites,
                         searchSuggestions = state.searchSuggestions,
                         onBack = { webViewInstance?.goBack() },
                         onForward = { webViewInstance?.goForward() },
@@ -1559,7 +1566,11 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onNextTab = { viewModel.selectNextTab() },
                         onPreviousTab = { viewModel.selectPreviousTab() },
                         accentColor = state.activeWallpaper.accentColor,
-                        siteThemeColor = state.siteThemeColor
+                        siteThemeColor = state.siteThemeColor,
+                        currentSpaceEmoji = state.currentSpace.iconEmoji,
+                        currentSpaceName = state.currentSpace.name,
+                        currentSpaceColor = Color(state.currentSpace.colorArgb),
+                        onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
                     )
                 }
             }
@@ -1591,6 +1602,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 tabs = state.tabs,
                 activeTabId = state.activeTabId,
                 tabGroups = state.tabGroups,
+                spaces = state.spaces,
+                activeSpaceId = state.activeSpaceId,
+                onSelectSpace = { viewModel.selectSpace(it) },
+                onCreateSpace = { name, emoji, color -> viewModel.createSpace(name, emoji, color) },
+                onUpdateSpace = { id, name, emoji, color -> viewModel.updateSpace(id, name, emoji, color) },
+                onDeleteSpace = { viewModel.deleteSpace(it) },
+                onMoveTabToSpace = { tabId, targetSpaceId -> viewModel.moveTabToSpace(tabId, targetSpaceId) },
                 onSelectTab = { viewModel.selectTab(it) },
                 onCloseTab = { viewModel.closeTab(it) },
                 onNewTab = { viewModel.addNewTab() },
@@ -2227,6 +2245,46 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             onDismiss = { viewModel.dismissPrivacyDashboard() },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // SPACE QUICK SWITCHER MODAL (ARC-STYLE BOTTOM SHEET)
+        AnimatedVisibility(
+            visible = state.showSpaceSwitcherModal,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        viewModel.toggleSpaceSwitcherModal(false)
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showSpaceSwitcherModal,
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            SpaceQuickSwitcherModal(
+                spaces = state.spaces,
+                activeSpaceId = state.activeSpaceId,
+                tabs = state.tabs,
+                isDarkMode = state.isDarkMode,
+                onSelectSpace = { viewModel.selectSpace(it) },
+                onCreateSpace = { name, emoji, color -> viewModel.createSpace(name, emoji, color) },
+                onCreateNewSpace = {
+                    viewModel.toggleSpaceSwitcherModal(false)
+                    viewModel.toggleTabsModal()
+                },
+                onDismiss = { viewModel.toggleSpaceSwitcherModal(false) }
+            )
+        }
     }
 }
 

@@ -17,9 +17,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -93,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import com.tessera.browser.R
 import com.tessera.browser.data.SpeedDialItem
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TesseraAirBar(
     progress: Float,
@@ -135,6 +138,10 @@ fun TesseraAirBar(
     onEditingChange: (Boolean) -> Unit = {},
     accentColor: Color = Color(0xFF0288D1),
     siteThemeColor: Color? = null,
+    currentSpaceEmoji: String = "🌐",
+    currentSpaceName: String = "Geral",
+    currentSpaceColor: Color = Color(0xFF0288D1),
+    onOpenSpaces: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var queryText by remember { mutableStateOf(displayUrl) }
@@ -796,17 +803,21 @@ fun TesseraAirBar(
                         }
                     }
 
-                    // 4. Abas Button (Rounded square with border and number badge)
+                    // 4. Abas Button (Rounded square with border, number badge, and Space indicator)
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable(
+                            .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onOpenTabs()
+                                },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenSpaces()
                                 }
                             ),
                         contentAlignment = Alignment.Center
@@ -818,7 +829,9 @@ fun TesseraAirBar(
                                 .clip(tabBadgeShape)
                                 .border(
                                     width = 1.8.dp,
-                                    color = contentColor,
+                                    color = if (currentSpaceColor != Color.Unspecified) {
+                                        lerp(contentColor, currentSpaceColor, 0.5f)
+                                    } else contentColor,
                                     shape = tabBadgeShape
                                 ),
                             contentAlignment = Alignment.Center
@@ -831,6 +844,17 @@ fun TesseraAirBar(
                                 textAlign = TextAlign.Center
                             )
                         }
+
+                        // Space indicator dot at top-right
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 6.dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(currentSpaceColor)
+                                .border(1.dp, omniBg, CircleShape)
+                        )
                     }
 
                     // 5. Configurações Button (Hamburger menu icon ≡)

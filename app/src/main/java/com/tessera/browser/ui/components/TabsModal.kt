@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -47,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tessera.browser.data.BrowserSpace
 import com.tessera.browser.data.TabGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,6 +90,13 @@ fun TabsModal(
     onCloseAllTabs: () -> Unit = {},
     onArchiveInactiveTabs: () -> Unit = {},
     onOpenHistory: () -> Unit = {},
+    spaces: List<BrowserSpace> = BrowserSpace.DEFAULT_SPACES,
+    activeSpaceId: String = "space_general",
+    onSelectSpace: (String) -> Unit = {},
+    onCreateSpace: (name: String, emoji: String, colorArgb: Long) -> Unit = { _, _, _ -> },
+    onUpdateSpace: (spaceId: String, name: String, emoji: String, colorArgb: Long) -> Unit = { _, _, _, _ -> },
+    onDeleteSpace: (spaceId: String) -> Unit = {},
+    onMoveTabToSpace: (tabId: String, targetSpaceId: String) -> Unit = { _, _ -> },
     accentColor: Color = Color(0xFF0288D1),
     isDarkMode: Boolean = false,
     modifier: Modifier = Modifier
@@ -100,8 +109,10 @@ fun TabsModal(
     var newGroupTitle by remember { mutableStateOf("") }
     var newGroupColor by remember { mutableStateOf(TabGroup.PRESET_COLORS.first()) }
     var tabToAssignGroup by remember { mutableStateOf<BrowserTab?>(null) }
+    var tabToMoveSpace by remember { mutableStateOf<BrowserTab?>(null) }
 
-    val filteredTabs = tabs.filter { tab ->
+    val currentSpaceTabs = tabs.filter { it.spaceId == activeSpaceId }
+    val filteredTabs = currentSpaceTabs.filter { tab ->
         val matchesQuery = searchQuery.isBlank() ||
                 tab.title.contains(searchQuery, ignoreCase = true) ||
                 tab.url.contains(searchQuery, ignoreCase = true)
@@ -120,6 +131,18 @@ fun TabsModal(
             .padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // -1. SELETOR DE ESPAÇOS (Arc Spaces Carousel)
+        SpacesCarouselBar(
+            spaces = spaces,
+            activeSpaceId = activeSpaceId,
+            tabs = tabs,
+            isDarkMode = isDarkMode,
+            onSelectSpace = onSelectSpace,
+            onCreateSpace = onCreateSpace,
+            onUpdateSpace = onUpdateSpace,
+            onDeleteSpace = onDeleteSpace
+        )
+
         // 0. SELETOR DE GRUPOS DE ABAS (Pills Horizontais)
         LazyRow(
             modifier = Modifier
@@ -307,12 +330,14 @@ fun TabsModal(
                             isActive = isActive,
                             tabGroup = tabGroup,
                             allGroups = tabGroups,
+                            allSpaces = spaces,
                             isDarkMode = isDarkMode,
                             accentColor = accentColor,
                             onClick = { onSelectTab(tab.id) },
                             onClose = { onCloseTab(tab.id) },
                             onAssignGroup = { gid -> onAddTabToGroup(tab.id, gid) },
                             onRemoveFromGroup = { onRemoveTabFromGroup(tab.id) },
+                            onMoveToSpaceClick = { tabToMoveSpace = tab },
                             onCreateNewGroup = {
                                 tabToAssignGroup = tab
                                 newGroupTitle = ""
@@ -640,6 +665,19 @@ fun TabsModal(
             }
         )
     }
+
+    tabToMoveSpace?.let { targetTab ->
+        MoveTabToSpaceDialog(
+            tabTitle = targetTab.title,
+            spaces = spaces,
+            currentSpaceId = activeSpaceId,
+            onSelectSpace = { newSpaceId ->
+                onMoveTabToSpace(targetTab.id, newSpaceId)
+                tabToMoveSpace = null
+            },
+            onDismiss = { tabToMoveSpace = null }
+        )
+    }
 }
 
 @Composable
@@ -648,12 +686,14 @@ private fun TabCardItem(
     isActive: Boolean,
     tabGroup: TabGroup? = null,
     allGroups: List<TabGroup> = emptyList(),
+    allSpaces: List<BrowserSpace> = emptyList(),
     isDarkMode: Boolean,
     accentColor: Color,
     onClick: () -> Unit,
     onClose: () -> Unit,
     onAssignGroup: (String) -> Unit = {},
     onRemoveFromGroup: () -> Unit = {},
+    onMoveToSpaceClick: () -> Unit = {},
     onCreateNewGroup: () -> Unit = {}
 ) {
     val cardShape = RoundedCornerShape(18.dp)
@@ -813,6 +853,23 @@ private fun TabCardItem(
                                 onClick = {
                                     showTabMenu = false
                                     onRemoveFromGroup()
+                                }
+                            )
+                        }
+                        if (allSpaces.size > 1) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.SwapHoriz, null, modifier = Modifier.size(16.dp))
+                                        Text("Mover para Espaço...")
+                                    }
+                                },
+                                onClick = {
+                                    showTabMenu = false
+                                    onMoveToSpaceClick()
                                 }
                             )
                         }
