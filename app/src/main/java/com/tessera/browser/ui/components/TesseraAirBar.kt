@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,14 +19,17 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -204,6 +210,13 @@ fun TesseraAirBar(
         }
     }
 
+    val specularBorderBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = if (isDarkMode) 0.32f else 0.65f),
+            Color.White.copy(alpha = if (isDarkMode) 0.07f else 0.16f)
+        )
+    )
+
     val capsuleBorder = if (isDarkMode) {
         Color.White.copy(alpha = 0.14f)
     } else {
@@ -250,14 +263,14 @@ fun TesseraAirBar(
                         .fillMaxWidth()
                         .height(52.dp)
                         .shadow(
-                            elevation = 12.dp,
+                            elevation = 14.dp,
                             shape = omniShape,
-                            ambientColor = Color.Black.copy(alpha = 0.18f),
-                            spotColor = Color.Black.copy(alpha = 0.12f)
+                            ambientColor = Color.Black.copy(alpha = 0.20f),
+                            spotColor = Color.Black.copy(alpha = 0.14f)
                         )
                         .clip(omniShape)
                         .background(capsuleBg)
-                        .border(1.dp, capsuleBorder, omniShape)
+                        .border(1.2.dp, specularBorderBrush, omniShape)
                         .padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -453,75 +466,125 @@ private fun TesseraUnifiedAirCapsule(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    val capsuleShape = RoundedCornerShape(26.dp)
-    val actionButtonShape = RoundedCornerShape(12.dp)
+    val omniShape = RoundedCornerShape(26.dp)
+    val satelliteShape = RoundedCornerShape(20.dp)
 
     var dragAccumulator by remember { mutableStateOf(0f) }
     val draggableState = rememberDraggableState { delta ->
         dragAccumulator += delta
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .shadow(
-                elevation = 8.dp,
-                shape = capsuleShape,
-                ambientColor = Color.Black.copy(alpha = 0.16f),
-                spotColor = Color.Black.copy(alpha = 0.10f)
-            )
-            .clip(capsuleShape)
-            .background(capsuleBg)
-            .border(1.dp, capsuleBorder, capsuleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        // Subtle loading bar inside the top of the capsule when browsing
-        if (!isHomePage && progress > 0f && progress < 1f) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .align(Alignment.TopCenter)
-                    .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
-                color = effectiveAccent,
-                trackColor = Color.Transparent
-            )
-        }
+    // Specular liquid glass border highlight (iluminação de borda física superior)
+    val specularBorder = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = if (isDarkMode) 0.32f else 0.65f),
+            Color.White.copy(alpha = if (isDarkMode) 0.07f else 0.16f)
+        )
+    )
 
-        Row(
+    // Tactile press bounce for Tab Island
+    val tabInteractionSource = remember { MutableInteractionSource() }
+    val isTabPressed by tabInteractionSource.collectIsPressedAsState()
+    val tabScale by animateFloatAsState(
+        targetValue = if (isTabPressed) 0.88f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
+        label = "tab_island_scale"
+    )
+
+    // Tactile press bounce for AI Island
+    val aiInteractionSource = remember { MutableInteractionSource() }
+    val isAiPressed by aiInteractionSource.collectIsPressedAsState()
+    val aiScale by animateFloatAsState(
+        targetValue = if (isAiPressed) 0.88f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
+        label = "ai_island_scale"
+    )
+
+    // Holographic Aurora gradient for AI Satellite Orb
+    val aiAuroraGradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF8B5CF6), // Royal Purple
+            Color(0xFF6366F1), // Electric Indigo
+            Color(0xFF06B6D4), // Cyan
+            Color(0xFFEC4899)  // Vibrant Magenta
+        )
+    )
+    val aiSpecularBorder = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = 0.70f),
+            Color.White.copy(alpha = 0.25f)
+        )
+    )
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // =========================================================================
+        // 1. ILHA CENTRAL (OMNIBAR ISLAND) — weight = 1f
+        // =========================================================================
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .height(52.dp)
-                .padding(start = 14.dp, end = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = omniShape,
+                    ambientColor = Color.Black.copy(alpha = 0.20f),
+                    spotColor = Color.Black.copy(alpha = 0.12f)
+                )
+                .clip(omniShape)
+                .background(capsuleBg)
+                .border(1.2.dp, specularBorder, omniShape),
+            contentAlignment = Alignment.Center
         ) {
-            // 1. Central Bar (weight = 1f) — Search bar or Domain/Security pill
+            // Loading micro-bar at the top curve of the Omnibar island
+            if (!isHomePage && progress > 0f && progress < 1f) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .align(Alignment.TopCenter)
+                        .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
+                    color = effectiveAccent,
+                    trackColor = Color.Transparent
+                )
+            }
+
             if (isHomePage) {
                 Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = onSearchClick
-                        ),
+                        )
+                        .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = "Pesquisar",
-                        tint = mutedColor,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(if (isDarkMode) Color.White.copy(0.08f) else Color.Black.copy(0.04f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Pesquisar",
+                            tint = effectiveAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                     Text(
                         text = "Pesquisar ou digitar endereço",
                         color = mutedColor,
-                        fontSize = 14.5.sp,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -529,16 +592,17 @@ private fun TesseraUnifiedAirCapsule(
             } else {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
                         .draggable(
                             state = draggableState,
                             orientation = Orientation.Horizontal,
                             onDragStopped = { velocity ->
-                                val threshold = 60f
-                                if (dragAccumulator < -threshold || velocity < -300f) {
+                                val threshold = 50f
+                                if (dragAccumulator < -threshold || velocity < -250f) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onNextTab()
-                                } else if (dragAccumulator > threshold || velocity > 300f) {
+                                } else if (dragAccumulator > threshold || velocity > 250f) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onPreviousTab()
                                 }
                                 dragAccumulator = 0f
@@ -548,7 +612,8 @@ private fun TesseraUnifiedAirCapsule(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = onSearchClick
-                        ),
+                        )
+                        .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Row(
@@ -560,25 +625,35 @@ private fun TesseraUnifiedAirCapsule(
                         val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
 
                         if (isWeb) {
-                            Icon(
-                                imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                contentDescription = "Segurança",
-                                tint = if (isSecure) Color(0xFF4CAF50) else Color(0xFFF44336),
+                            Box(
                                 modifier = Modifier
-                                    .size(13.5.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSecure) Color(0xFF10B981).copy(alpha = 0.14f)
+                                        else Color(0xFFEF4444).copy(alpha = 0.14f)
+                                    )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,
                                         onClick = onOpenSiteSettings
                                     )
-                            )
+                                    .padding(horizontal = 5.dp, vertical = 3.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                    contentDescription = "Segurança",
+                                    tint = if (isSecure) Color(0xFF10B981) else Color(0xFFEF4444),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
 
                             if (privacyBlockedCount > 0) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0xFF00E676).copy(alpha = 0.15f))
-                                        .border(0.5.dp, Color(0xFF00E676).copy(alpha = 0.40f), RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF06B6D4).copy(alpha = 0.14f))
+                                        .border(0.5.dp, Color(0xFF06B6D4).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
@@ -593,12 +668,12 @@ private fun TesseraUnifiedAirCapsule(
                                         Icon(
                                             imageVector = Icons.Rounded.Shield,
                                             contentDescription = null,
-                                            tint = Color(0xFF00E676),
+                                            tint = Color(0xFF06B6D4),
                                             modifier = Modifier.size(9.dp)
                                         )
                                         Text(
                                             text = "$privacyBlockedCount",
-                                            color = Color(0xFF00E676),
+                                            color = Color(0xFF06B6D4),
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -622,7 +697,7 @@ private fun TesseraUnifiedAirCapsule(
                         Text(
                             text = hostText,
                             color = contentColor,
-                            fontSize = 14.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -630,96 +705,148 @@ private fun TesseraUnifiedAirCapsule(
                         )
 
                         if (isReaderModeActive || isReaderModeAvailable) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                contentDescription = "Modo Leitor",
-                                tint = if (isReaderModeActive) effectiveAccent else mutedColor,
+                            Box(
                                 modifier = Modifier
-                                    .size(15.dp)
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isReaderModeActive) effectiveAccent.copy(alpha = 0.16f) else Color.Transparent)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,
                                         onClick = onToggleReaderMode
-                                    )
-                            )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                    contentDescription = "Modo Leitor",
+                                    tint = if (isReaderModeActive) effectiveAccent else mutedColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
 
-            // 2. Tab Count Button ([ 1 ])
+        // =========================================================================
+        // 2. SATÉLITE DE ABAS (TAB STACK SATELLITE ISLAND — CARTÕES EM CAMADAS 3D)
+        // =========================================================================
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .scale(tabScale)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = satelliteShape,
+                    ambientColor = Color.Black.copy(alpha = 0.20f),
+                    spotColor = Color.Black.copy(alpha = 0.12f)
+                )
+                .clip(satelliteShape)
+                .background(capsuleBg)
+                .border(1.2.dp, specularBorder, satelliteShape)
+                .combinedClickable(
+                    interactionSource = tabInteractionSource,
+                    indication = null,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenTabs()
+                    },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenSettings()
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(actionButtonShape)
-                    .background(
-                        if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
-                    )
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onOpenTabs()
-                        },
-                        onLongClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onOpenSettings()
-                        }
-                    ),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
+                // Folha Traseira (Back Sheet) — cria a ilusão física de páginas sobrepostas
+                Box(
+                    modifier = Modifier
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(20.dp)
+                        .border(
+                            width = 1.3.dp,
+                            color = contentColor.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(5.5.dp)
+                        )
+                )
+
+                // Folha Frontal (Front Sheet) — translúcida com contorno nítido e número
                 Box(
                     modifier = Modifier
                         .size(20.dp)
-                        .border(1.4.dp, contentColor.copy(alpha = 0.85f), RoundedCornerShape(5.dp)),
+                        .clip(RoundedCornerShape(5.5.dp))
+                        .background(
+                            if (isDarkMode) Color.White.copy(alpha = 0.12f)
+                            else Color.Black.copy(alpha = 0.06f)
+                        )
+                        .border(
+                            width = 1.4.dp,
+                            color = contentColor.copy(alpha = 0.88f),
+                            shape = RoundedCornerShape(5.5.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "$tabCount",
                         color = contentColor,
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                 }
 
+                // Indicador de Espaço Ativo (Pílula sutil na base)
                 if (currentSpaceColor != Color.Unspecified) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 4.dp, end = 4.dp)
-                            .size(5.dp)
-                            .clip(CircleShape)
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 5.dp)
+                            .size(14.dp, 3.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
                             .background(currentSpaceColor)
                     )
                 }
             }
+        }
 
-            // 3. AI Action Button (✦)
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(actionButtonShape)
-                    .background(effectiveAccent.copy(alpha = 0.16f))
-                    .border(1.dp, effectiveAccent.copy(alpha = 0.35f), actionButtonShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onOpenAiAction()
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = "Tessera AI",
-                    tint = effectiveAccent,
-                    modifier = Modifier.size(19.dp)
+        // =========================================================================
+        // 3. SATÉLITE DE IA (TESSERA AI AURORA CRYSTAL ORB ISLAND)
+        // =========================================================================
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .scale(aiScale)
+                .shadow(
+                    elevation = 12.dp,
+                    shape = satelliteShape,
+                    ambientColor = Color(0xFF8B5CF6).copy(alpha = 0.40f),
+                    spotColor = Color(0xFF06B6D4).copy(alpha = 0.30f)
                 )
-            }
+                .clip(satelliteShape)
+                .background(aiAuroraGradient)
+                .border(1.2.dp, aiSpecularBorder, satelliteShape)
+                .clickable(
+                    interactionSource = aiInteractionSource,
+                    indication = null,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenAiAction()
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.AutoAwesome,
+                contentDescription = "Tessera AI",
+                tint = Color.White,
+                modifier = Modifier.size(21.dp)
+            )
         }
     }
 }
