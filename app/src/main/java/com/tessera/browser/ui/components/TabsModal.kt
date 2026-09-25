@@ -294,11 +294,11 @@ fun TabsModal(
             }
         }
 
-        // 1. CARROSSEL HORIZONTAL DE ABAS FLUTUANTES (Layout Imagem 3)
+        // 1. CARROSSEL HORIZONTAL DE ABAS FLUTUANTES
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(230.dp)
+                .height(260.dp)
         ) {
             if (filteredTabs.isEmpty()) {
                 Box(
@@ -350,240 +350,136 @@ fun TabsModal(
             }
         }
 
-        // 2. BARRA DE PESQUISA DE ABAS: "🔍 Search tabs" FLUTUANTE (Layout Imagem 3)
-        val searchPillShape = RoundedCornerShape(24.dp)
-        Box(
+        // 2. BARRA DE AÇÕES MINIMALISTA DO GERENCIADOR DE ABAS
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .height(46.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = searchPillShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.15f)
-                )
-                .clip(searchPillShape)
-                .background(if (isDarkMode) Color(0xFF2B2623) else Color.White)
-                .border(
-                    width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color(0xFFE5E7EB),
-                    shape = searchPillShape
-                )
-                .padding(horizontal = 14.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // Botão Concluído (Fecha o modal de abas)
+            TextButton(
+                onClick = onDismiss,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Buscar abas",
-                    tint = mutedColor,
-                    modifier = Modifier.size(19.dp)
+                Text(
+                    text = "Concluído",
+                    color = contentColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (searchQuery.isEmpty()) {
-                        Text(
-                            text = "Search tabs",
-                            color = mutedColor,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        textStyle = TextStyle(
-                            color = contentColor,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        cursorBrush = SolidColor(accentColor)
-                    )
-                }
-
-                if (searchQuery.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .clickable { searchQuery = "" },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Limpar busca",
-                            tint = mutedColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
             }
-        }
 
-        // 3. BARRA DE RODAPÉ COM 5 AÇÕES FLUTUANTE (DOCK)
-        val dockShape = RoundedCornerShape(26.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .height(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = dockShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.15f)
-                )
-                .clip(dockShape)
-                .background(if (isDarkMode) Color(0xFF2B2623) else Color.White)
-                .border(
-                    width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color(0xFFE5E7EB),
-                    shape = dockShape
-                )
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Botão Central: [+ Nova Aba] em cápsula elegante com accentColor
+            val newTabShape = RoundedCornerShape(22.dp)
+            Box(
+                modifier = Modifier
+                    .height(44.dp)
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = newTabShape,
+                        ambientColor = accentColor.copy(alpha = 0.35f),
+                        spotColor = accentColor.copy(alpha = 0.25f)
+                    )
+                    .clip(newTabShape)
+                    .background(accentColor)
+                    .clickable(onClick = onNewTab)
+                    .padding(horizontal = 22.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // 1. Relógio / Histórico
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onOpenHistory),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Schedule,
-                        contentDescription = "Histórico",
-                        tint = contentColor,
-                        modifier = Modifier.size(23.dp)
-                    )
-                }
-
-                // 2. Pin / Fixar
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (filterPinnedOnly) accentColor.copy(alpha = 0.18f) else Color.Transparent
-                        )
-                        .clickable { filterPinnedOnly = !filterPinnedOnly },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PushPin,
-                        contentDescription = "Abas Fixadas",
-                        tint = if (filterPinnedOnly) accentColor else contentColor,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                // 3. Botão [+] Nova Guia em Cápsula Cinza Suave (Layout Imagem 3)
-                val plusPillShape = RoundedCornerShape(16.dp)
-                Box(
-                    modifier = Modifier
-                        .height(38.dp)
-                        .width(52.dp)
-                        .clip(plusPillShape)
-                        .background(if (isDarkMode) Color(0xFF38322E) else Color(0xFFE2E4E8))
-                        .clickable(onClick = onNewTab),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
-                        contentDescription = "Nova Guia",
-                        tint = contentColor,
-                        modifier = Modifier.size(22.dp)
+                        contentDescription = "Nova Aba",
+                        tint = Color.White,
+                        modifier = Modifier.size(19.dp)
                     )
-                }
-
-                // 4. Badge Numérico com Contagem de Abas (Pílula Preta com Número Branco)
-                val badgeShape = RoundedCornerShape(8.dp)
-                Box(
-                    modifier = Modifier
-                        .size(width = 36.dp, height = 28.dp)
-                        .clip(badgeShape)
-                        .background(Color(0xFF191919)),
-                    contentAlignment = Alignment.Center
-                ) {
                     Text(
-                        text = tabs.size.toString(),
+                        text = "Nova Aba",
                         color = Color.White,
-                        fontSize = 12.5.sp,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
 
-                // 5. Mais Opções (•••)
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .clickable { showMenu = true },
-                    contentAlignment = Alignment.Center
+            // Botão de Mais Opções (•••) discreto
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .clickable { showMenu = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreHoriz,
+                    contentDescription = "Mais opções",
+                    tint = contentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreHoriz,
-                        contentDescription = "Mais opções",
-                        tint = contentColor,
-                        modifier = Modifier.size(24.dp)
+                    DropdownMenuItem(
+                        text = { Text("Histórico") },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            onOpenHistory()
+                        }
                     )
-
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Novo grupo de abas") },
-                            onClick = {
-                                showMenu = false
-                                newGroupTitle = ""
-                                newGroupColor = TabGroup.PRESET_COLORS.first()
-                                showCreateGroupDialog = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Arquivar abas inativas (24h)") },
-                            onClick = {
-                                showMenu = false
-                                onArchiveInactiveTabs()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Fechar todas as guias") },
-                            onClick = {
-                                showMenu = false
-                                onCloseAllTabs()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Fixar aba atual") },
-                            onClick = {
-                                showMenu = false
-                                onTogglePin(activeTabId)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Fechar menu") },
-                            onClick = { showMenu = false }
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (filterPinnedOnly) "Mostrar todas as abas" else "Apenas abas fixadas")
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            filterPinnedOnly = !filterPinnedOnly
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Novo grupo de abas") },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            newGroupTitle = ""
+                            newGroupColor = TabGroup.PRESET_COLORS.first()
+                            showCreateGroupDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Arquivar abas inativas (24h)") },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            onArchiveInactiveTabs()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Fechar todas as guias", color = Color(0xFFE53935)) },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            onCloseAllTabs()
+                        }
+                    )
                 }
             }
         }

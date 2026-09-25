@@ -12,6 +12,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -384,29 +386,14 @@ fun TesseraAirBar(
                         }
                     }
                 }
-            } else if (isHomePage) {
-                // 2. STATE B: HOME MODE (Opera / Dia Browser Inspired Minimalist Dock)
-                TesseraHomeBottomDock(
-                    tabCount = tabCount,
-                    isDarkMode = isDarkMode,
-                    effectiveAccent = effectiveAccent,
-                    capsuleBg = capsuleBg,
-                    capsuleBorder = capsuleBorder,
-                    contentColor = contentColor,
-                    mutedColor = mutedColor,
-                    onSearchClick = { isEditing = true },
-                    onOpenTabs = onOpenTabs,
-                    onOpenAiAction = onOpenAiAction
-                )
             } else {
-                // 3. STATE C: WEB BROWSING — CÁPSULA ÚNICA DE ALTURA COMPACTA (50-52dp)
-                // Layout: [ ⮜ Voltar ] [ 🔒 domínio.com ] [ ✦ IA ] [ 🗂️ Abas ] [ ⋮ Menu ]
-                TesseraSingleWebCapsule(
+                // 2. UNIFIED STATE: HOME & WEB BROWSING (Cápsula Única: Barra, Aba e IA)
+                TesseraUnifiedAirCapsule(
                     progress = animatedProgress,
                     displayUrl = displayUrl,
-                    canGoBack = canGoBack,
                     tabCount = tabCount,
                     isDarkMode = isDarkMode,
+                    isHomePage = isHomePage,
                     effectiveAccent = effectiveAccent,
                     capsuleBg = capsuleBg,
                     capsuleBorder = capsuleBorder,
@@ -416,7 +403,6 @@ fun TesseraAirBar(
                     privacyBlockedCount = privacyBlockedCount,
                     isReaderModeActive = isReaderModeActive,
                     isReaderModeAvailable = isReaderModeAvailable,
-                    onBack = onBack,
                     onSearchClick = { isEditing = true },
                     onOpenAiAction = onOpenAiAction,
                     onOpenTabs = onOpenTabs,
@@ -433,17 +419,19 @@ fun TesseraAirBar(
 }
 
 /**
- * Single-line compact navigation capsule for web browsing.
- * Exactly matches the user's requested layout:
- * [ ⮜ Voltar ] [ 🔒 domínio.com ] [ ✦ IA ] [ 🗂️ Abas ] [ ⋮ Menu ]
+ * Tessera Unified Fluid Capsule Dock.
+ * Single elegant capsule containing:
+ * [ 🔍 Pesquisar... / 🔒 domínio.com ] [ 1 ] [ ✦ IA ]
+ * Fluid, glassmorphic, cohesive aesthetic matching Opera & Dia Browser designs.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TesseraSingleWebCapsule(
+private fun TesseraUnifiedAirCapsule(
     progress: Float,
     displayUrl: String,
-    canGoBack: Boolean,
     tabCount: Int,
     isDarkMode: Boolean,
+    isHomePage: Boolean,
     effectiveAccent: Color,
     capsuleBg: Color,
     capsuleBorder: Color,
@@ -453,7 +441,6 @@ private fun TesseraSingleWebCapsule(
     privacyBlockedCount: Int,
     isReaderModeActive: Boolean,
     isReaderModeAvailable: Boolean,
-    onBack: () -> Unit,
     onSearchClick: () -> Unit,
     onOpenAiAction: () -> Unit,
     onOpenTabs: () -> Unit,
@@ -462,327 +449,283 @@ private fun TesseraSingleWebCapsule(
     onOpenPrivacyDashboard: () -> Unit,
     onToggleReaderMode: () -> Unit,
     onNextTab: () -> Unit,
-    onPreviousTab: () -> Unit
+    onPreviousTab: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     val capsuleShape = RoundedCornerShape(26.dp)
-    val buttonShape = RoundedCornerShape(14.dp)
+    val actionButtonShape = RoundedCornerShape(12.dp)
 
     var dragAccumulator by remember { mutableStateOf(0f) }
     val draggableState = rememberDraggableState { delta ->
         dragAccumulator += delta
     }
 
-    Row(
-        modifier = Modifier
+    Box(
+        modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .height(52.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = capsuleShape,
+                ambientColor = Color.Black.copy(alpha = 0.16f),
+                spotColor = Color.Black.copy(alpha = 0.10f)
+            )
+            .clip(capsuleShape)
+            .background(capsuleBg)
+            .border(1.dp, capsuleBorder, capsuleShape),
+        contentAlignment = Alignment.Center
     ) {
-        // 1. Back Button (⮜)
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = buttonShape,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.08f)
-                )
-                .clip(buttonShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, buttonShape)
-                .clickable(
-                    enabled = canGoBack,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onBack()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Voltar",
-                tint = if (canGoBack) contentColor else mutedColor.copy(alpha = 0.35f),
-                modifier = Modifier.size(19.dp)
-            )
-        }
-
-        // 2. Central Domain & Security Capsule (weight = 1f)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .shadow(
-                    elevation = 6.dp,
-                    shape = capsuleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.14f),
-                    spotColor = Color.Black.copy(alpha = 0.08f)
-                )
-                .clip(capsuleShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, capsuleShape)
-                .draggable(
-                    state = draggableState,
-                    orientation = Orientation.Horizontal,
-                    onDragStopped = { velocity ->
-                        val threshold = 60f
-                        if (dragAccumulator < -threshold || velocity < -300f) {
-                            onNextTab()
-                        } else if (dragAccumulator > threshold || velocity > 300f) {
-                            onPreviousTab()
-                        }
-                        dragAccumulator = 0f
-                    }
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onSearchClick
-                )
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Subtle loading bar inside the top of the capsule
-            if (progress > 0f && progress < 1f) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .align(Alignment.TopCenter)
-                        .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
-                    color = effectiveAccent,
-                    trackColor = Color.Transparent
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
-                val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
-
-                if (isWeb) {
-                    // Security Lock Icon
-                    Icon(
-                        imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                        contentDescription = "Segurança",
-                        tint = if (isSecure) Color(0xFF4CAF50) else Color(0xFFF44336),
-                        modifier = Modifier
-                            .size(13.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onOpenSiteSettings
-                            )
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-
-                    // Privacy Shield indicator (if trackers blocked)
-                    if (privacyBlockedCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF00E676).copy(alpha = 0.15f))
-                                .border(0.5.dp, Color(0xFF00E676).copy(alpha = 0.40f), RoundedCornerShape(8.dp))
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = onOpenPrivacyDashboard
-                                )
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Shield,
-                                    contentDescription = null,
-                                    tint = Color(0xFF00E676),
-                                    modifier = Modifier.size(10.dp)
-                                )
-                                Text(
-                                    text = "$privacyBlockedCount",
-                                    color = Color(0xFF00E676),
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(5.dp))
-                    }
-                }
-
-                // Clean Host Display
-                val hostText = if (displayUrl.isNotBlank()) {
-                    try {
-                        val uri = java.net.URI(displayUrl)
-                        val host = uri.host ?: displayUrl
-                        if (host.startsWith("www.")) host.substring(4) else host
-                    } catch (e: Exception) {
-                        displayUrl
-                    }
-                } else {
-                    "Pesquisar ou digitar endereço"
-                }
-
-                Text(
-                    text = hostText,
-                    color = contentColor,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-
-                // Reader mode badge if active/available
-                if (isReaderModeActive || isReaderModeAvailable) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                        contentDescription = "Modo Leitor",
-                        tint = if (isReaderModeActive) effectiveAccent else mutedColor,
-                        modifier = Modifier
-                            .size(14.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onToggleReaderMode
-                            )
-                    )
-                }
-            }
-        }
-
-        // 3. AI Button (✦)
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = buttonShape,
-                    ambientColor = effectiveAccent.copy(alpha = 0.25f),
-                    spotColor = effectiveAccent.copy(alpha = 0.20f)
-                )
-                .clip(buttonShape)
-                .background(effectiveAccent.copy(alpha = 0.16f))
-                .border(1.dp, effectiveAccent.copy(alpha = 0.35f), buttonShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenAiAction()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
-                contentDescription = "Tessera AI",
-                tint = effectiveAccent,
-                modifier = Modifier.size(19.dp)
-            )
-        }
-
-        // 4. Tabs Button ([ 1 ])
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = buttonShape,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.08f)
-                )
-                .clip(buttonShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, buttonShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenTabs()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            val badgeShape = RoundedCornerShape(5.dp)
-            Box(
+        // Subtle loading bar inside the top of the capsule when browsing
+        if (!isHomePage && progress > 0f && progress < 1f) {
+            LinearProgressIndicator(
+                progress = { progress },
                 modifier = Modifier
-                    .size(20.dp)
-                    .border(1.4.dp, contentColor.copy(alpha = 0.85f), badgeShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "$tabCount",
-                    color = contentColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .align(Alignment.TopCenter)
+                    .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
+                color = effectiveAccent,
+                trackColor = Color.Transparent
+            )
+        }
 
-            // Dot indicating Space color
-            if (currentSpaceColor != Color.Unspecified) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .padding(start = 14.dp, end = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 1. Central Bar (weight = 1f) — Search bar or Domain/Security pill
+            if (isHomePage) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onSearchClick
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Pesquisar",
+                        tint = mutedColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Pesquisar ou digitar endereço",
+                        color = mutedColor,
+                        fontSize = 14.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 5.dp, end = 5.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(currentSpaceColor)
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .draggable(
+                            state = draggableState,
+                            orientation = Orientation.Horizontal,
+                            onDragStopped = { velocity ->
+                                val threshold = 60f
+                                if (dragAccumulator < -threshold || velocity < -300f) {
+                                    onNextTab()
+                                } else if (dragAccumulator > threshold || velocity > 300f) {
+                                    onPreviousTab()
+                                }
+                                dragAccumulator = 0f
+                            }
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onSearchClick
+                        ),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
+                        val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
+
+                        if (isWeb) {
+                            Icon(
+                                imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                contentDescription = "Segurança",
+                                tint = if (isSecure) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                modifier = Modifier
+                                    .size(13.5.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onOpenSiteSettings
+                                    )
+                            )
+
+                            if (privacyBlockedCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF00E676).copy(alpha = 0.15f))
+                                        .border(0.5.dp, Color(0xFF00E676).copy(alpha = 0.40f), RoundedCornerShape(6.dp))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = onOpenPrivacyDashboard
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Shield,
+                                            contentDescription = null,
+                                            tint = Color(0xFF00E676),
+                                            modifier = Modifier.size(9.dp)
+                                        )
+                                        Text(
+                                            text = "$privacyBlockedCount",
+                                            color = Color(0xFF00E676),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        val hostText = if (displayUrl.isNotBlank()) {
+                            try {
+                                val uri = java.net.URI(displayUrl)
+                                val host = uri.host ?: displayUrl
+                                if (host.startsWith("www.")) host.substring(4) else host
+                            } catch (e: Exception) {
+                                displayUrl
+                            }
+                        } else {
+                            "Pesquisar ou digitar endereço"
+                        }
+
+                        Text(
+                            text = hostText,
+                            color = contentColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+
+                        if (isReaderModeActive || isReaderModeAvailable) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                contentDescription = "Modo Leitor",
+                                tint = if (isReaderModeActive) effectiveAccent else mutedColor,
+                                modifier = Modifier
+                                    .size(15.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onToggleReaderMode
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Tab Count Button ([ 1 ])
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(actionButtonShape)
+                    .background(
+                        if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+                    )
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onOpenTabs()
+                        },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onOpenSettings()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .border(1.4.dp, contentColor.copy(alpha = 0.85f), RoundedCornerShape(5.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$tabCount",
+                        color = contentColor,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (currentSpaceColor != Color.Unspecified) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp, end = 4.dp)
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(currentSpaceColor)
+                    )
+                }
+            }
+
+            // 3. AI Action Button (✦)
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(actionButtonShape)
+                    .background(effectiveAccent.copy(alpha = 0.16f))
+                    .border(1.dp, effectiveAccent.copy(alpha = 0.35f), actionButtonShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onOpenAiAction()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = "Tessera AI",
+                    tint = effectiveAccent,
+                    modifier = Modifier.size(19.dp)
                 )
             }
-        }
-
-        // 5. Menu Button (⋮)
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = buttonShape,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.08f)
-                )
-                .clip(buttonShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, buttonShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenSettings()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.MoreVert,
-                contentDescription = "Menu de Opções",
-                tint = contentColor,
-                modifier = Modifier.size(20.dp)
-            )
         }
     }
 }
 
 /**
- * Minimalist floating dock for Tessera Browser Home screen.
- * Displays: [ 🔍 Pesquisar ou digitar endereço ] [ 1 ] ( ✦ )
- * Inspired by Opera & Dia Browser aesthetics.
+ * Minimalist floating dock for Tessera Browser Home screen (delegating to unified capsule).
  */
 @Composable
 fun TesseraHomeBottomDock(
@@ -798,129 +741,32 @@ fun TesseraHomeBottomDock(
     onOpenAiAction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
-    val homePillShape = RoundedCornerShape(26.dp)
-    val squircleShape = RoundedCornerShape(16.dp)
-
-    Row(
+    TesseraUnifiedAirCapsule(
+        progress = 0f,
+        displayUrl = "",
+        tabCount = tabCount,
+        isDarkMode = isDarkMode,
+        isHomePage = true,
+        effectiveAccent = effectiveAccent,
+        capsuleBg = capsuleBg,
+        capsuleBorder = capsuleBorder,
+        contentColor = contentColor,
+        mutedColor = mutedColor,
+        currentSpaceColor = Color.Unspecified,
+        privacyBlockedCount = 0,
+        isReaderModeActive = false,
+        isReaderModeAvailable = false,
+        onSearchClick = onSearchClick,
+        onOpenAiAction = onOpenAiAction,
+        onOpenTabs = onOpenTabs,
+        onOpenSettings = {},
+        onOpenSiteSettings = {},
+        onOpenPrivacyDashboard = {},
+        onToggleReaderMode = {},
+        onNextTab = {},
+        onPreviousTab = {},
         modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // 1. Search Pill (weight = 1f)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = homePillShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.10f)
-                )
-                .clip(homePillShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, homePillShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onSearchClick
-                )
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Pesquisar",
-                    tint = mutedColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Pesquisar ou digitar endereço",
-                    color = mutedColor,
-                    fontSize = 14.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 2. Tab Count Button
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = squircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.10f)
-                )
-                .clip(squircleShape)
-                .background(capsuleBg)
-                .border(1.dp, capsuleBorder, squircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenTabs()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .border(1.5.dp, contentColor.copy(alpha = 0.85f), RoundedCornerShape(6.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "$tabCount",
-                    color = contentColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        // 3. AI Action Button
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = squircleShape,
-                    ambientColor = effectiveAccent.copy(alpha = 0.30f),
-                    spotColor = effectiveAccent.copy(alpha = 0.25f)
-                )
-                .clip(squircleShape)
-                .background(effectiveAccent.copy(alpha = 0.18f))
-                .border(1.dp, effectiveAccent.copy(alpha = 0.40f), squircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenAiAction()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
-                contentDescription = "Tessera AI",
-                tint = effectiveAccent,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
+    )
 }
 
 @Composable
