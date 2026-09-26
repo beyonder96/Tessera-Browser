@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
@@ -132,8 +131,6 @@ fun QuickSettingsPanel(
     isAutoPipEnabled: Boolean = true,
     onAutoPipChanged: (Boolean) -> Unit = {},
     onEnterPip: () -> Unit = {},
-    onOpenNotebook: () -> Unit = {},
-    onClipPage: () -> Unit = {},
     geminiApiKey: String? = null,
     onGeminiApiKeyChanged: (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -440,10 +437,6 @@ fun QuickSettingsPanel(
                 PageActionItem(Icons.Rounded.SmartDisplay, "Janela Flutuante", Color(0xFF42A5F5)) {
                     onDismiss()
                     onEnterPip()
-                },
-                PageActionItem(Icons.Rounded.EditNote, "Clipar no Caderno", Color(0xFFFFB300)) {
-                    onDismiss()
-                    onClipPage()
                 }
             )
 
@@ -584,43 +577,6 @@ fun QuickSettingsPanel(
                     color = primaryTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Caderno de Notas & Web Clipper
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .clickable {
-                    onDismiss()
-                    onOpenNotebook()
-                }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.EditNote,
-                contentDescription = null,
-                tint = if (isDarkMode) Color(0xFFFFB300) else Color(0xFFF57F17),
-                modifier = Modifier.size(20.dp)
-            )
-            Column {
-                Text(
-                    text = "Caderno & Web Clipper",
-                    color = primaryTextColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Notas salvas, trechos e sínteses com IA",
-                    color = sectionHeaderColor,
-                    fontSize = 11.sp
                 )
             }
         }

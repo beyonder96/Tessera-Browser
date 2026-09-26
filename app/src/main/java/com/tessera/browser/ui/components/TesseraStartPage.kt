@@ -88,8 +88,6 @@ fun TesseraStartPage(
     currentSpaceName: String = "Geral",
     currentSpaceColor: Color = Color(0xFF0288D1),
     onOpenSpaces: () -> Unit = {},
-    notesCount: Int = 0,
-    onOpenNotebook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {

@@ -49,12 +49,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -126,7 +124,6 @@ fun TesseraAiSheet(
     onSaveKey: (AiProvider, String) -> Unit = { _, _ -> },
     onRegenerateSummary: () -> Unit = {},
     onAskQuestion: (String) -> Unit = {},
-    onSaveToNotebook: ((title: String, content: String) -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,7 +137,6 @@ fun TesseraAiSheet(
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Síntese & Insights, 1 = Chat da Página
     var showKeyConfigModal by remember { mutableStateOf(false) }
     var copiedSummaryFeedback by remember { mutableStateOf(false) }
-    var savedNoteFeedback by remember { mutableStateOf(false) }
     var questionInput by remember { mutableStateOf("") }
     val summaryScrollState = rememberScrollState()
     val chatScrollState = rememberScrollState()
@@ -149,13 +145,6 @@ fun TesseraAiSheet(
         if (copiedSummaryFeedback) {
             delay(2200)
             copiedSummaryFeedback = false
-        }
-    }
-
-    LaunchedEffect(savedNoteFeedback) {
-        if (savedNoteFeedback) {
-            delay(2400)
-            savedNoteFeedback = false
         }
     }
 
@@ -745,30 +734,7 @@ fun TesseraAiSheet(
                                         )
                                     }
 
-                                    // 3. Salvar no Caderno de Notas
-                                    if (onSaveToNotebook != null) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .clip(CircleShape)
-                                                .background(if (savedNoteFeedback) Color(0xFF0288D1) else (if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)))
-                                            .clickable {
-                                                val title = state.pageTitle.ifBlank { "Síntese: ${state.pageDomain}" }
-                                                onSaveToNotebook(title, state.summary)
-                                                savedNoteFeedback = true
-                                            },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = if (savedNoteFeedback) Icons.Rounded.Check else Icons.Rounded.BookmarkAdd,
-                                                contentDescription = "Salvar no Caderno",
-                                                tint = if (savedNoteFeedback) Color.White else textColor,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                    }
-
-                                    // 4. Regerar
+                                    // 3. Regerar
                                     Box(
                                         modifier = Modifier
                                             .size(30.dp)
