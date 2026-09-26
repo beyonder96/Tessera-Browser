@@ -1832,6 +1832,19 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 },
                 onRegenerateSummary = { viewModel.regenerateAiSummary() },
                 onAskQuestion = { q -> viewModel.askAiAssistantQuestion(q) },
+                onSaveToNotebook = { title, content ->
+                    viewModel.saveNote(
+                        com.tessera.browser.data.NoteItem(
+                            title = title,
+                            content = content,
+                            sourceUrl = state.aiAssistantState.pageUrl,
+                            sourceTitle = state.aiAssistantState.pageTitle,
+                            type = com.tessera.browser.data.NoteType.AI_SUMMARY,
+                            spaceId = state.activeSpaceId,
+                            aiSummary = content
+                        )
+                    )
+                },
                 onDismiss = { viewModel.dismissAiAssistant() }
             )
         }
