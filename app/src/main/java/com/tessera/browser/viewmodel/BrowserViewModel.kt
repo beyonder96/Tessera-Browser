@@ -716,6 +716,11 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun fallbackReaderArticle(title: String, domain: String) {
+        // Se ja tiver blocos de conteudo estruturado extraidos, preserva e cancela loading
+        if (!_uiState.value.readerArticle?.blocks.isNullOrEmpty()) {
+            _uiState.update { it.copy(isReaderLoading = false) }
+            return
+        }
         val cleanTitle = title.ifBlank { "Artigo da Página" }
         val fallbackBlocks = listOf(
             ReaderBlock(ReaderBlockType.PARAGRAPH, "Não foi possível estruturar o texto completo automaticamente para $domain.")

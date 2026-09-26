@@ -220,28 +220,45 @@ private val READER_EXTRACTION_SCRIPT = """
             }
             if (dateStr.length > 30) dateStr = dateStr.substring(0, 30);
 
-            // 4. Clutter selectors to completely ignore
-            var ignoreSelector = [
-                '.infobox', '.infobox_v2', 'table.infobox', '.navbox', '.vertical-navbox', '.sidebar',
-                '.toc', '.vector-toc', '#toc', '.mw-jump-link', '.mw-editsection', '.reference',
-                'sup.reference', '.reflist', '.mw-references-wrap', '.references', '.noprint',
-                '.mw-empty-elt', 'nav', 'footer', 'header', 'form', 'button', 'input', 'select',
-                'textarea', 'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', '.ad', '.ads',
-                '.advertisement', '[id*="google_ads"]', '[class*="google_ads"]', '[id*="banner"]',
-                '[class*="banner"]', '.share', '.social', '.share-buttons', '#comments', '.comments',
-                '.cookie-banner', '.cookie-notice', '.modal', '.popup', '[role="navigation"]',
-                '[role="banner"]', '[role="complementary"]', '[role="dialog"]', '[aria-hidden="true"]',
-                '.hatnote', '.shortdescription', '.catlinks', '#catlinks', '.printfooter', '#footer',
-                '.license', '.ambox', '.sistersitebox', '.newsletter-signup', '.subscription-prompt',
-                '.related-posts', '.recommended', '.aside', 'aside'
-            ].join(', ');
+            // 4. Safe Non-throwing Clutter Filter (Removes Wikipedia infoboxes, navboxes, sidebars, ads, etc.)
+            function isClutter(el) {
+                if (!el || el.nodeType !== 1) return true;
+                var badTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, IFRAME: 1, FORM: 1, INPUT: 1, BUTTON: 1, SELECT: 1, TEXTAREA: 1, SVG: 1, CANVAS: 1, NAV: 1, FOOTER: 1, HEADER: 1 };
+                if (badTags[el.tagName]) return true;
+
+                var cur = el;
+                var depth = 0;
+                while (cur && cur !== document.body && depth < 12) {
+                    var cName = (typeof cur.className === 'string') ? cur.className.toLowerCase() : '';
+                    var cId = (typeof cur.id === 'string') ? cur.id.toLowerCase() : '';
+                    var role = (cur.getAttribute && cur.getAttribute('role')) ? cur.getAttribute('role').toLowerCase() : '';
+
+                    if (cName.indexOf('infobox') !== -1 || cName.indexOf('navbox') !== -1 || cName.indexOf('sidebar') !== -1 ||
+                        cName.indexOf('vertical-navbox') !== -1 || cName.indexOf('mw-references-wrap') !== -1 ||
+                        cName.indexOf('reflist') !== -1 || cName.indexOf('catlinks') !== -1 || cName.indexOf('mw-editsection') !== -1 ||
+                        cName.indexOf('cookie-banner') !== -1 || cName.indexOf('cookie-notice') !== -1 ||
+                        cName.indexOf('share-buttons') !== -1 || cName.indexOf('social-share') !== -1 ||
+                        cId === 'toc' || cName.indexOf('vector-toc') !== -1 || cName.indexOf('mw-jump-link') !== -1 ||
+                        cName.indexOf('hatnote') !== -1 || cName.indexOf('ambox') !== -1 || cName.indexOf('sistersitebox') !== -1 ||
+                        cName.indexOf('ad-container') !== -1 || cName.indexOf('advertisement') !== -1 ||
+                        cId.indexOf('google_ads') !== -1 || cName.indexOf('google_ads') !== -1) {
+                        return true;
+                    }
+                    if (role === 'navigation' || role === 'dialog') {
+                        return true;
+                    }
+                    cur = cur.parentElement;
+                    depth++;
+                }
+                return false;
+            }
 
             // 5. Select Best Content Container
             var bestContainer = null;
             var maxScore = -1;
 
             // Prioritize dedicated article container for Wikipedia
-            var wikiMain = document.querySelector('#mw-content-text .mw-parser-output, #mw-content-text, #bodyContent');
+            var wikiMain = document.querySelector('#mw-content-text .mw-parser-output, #mw-content-text, #bodyContent, .mw-body-content');
             if (wikiMain && (wikiMain.innerText || wikiMain.textContent || '').length > 200) {
                 bestContainer = wikiMain;
             } else {
@@ -258,7 +275,7 @@ private val READER_EXTRACTION_SCRIPT = """
                     for (var e = 0; e < els.length; e++) {
                         var el = els[e];
                         if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
-                        if (el.closest(ignoreSelector)) continue;
+                        if (isClutter(el)) continue;
 
                         var pList = el.querySelectorAll('p');
                         var fullText = (el.innerText || el.textContent || '').trim();
@@ -292,7 +309,7 @@ private val READER_EXTRACTION_SCRIPT = """
             for (var i = 0; i < items.length; i++) {
                 if (stopped) break;
                 var node = items[i];
-                if (node.closest(ignoreSelector)) continue;
+                if (isClutter(node)) continue;
 
                 var tag = node.tagName.toLowerCase();
 
@@ -326,11 +343,16 @@ private val READER_EXTRACTION_SCRIPT = """
 
                 // Clean Structured Lists
                 if (tag === 'ul' || tag === 'ol') {
-                    if (node.parentElement && (node.parentElement.tagName.toLowerCase() === 'li' || node.parentElement.closest('ul, ol'))) continue;
-                    var listItems = node.querySelectorAll(':scope > li');
+                    if (node.parentElement && (node.parentElement.tagName.toLowerCase() === 'li' || isClutter(node.parentElement))) continue;
+                    var listItems = [];
+                    for (var liChild = 0; liChild < node.children.length; liChild++) {
+                        if (node.children[liChild].tagName && node.children[liChild].tagName.toLowerCase() === 'li') {
+                            listItems.push(node.children[liChild]);
+                        }
+                    }
                     for (var liIdx = 0; liIdx < listItems.length; liIdx++) {
                         var liNode = listItems[liIdx];
-                        if (liNode.closest(ignoreSelector)) continue;
+                        if (isClutter(liNode)) continue;
                         var liText = (liNode.innerText || liNode.textContent || '').trim();
                         liText = liText.replace(/\[\d+\]|\[editar.*?\]/g, '').trim();
                         if (liText.length > 5 && !seenTexts.has(liText)) {
@@ -378,16 +400,30 @@ private val READER_EXTRACTION_SCRIPT = """
                 }
             }
 
-            // Fallback: extract substantive paragraphs if container search yielded < 2 blocks
+            // Tier 2 Fallback: extract substantive paragraphs if container search yielded < 2 blocks
             if (blocks.length < 2) {
                 var allPs = (document.body || document.documentElement).querySelectorAll('p');
                 for (var pIdx = 0; pIdx < allPs.length; pIdx++) {
                     var pNode = allPs[pIdx];
-                    if (pNode.closest(ignoreSelector)) continue;
-                    var pText = (pNode.innerText || pNode.textContent || '').trim().replace(/\[\d+\]/g, '');
-                    if (pText.length > 40 && !seenTexts.has(pText)) {
+                    if (isClutter(pNode)) continue;
+                    var pText = (pNode.innerText || pNode.textContent || '').trim().replace(/\[\d+\]/g, '').replace(/\[editar.*?\]/gi, '');
+                    if (pText.length > 30 && !seenTexts.has(pText)) {
                         seenTexts.add(pText);
                         blocks.push({ type: 'PARAGRAPH', text: pText });
+                    }
+                }
+            }
+
+            // Tier 3 Fallback: extract substantive text if still < 2 blocks
+            if (blocks.length < 2) {
+                var allDivs = (document.body || document.documentElement).querySelectorAll('div, section');
+                for (var dIdx = 0; dIdx < allDivs.length; dIdx++) {
+                    var dNode = allDivs[dIdx];
+                    if (isClutter(dNode) || dNode.children.length > 2) continue;
+                    var dText = (dNode.innerText || dNode.textContent || '').trim().replace(/\[\d+\]/g, '');
+                    if (dText.length > 50 && !seenTexts.has(dText)) {
+                        seenTexts.add(dText);
+                        blocks.push({ type: 'PARAGRAPH', text: dText });
                     }
                 }
             }
@@ -408,15 +444,27 @@ private val READER_EXTRACTION_SCRIPT = """
             };
 
             var jsonStr = JSON.stringify(articleData);
-            if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
-                window.TesseraBridge.onArticleExtracted(jsonStr);
-            }
+            try {
+                if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
+                    window.TesseraBridge.onArticleExtracted(jsonStr);
+                }
+            } catch(bErr) {}
             return jsonStr;
         } catch(err) {
-            if (window.TesseraBridge && window.TesseraBridge.onExtractionFailed) {
-                window.TesseraBridge.onExtractionFailed();
-            }
-            return JSON.stringify({ error: err.toString(), blocks: [] });
+            try {
+                if (window.TesseraBridge && window.TesseraBridge.onExtractionFailed) {
+                    window.TesseraBridge.onExtractionFailed(err.toString());
+                }
+            } catch(bErr2) {}
+            var emergencyText = (document.body ? document.body.innerText : '').substring(0, 4000).trim();
+            return JSON.stringify({
+                title: document.title || 'Artigo',
+                author: '',
+                publishDate: '',
+                domain: (window.location.hostname || '').replace(/^www\./, ''),
+                readingTimeMinutes: 2,
+                blocks: emergencyText ? [{ type: 'PARAGRAPH', text: emergencyText }] : []
+            });
         }
     })();
 """.trimIndent()
@@ -515,7 +563,7 @@ private val SUMMARY_EXTRACTION_SCRIPT = """
 class TesseraWebBridge(
     private val onReaderExit: () -> Unit,
     private val onArticleExtracted: (String) -> Unit,
-    private val onExtractionFailed: () -> Unit,
+    private val onExtractionFailed: (String) -> Unit,
     private val onSummaryExtracted: (String) -> Unit = {},
     private val onVideoPlaybackChanged: (Boolean, Int, Int) -> Unit = { _, _, _ -> }
 ) {
@@ -531,7 +579,12 @@ class TesseraWebBridge(
 
     @JavascriptInterface
     fun onExtractionFailed() {
-        onExtractionFailed()
+        onExtractionFailed("")
+    }
+
+    @JavascriptInterface
+    fun onExtractionFailed(errorMsg: String) {
+        onExtractionFailed(errorMsg)
     }
 
     @JavascriptInterface
@@ -745,11 +798,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT) { result ->
                 if (!result.isNullOrBlank() && result != "null" && result != "\"\"") {
                     try {
-                        val cleanJson = if (result.length >= 2 && result.startsWith("\"") && result.endsWith("\"")) {
+                        val trimmed = result.trim()
+                        val cleanJson = if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
                             try {
-                                org.json.JSONTokener(result).nextValue().toString()
+                                val value = org.json.JSONTokener(trimmed).nextValue()
+                                if (value is String) value else value.toString()
                             } catch (e: Exception) {
-                                result.substring(1, result.length - 1)
+                                trimmed.removeSurrounding("\"")
                                     .replace("\\\"", "\"")
                                     .replace("\\\\", "\\")
                                     .replace("\\n", "\n")
@@ -757,7 +812,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     .replace("\\t", "\t")
                             }
                         } else {
-                            result
+                            trimmed
                         }
                         viewModel.processExtractedArticleJson(cleanJson)
                     } catch (e: Exception) {
@@ -920,7 +975,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             viewModel.processExtractedArticleJson(jsonStr)
                                         }
                                     },
-                                    onExtractionFailed = {
+                                    onExtractionFailed = { errorMsg ->
+                                        Log.w("TesseraBrowser", "JS reportou falha na extração do leitor: $errorMsg")
                                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                                             val currentTitle = webViewInstance?.title ?: "Documento"
                                             val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
