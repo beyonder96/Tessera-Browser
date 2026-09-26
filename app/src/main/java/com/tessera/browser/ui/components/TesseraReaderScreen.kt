@@ -56,7 +56,7 @@ import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -383,13 +383,13 @@ fun TesseraReaderScreen(
                                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.PictureAsPdf,
+                                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                                 contentDescription = null,
                                                 tint = colors.accent,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Text(
-                                                text = if (article.domain.isNotBlank()) "DOCUMENTO • ${article.domain.uppercase()}" else "MODO LEITURA PDF",
+                                                text = if (article.domain.isNotBlank()) "LEITURA • ${article.domain.uppercase()}" else "MODO LEITURA",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 letterSpacing = 0.8.sp,
@@ -516,8 +516,15 @@ fun TesseraReaderScreen(
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
 
+                                    val renderedBlocks = remember(article.blocks, article.title) {
+                                        article.blocks.filterIndexed { index, block ->
+                                            !(index == 0 && (block.type == ReaderBlockType.H1 || block.type == ReaderBlockType.H2) &&
+                                                    block.text.trim().equals(article.title.trim(), ignoreCase = true))
+                                        }
+                                    }
+
                                     // RENDER ALL ARTICLE BLOCKS
-                                    article.blocks.forEachIndexed { index, block ->
+                                    renderedBlocks.forEachIndexed { index, block ->
                                         val highlightHex = readerHighlights[index]
                                         val isHighlighted = highlightHex != null
 
@@ -719,6 +726,30 @@ private fun ReaderBlockItem(
                     }
                 }
             }
+            ReaderBlockType.LIST_ITEM -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 6.dp, end = 4.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "•",
+                        fontSize = (fontSizeSp + 2).sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.accent,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(
+                        text = block.text.removePrefix("•").trim(),
+                        fontFamily = fontFamily,
+                        fontSize = fontSizeSp.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = colors.text,
+                        lineHeight = (fontSizeSp * 1.55f).sp
+                    )
+                }
+            }
             ReaderBlockType.IMAGE -> {
                 if (showImages && !block.imageUrl.isNullOrBlank()) {
                     Column(
@@ -803,7 +834,7 @@ private fun ReaderTopBar(
                 // Domain & Read Time
                 Column {
                     Text(
-                        text = domain.ifBlank { "Modo Leitura PDF" },
+                        text = domain.ifBlank { "Modo Leitura" },
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.text,
@@ -811,7 +842,7 @@ private fun ReaderTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "⏱️ $readTimeMinutes min • PDF",
+                        text = "⏱️ $readTimeMinutes min",
                         fontSize = 11.sp,
                         color = colors.textSecondary
                     )

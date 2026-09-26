@@ -168,7 +168,7 @@ data class HistoryEntry(
 }
 
 enum class ReaderBlockType {
-    H1, H2, H3, PARAGRAPH, BLOCKQUOTE, IMAGE
+    H1, H2, H3, PARAGRAPH, BLOCKQUOTE, LIST_ITEM, IMAGE
 }
 
 data class ReaderBlock(
@@ -637,9 +637,9 @@ class BrowserViewModel : ViewModel() {
             )
         }
 
-        // Safety fallback: se a extração demorar mais de 3 segundos, popula fallback
+        // Safety fallback: se a extração demorar mais de 10 segundos, popula fallback
         viewModelScope.launch {
-            delay(3200)
+            delay(10000)
             if (_uiState.value.isReaderLoading && _uiState.value.isReaderModeActive) {
                 if (_uiState.value.readerArticle?.blocks.isNullOrEmpty()) {
                     fallbackReaderArticle(cleanTitle, cleanDomain)
@@ -653,12 +653,12 @@ class BrowserViewModel : ViewModel() {
     fun processExtractedArticleJson(jsonStr: String) {
         try {
             val json = JSONObject(jsonStr)
-            val title = json.optString("title", "").ifBlank { _uiState.value.readerArticle?.title ?: "Documento" }
+            val title = json.optString("title", "").ifBlank { _uiState.value.readerArticle?.title ?: "Artigo" }
             val author = json.optString("author", "").takeIf { it.isNotBlank() }
             val date = json.optString("publishDate", "").takeIf { it.isNotBlank() }
             val domain = json.optString("domain", "").ifBlank { _uiState.value.readerArticle?.domain ?: "" }
             val readTime = json.optInt("readingTimeMinutes", 1)
-            val plainText = json.optString("plainText", "")
+            val rawPlainText = json.optString("plainText", "")
 
             val blocksArr = json.optJSONArray("blocks") ?: JSONArray()
             val blocks = mutableListOf<ReaderBlock>()
@@ -674,15 +674,22 @@ class BrowserViewModel : ViewModel() {
                 }
             }
 
-            if (blocks.isEmpty() && plainText.isNotBlank()) {
-                val paragraphs = plainText.split("\n\n").map { it.trim() }.filter { it.isNotBlank() }
+            if (blocks.isEmpty() && rawPlainText.isNotBlank()) {
+                val paragraphs = rawPlainText.split("\n\n").map { it.trim() }.filter { it.isNotBlank() }
                 for (p in paragraphs) {
                     blocks.add(ReaderBlock(ReaderBlockType.PARAGRAPH, p))
                 }
             }
 
             if (blocks.isEmpty()) {
-                blocks.add(ReaderBlock(ReaderBlockType.PARAGRAPH, "Documento renderizado para leitura imersiva em $domain."))
+                blocks.add(ReaderBlock(ReaderBlockType.PARAGRAPH, "Não foi possível extrair o conteúdo estruturado desta página."))
+            }
+
+            // Deriva o texto completo diretamente dos blocos para economizar memória e payload
+            val plainText = if (rawPlainText.isNotBlank()) {
+                rawPlainText
+            } else {
+                blocks.filter { it.type != ReaderBlockType.IMAGE }.joinToString("\n\n") { it.text }
             }
 
             val article = ReaderArticle(
@@ -709,10 +716,9 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun fallbackReaderArticle(title: String, domain: String) {
-        val cleanTitle = title.ifBlank { "Documento da Página" }
+        val cleanTitle = title.ifBlank { "Artigo da Página" }
         val fallbackBlocks = listOf(
-            ReaderBlock(ReaderBlockType.H1, cleanTitle),
-            ReaderBlock(ReaderBlockType.PARAGRAPH, "Conteúdo formatado no modo documento PDF para $domain.")
+            ReaderBlock(ReaderBlockType.PARAGRAPH, "Não foi possível estruturar o texto completo automaticamente para $domain.")
         )
         val fallbackArticle = ReaderArticle(
             title = cleanTitle,

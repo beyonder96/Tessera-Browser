@@ -181,7 +181,7 @@ private val READER_EXTRACTION_SCRIPT = """
         try {
             var domain = (window.location.hostname || '').replace(/^www\./, '');
 
-            // 1. Title Extraction
+            // 1. Title Extraction & Cleaning
             var title = '';
             var metaOg = document.querySelector('meta[property="og:title"]');
             var metaTw = document.querySelector('meta[name="twitter:title"]');
@@ -190,22 +190,24 @@ private val READER_EXTRACTION_SCRIPT = """
                 title = metaOg.content.trim();
             } else if (metaTw && metaTw.content) {
                 title = metaTw.content.trim();
-            } else if (h1 && (h1.innerText || h1.textContent || '').trim().length > 3) {
-                title = (h1.innerText || h1.textContent).trim();
+            } else if (h1) {
+                title = (h1.innerText || h1.textContent || '').trim();
             } else {
-                title = document.title || '';
+                title = document.title || 'Artigo';
             }
-            title = title.replace(/\s*[-–—|]\s*[^-–—|]+$/, '').trim();
+            // Remove common news/encyclopedia branding suffixes
+            title = title.replace(/\s*[-–—|]\s*(Wikipédia.*|G1.*|UOL.*|Folha.*|TechCrunch.*|Medium.*|CNN.*|BBC.*|[^-–—|]{3,30})${'$'}/i, '').trim();
 
             // 2. Author Extraction
             var author = '';
-            var authorMeta = document.querySelector('meta[name="author"], meta[property="article:author"], meta[name="byl"]');
+            var authorMeta = document.querySelector('meta[name="author"], meta[property="article:author"], meta[name="byl"], meta[property="og:article:author"]');
             var authorEl = document.querySelector('[rel="author"], .byline, .author, .c-byline__item, .author-name, .article__author, [itemprop="author"]');
             if (authorMeta && authorMeta.content) {
                 author = authorMeta.content.trim();
-            } else if (authorEl && (authorEl.innerText || authorEl.textContent || '').trim()) {
-                author = (authorEl.innerText || authorEl.textContent).trim();
+            } else if (authorEl) {
+                author = (authorEl.innerText || authorEl.textContent || '').trim();
             }
+            if (author.length > 50) author = author.substring(0, 50);
 
             // 3. Date Extraction
             var dateStr = '';
@@ -216,59 +218,85 @@ private val READER_EXTRACTION_SCRIPT = """
             } else if (timeEl) {
                 dateStr = (timeEl.getAttribute('datetime') || timeEl.innerText || timeEl.textContent || '').trim();
             }
-            if (dateStr.length > 35) dateStr = dateStr.substring(0, 35);
+            if (dateStr.length > 30) dateStr = dateStr.substring(0, 30);
 
-            // 4. Candidate Content Containers (Searching LIVE DOM directly)
-            var candidateSelectors = [
-                'article', '[itemprop="articleBody"]', 'main article', '[role="main"] article',
-                '.article-body', '.article__body', '.post-content', '.entry-content', '.story-body',
-                '.content-article', '.caas-body', '#article-body', '#story', '.noticia-texto',
-                '.materia-conteudo', '.post_content', '.articleContent', 'main', '[role="main"]',
-                '#main-content', '.main-content', '#content'
-            ];
+            // 4. Clutter selectors to completely ignore
+            var ignoreSelector = [
+                '.infobox', '.infobox_v2', 'table.infobox', '.navbox', '.vertical-navbox', '.sidebar',
+                '.toc', '.vector-toc', '#toc', '.mw-jump-link', '.mw-editsection', '.reference',
+                'sup.reference', '.reflist', '.mw-references-wrap', '.references', '.noprint',
+                '.mw-empty-elt', 'nav', 'footer', 'header', 'form', 'button', 'input', 'select',
+                'textarea', 'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', '.ad', '.ads',
+                '.advertisement', '[id*="google_ads"]', '[class*="google_ads"]', '[id*="banner"]',
+                '[class*="banner"]', '.share', '.social', '.share-buttons', '#comments', '.comments',
+                '.cookie-banner', '.cookie-notice', '.modal', '.popup', '[role="navigation"]',
+                '[role="banner"]', '[role="complementary"]', '[role="dialog"]', '[aria-hidden="true"]',
+                '.hatnote', '.shortdescription', '.catlinks', '#catlinks', '.printfooter', '#footer',
+                '.license', '.ambox', '.sistersitebox', '.newsletter-signup', '.subscription-prompt',
+                '.related-posts', '.recommended', '.aside', 'aside'
+            ].join(', ');
 
+            // 5. Select Best Content Container
             var bestContainer = null;
             var maxScore = -1;
 
-            for (var c = 0; c < candidateSelectors.length; c++) {
-                var els = document.querySelectorAll(candidateSelectors[c]);
-                for (var e = 0; e < els.length; e++) {
-                    var el = els[e];
-                    if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
-                    var pList = el.querySelectorAll('p');
-                    var text = (el.innerText || el.textContent || '').trim();
-                    var links = el.querySelectorAll('a');
-                    var linkTextLen = 0;
-                    for (var l = 0; l < links.length; l++) {
-                        linkTextLen += (links[l].innerText || links[l].textContent || '').length;
-                    }
-                    var substantiveTextLen = Math.max(0, text.length - linkTextLen);
-                    var score = pList.length * 150 + substantiveTextLen;
-                    if (score > maxScore && substantiveTextLen > 150) {
-                        maxScore = score;
-                        bestContainer = el;
+            // Prioritize dedicated article container for Wikipedia
+            var wikiMain = document.querySelector('#mw-content-text .mw-parser-output, #mw-content-text, #bodyContent');
+            if (wikiMain && (wikiMain.innerText || wikiMain.textContent || '').length > 200) {
+                bestContainer = wikiMain;
+            } else {
+                var candidateSelectors = [
+                    'article', '[itemprop="articleBody"]', 'main article', '[role="main"] article',
+                    '.article-body', '.article__body', '.post-content', '.entry-content', '.story-body',
+                    '.content-article', '.caas-body', '#article-body', '#story', '.noticia-texto',
+                    '.materia-conteudo', '.post_content', '.articleContent', 'main', '[role="main"]',
+                    '#main-content', '.main-content', '#content'
+                ];
+
+                for (var c = 0; c < candidateSelectors.length; c++) {
+                    var els = document.querySelectorAll(candidateSelectors[c]);
+                    for (var e = 0; e < els.length; e++) {
+                        var el = els[e];
+                        if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
+                        if (el.closest(ignoreSelector)) continue;
+
+                        var pList = el.querySelectorAll('p');
+                        var fullText = (el.innerText || el.textContent || '').trim();
+                        var links = el.querySelectorAll('a');
+                        var linkTextLen = 0;
+                        for (var l = 0; l < links.length; l++) {
+                            linkTextLen += (links[l].innerText || links[l].textContent || '').length;
+                        }
+                        var substantiveTextLen = Math.max(0, fullText.length - linkTextLen);
+                        var score = pList.length * 250 + substantiveTextLen;
+                        if (score > maxScore && substantiveTextLen > 150) {
+                            maxScore = score;
+                            bestContainer = el;
+                        }
                     }
                 }
-                if (bestContainer && maxScore > 600) break;
             }
 
             if (!bestContainer) {
                 bestContainer = document.body || document.documentElement;
             }
 
-            var ignoreSelector = 'nav, footer, header, form, button, input, select, textarea, script, style, noscript, iframe, svg, canvas, .ad, .ads, .advertisement, [id*="google_ads"], [class*="google_ads"], [id*="banner"], [class*="banner"], .sidebar, .widget, .share, .social, .share-buttons, #comments, .comments, .cookie-banner, .cookie-notice, .cookie-consent, .modal, .popup, [role="navigation"], [role="banner"], [role="complementary"], [role="dialog"], [aria-hidden="true"]';
-
+            // 6. Extract Structured Blocks (Headings, Paragraphs, Blockquotes, Lists, Images)
             var blocks = [];
-            var plainTextParts = [];
             var seenTexts = new Set();
+            var stopSections = /^(ver também|referências|referencias|fontes|bibliografia|ligações externas|links externos|notas|créditos|leia também|mais sobre|compartilhe|comentários)${'$'}/i;
+            var stopped = false;
 
-            var items = bestContainer.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, li, img');
+            var items = bestContainer.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, ul, ol, img');
+
             for (var i = 0; i < items.length; i++) {
+                if (stopped) break;
                 var node = items[i];
                 if (node.closest(ignoreSelector)) continue;
 
                 var tag = node.tagName.toLowerCase();
 
+                // Images with Captions
                 if (tag === 'img') {
                     var rawSrc = node.currentSrc || node.getAttribute('data-src') || node.getAttribute('data-lazy-src') || node.getAttribute('data-original') || node.src || '';
                     if (rawSrc && !rawSrc.startsWith('data:') && !rawSrc.includes('icon') && !rawSrc.includes('logo') && !rawSrc.includes('avatar') && !rawSrc.includes('pixel') && !rawSrc.includes('tracking')) {
@@ -282,113 +310,113 @@ private val READER_EXTRACTION_SCRIPT = """
                                     if (figCap) caption = (figCap.innerText || figCap.textContent || '').trim();
                                 }
                             }
-                            blocks.push({
-                                type: 'IMAGE',
-                                text: '',
-                                imageUrl: absUrl,
-                                caption: caption
-                            });
+                            if (!seenTexts.has(absUrl)) {
+                                seenTexts.add(absUrl);
+                                blocks.push({
+                                    type: 'IMAGE',
+                                    text: '',
+                                    imageUrl: absUrl,
+                                    caption: caption
+                                });
+                            }
                         } catch(uErr) {}
                     }
                     continue;
                 }
 
-                var t = (node.innerText || node.textContent || '').trim();
-                if (!t || t.length < 10) continue;
-                if (seenTexts.has(t)) continue;
-                seenTexts.add(t);
+                // Clean Structured Lists
+                if (tag === 'ul' || tag === 'ol') {
+                    if (node.parentElement && (node.parentElement.tagName.toLowerCase() === 'li' || node.parentElement.closest('ul, ol'))) continue;
+                    var listItems = node.querySelectorAll(':scope > li');
+                    for (var liIdx = 0; liIdx < listItems.length; liIdx++) {
+                        var liNode = listItems[liIdx];
+                        if (liNode.closest(ignoreSelector)) continue;
+                        var liText = (liNode.innerText || liNode.textContent || '').trim();
+                        liText = liText.replace(/\[\d+\]|\[editar.*?\]/g, '').trim();
+                        if (liText.length > 5 && !seenTexts.has(liText)) {
+                            seenTexts.add(liText);
+                            blocks.push({
+                                type: 'LIST_ITEM',
+                                text: '•  ' + liText
+                            });
+                        }
+                    }
+                    continue;
+                }
 
-                if (tag === 'h1' && blocks.length > 0) {
-                    blocks.push({ type: 'H1', text: t });
-                    plainTextParts.push(t);
+                // Clean Headings, Paragraphs, Quotes
+                var rawText = (node.innerText || node.textContent || '').trim();
+                var cleanText = rawText.replace(/\[editar.*?\]/gi, '')
+                                       .replace(/\[\d+\]/g, '')
+                                       .replace(/\[nota\s*\d+\]/gi, '')
+                                       .replace(/\[carece\s*de\s*fontes.*?\]/gi, '')
+                                       .trim();
+
+                if (!cleanText || cleanText.length < 10) continue;
+
+                // Stop extraction once End Sections are reached
+                if ((tag === 'h2' || tag === 'h3' || tag === 'h1') && stopSections.test(cleanText)) {
+                    stopped = true;
+                    break;
+                }
+
+                if (seenTexts.has(cleanText)) continue;
+                seenTexts.add(cleanText);
+
+                if (tag === 'h1') {
+                    if (cleanText.toLowerCase() !== title.toLowerCase()) {
+                        blocks.push({ type: 'H1', text: cleanText });
+                    }
                 } else if (tag === 'h2') {
-                    blocks.push({ type: 'H2', text: t });
-                    plainTextParts.push(t);
+                    blocks.push({ type: 'H2', text: cleanText });
                 } else if (tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
-                    blocks.push({ type: 'H3', text: t });
-                    plainTextParts.push(t);
+                    blocks.push({ type: 'H3', text: cleanText });
                 } else if (tag === 'blockquote') {
-                    blocks.push({ type: 'BLOCKQUOTE', text: t });
-                    plainTextParts.push(t);
-                } else {
-                    blocks.push({ type: 'PARAGRAPH', text: t });
-                    plainTextParts.push(t);
+                    blocks.push({ type: 'BLOCKQUOTE', text: cleanText });
+                } else if (tag === 'p') {
+                    blocks.push({ type: 'PARAGRAPH', text: cleanText });
                 }
             }
 
+            // Fallback: extract substantive paragraphs if container search yielded < 2 blocks
             if (blocks.length < 2) {
-                var candidateDivs = (document.body || document.documentElement).querySelectorAll('p, div, section, li, [class*="text"], [class*="content"]');
-                for (var p = 0; p < candidateDivs.length; p++) {
-                    var pel = candidateDivs[p];
-                    if (pel.closest(ignoreSelector)) continue;
-                    if (pel.tagName.toLowerCase() === 'div' && pel.querySelectorAll('div, p').length > 0) continue;
-                    var pt = (pel.innerText || pel.textContent || '').trim();
-                    if (pt.length > 25 && !seenTexts.has(pt)) {
-                        seenTexts.add(pt);
-                        blocks.push({ type: 'PARAGRAPH', text: pt });
-                        plainTextParts.push(pt);
+                var allPs = (document.body || document.documentElement).querySelectorAll('p');
+                for (var pIdx = 0; pIdx < allPs.length; pIdx++) {
+                    var pNode = allPs[pIdx];
+                    if (pNode.closest(ignoreSelector)) continue;
+                    var pText = (pNode.innerText || pNode.textContent || '').trim().replace(/\[\d+\]/g, '');
+                    if (pText.length > 40 && !seenTexts.has(pText)) {
+                        seenTexts.add(pText);
+                        blocks.push({ type: 'PARAGRAPH', text: pText });
                     }
                 }
             }
 
-            if (blocks.length === 0) {
-                var rawBody = (document.body ? (document.body.innerText || document.body.textContent || '') : '').trim();
-                var lines = rawBody.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 25; });
-                for (var lIdx = 0; lIdx < Math.min(lines.length, 50); lIdx++) {
-                    var line = lines[lIdx];
-                    if (!seenTexts.has(line)) {
-                        seenTexts.add(line);
-                        blocks.push({ type: 'PARAGRAPH', text: line });
-                        plainTextParts.push(line);
-                    }
-                }
-            }
-
-            var fullText = plainTextParts.join('\n\n');
-            var words = (fullText.match(/\S+/g) || []).length;
-            var readTime = Math.max(1, Math.round(words / 190));
+            // Calculate reading time
+            var totalWords = blocks.reduce(function(acc, b) {
+                return acc + (b.text ? (b.text.match(/\S+/g) || []).length : 0);
+            }, 0);
+            var readTime = Math.max(1, Math.round(totalWords / 190));
 
             var articleData = {
-                title: title || document.title || 'Documento',
+                title: title || document.title || 'Artigo',
                 author: author,
                 publishDate: dateStr,
                 domain: domain,
                 readingTimeMinutes: readTime,
-                blocks: blocks,
-                plainText: fullText
+                blocks: blocks
             };
 
+            var jsonStr = JSON.stringify(articleData);
             if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
-                window.TesseraBridge.onArticleExtracted(JSON.stringify(articleData));
+                window.TesseraBridge.onArticleExtracted(jsonStr);
             }
-            return JSON.stringify(articleData);
+            return jsonStr;
         } catch(err) {
-            var fallbackText = '';
-            try {
-                var bEl = document.body || document.documentElement;
-                fallbackText = (bEl.innerText || bEl.textContent || '').trim();
-            } catch(e) {}
-            var fbLines = fallbackText.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 25; });
-            var fbBlocks = [];
-            for (var f = 0; f < Math.min(fbLines.length, 30); f++) {
-                fbBlocks.push({ type: 'PARAGRAPH', text: fbLines[f] });
+            if (window.TesseraBridge && window.TesseraBridge.onExtractionFailed) {
+                window.TesseraBridge.onExtractionFailed();
             }
-            if (fbBlocks.length === 0) {
-                fbBlocks.push({ type: 'PARAGRAPH', text: 'Documento renderizado para leitura imersiva.' });
-            }
-            var fallbackData = {
-                title: document.title || 'Documento',
-                author: '',
-                publishDate: '',
-                domain: (window.location.hostname || '').replace(/^www\./, ''),
-                readingTimeMinutes: Math.max(1, Math.round(fallbackText.split(/\s+/).length / 190)),
-                blocks: fbBlocks,
-                plainText: fallbackText.substring(0, 8000)
-            };
-            if (window.TesseraBridge && window.TesseraBridge.onArticleExtracted) {
-                window.TesseraBridge.onArticleExtracted(JSON.stringify(fallbackData));
-            }
-            return JSON.stringify(fallbackData);
+            return JSON.stringify({ error: err.toString(), blocks: [] });
         }
     })();
 """.trimIndent()
@@ -701,31 +729,39 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         } else if (state.isHomePage) {
             Toast.makeText(context, "Abra uma página ou artigo para ativar o Modo Leitura.", Toast.LENGTH_SHORT).show()
         } else {
-            val pageTitle = webViewInstance?.title?.takeIf { it.isNotBlank() } ?: "Documento"
+            val pageTitle = webViewInstance?.title?.takeIf { it.isNotBlank() } ?: "Artigo"
             val pageDomain = try {
                 Uri.parse(state.displayUrl.ifBlank { state.currentUrl }).host?.replace("www.", "") ?: ""
             } catch (e: Exception) { "" }
 
-            // 1. Muda imediatamente a tela para o modo leitor PDF!
+            // 1. Ativa o estado de carregamento do leitor imersivo
             viewModel.startReaderLoading(
                 initialTitle = pageTitle,
                 initialDomain = pageDomain,
                 initialUrl = state.displayUrl.ifBlank { state.currentUrl }
             )
 
-            // 2. Extrai dados via script resiliente com retorno direto
+            // 2. Extrai dados via script resiliente com retorno direto e ponte nativa
             webViewInstance?.evaluateJavascript(READER_EXTRACTION_SCRIPT) { result ->
                 if (!result.isNullOrBlank() && result != "null" && result != "\"\"") {
                     try {
-                        val cleanJson = if (result.startsWith("\"") && result.endsWith("\"")) {
-                            org.json.JSONTokener(result).nextValue().toString()
+                        val cleanJson = if (result.length >= 2 && result.startsWith("\"") && result.endsWith("\"")) {
+                            try {
+                                org.json.JSONTokener(result).nextValue().toString()
+                            } catch (e: Exception) {
+                                result.substring(1, result.length - 1)
+                                    .replace("\\\"", "\"")
+                                    .replace("\\\\", "\\")
+                                    .replace("\\n", "\n")
+                                    .replace("\\r", "\r")
+                                    .replace("\\t", "\t")
+                            }
                         } else {
                             result
                         }
                         viewModel.processExtractedArticleJson(cleanJson)
                     } catch (e: Exception) {
                         Log.e("TesseraBrowser", "Falha ao processar retorno direto do leitor", e)
-                        viewModel.fallbackReaderArticle(pageTitle, pageDomain)
                     }
                 }
             }
