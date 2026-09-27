@@ -175,7 +175,7 @@ fun TesseraAiSheet(
 
     // Paleta de Cores e Gradientes de Alta Fidelidade
     val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    val sheetBg = if (isDarkMode) Color(0xF7151210) else Color(0xFAFBFBFD)
+    val sheetBg = if (isDarkMode) Color(0xFF151210) else Color(0xFFFBFBFD)
     val surfaceCardBg = if (isDarkMode) Color(0xFF221D1A) else Color.White
     val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
     val textColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1A1A1E)
@@ -362,7 +362,7 @@ fun TesseraAiSheet(
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
                                                 Icon(Icons.Rounded.AutoAwesome, null, tint = Color(0xFF4285F4), modifier = Modifier.size(16.dp))
-                                                Text("Google Gemini (Flash 2.0)", fontWeight = FontWeight.Bold)
+                                                Text("Google Gemini (Flash)", fontWeight = FontWeight.Bold)
                                             }
                                             Text("Cota gratuita do Google AI Studio • Alta precisão", fontSize = 11.sp, color = mutedColor)
                                         }
@@ -615,6 +615,7 @@ fun TesseraAiSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(18.dp))
+                                    .background(surfaceCardBg)
                                     .background(Color(0xFFE53935).copy(alpha = 0.08f))
                                     .border(1.dp, Color(0xFFE53935).copy(alpha = 0.22f), RoundedCornerShape(18.dp))
                                     .padding(18.dp)
@@ -1447,7 +1448,7 @@ private fun AiKeyOnboardingCard(
 
             Text(
                 text = if (provider == AiProvider.GEMINI) {
-                    "O Google Gemini 2.0 Flash sintetiza páginas e responde dúvidas com inteligência profunda. Crie sua chave gratuita no Google AI Studio."
+                    "O Google Gemini Flash sintetiza páginas e responde dúvidas com inteligência profunda. Crie sua chave gratuita no Google AI Studio."
                 } else {
                     "O Groq Cloud acelera a inferência do modelo Llama 3.3 70B com respostas quase instantâneas. Obtenha sua chave no console do Groq."
                 },

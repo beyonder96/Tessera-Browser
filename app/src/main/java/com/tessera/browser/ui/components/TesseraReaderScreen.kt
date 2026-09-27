@@ -173,6 +173,38 @@ private val HIGHLIGHT_COLORS = listOf(
     "#FED7AA" to "Laranja"
 )
 
+private fun formatReaderDate(rawDate: String?): String {
+    if (rawDate.isNullOrBlank()) return ""
+    val trimmed = rawDate.trim()
+    return try {
+        if (trimmed.contains("T")) {
+            val dateTime = try {
+                java.time.OffsetDateTime.parse(trimmed).toLocalDateTime()
+            } catch (e: Exception) {
+                try {
+                    java.time.LocalDateTime.parse(trimmed)
+                } catch (e2: Exception) {
+                    java.time.LocalDate.parse(trimmed.substringBefore("T")).atStartOfDay()
+                }
+            }
+            val formatter = if (dateTime.hour != 0 || dateTime.minute != 0) {
+                java.time.format.DateTimeFormatter.ofPattern("d 'de' MMM. 'de' yyyy, HH:mm", java.util.Locale("pt", "BR"))
+            } else {
+                java.time.format.DateTimeFormatter.ofPattern("d 'de' MMM. 'de' yyyy", java.util.Locale("pt", "BR"))
+            }
+            dateTime.format(formatter)
+        } else if (trimmed.matches(Regex("""^\d{4}-\d{2}-\d{2}$"""))) {
+            val date = java.time.LocalDate.parse(trimmed)
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("d 'de' MMM. 'de' yyyy", java.util.Locale("pt", "BR"))
+            date.format(formatter)
+        } else {
+            trimmed.replace(Regex("""(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})"""), "$1 às $2")
+        }
+    } catch (e: Exception) {
+        trimmed
+    }
+}
+
 private fun parseColorHex(hex: String, defaultColor: Color = Color(0xFFFEF08A)): Color {
     return try {
         Color(android.graphics.Color.parseColor(hex))
@@ -211,6 +243,7 @@ fun TesseraReaderScreen(
     onSeekAudio: (Long) -> Unit = {},
     onCycleSpeed: () -> Unit = {},
     onOpenArcSummary: () -> Unit = {},
+    onPrintPdf: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -280,6 +313,7 @@ fun TesseraReaderScreen(
                         Toast.makeText(context, "Texto do artigo copiado!", Toast.LENGTH_SHORT).show()
                     }
                 },
+                onPrintPdf = onPrintPdf,
                 onToggleSettings = onToggleSettings
             )
 
@@ -443,18 +477,21 @@ fun TesseraReaderScreen(
                                         }
 
                                         if (!article.publishDate.isNullOrBlank()) {
-                                            Text(
-                                                text = "•",
-                                                fontSize = 12.sp,
-                                                color = colors.textSecondary
-                                            )
-                                            Text(
-                                                text = article.publishDate,
-                                                fontSize = 12.sp,
-                                                color = colors.textSecondary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            val formattedDate = formatReaderDate(article.publishDate)
+                                            if (formattedDate.isNotBlank()) {
+                                                Text(
+                                                    text = "•",
+                                                    fontSize = 12.sp,
+                                                    color = colors.textSecondary
+                                                )
+                                                Text(
+                                                    text = formattedDate,
+                                                    fontSize = 12.sp,
+                                                    color = colors.textSecondary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
 
                                         Text(
@@ -803,6 +840,7 @@ private fun ReaderTopBar(
     onToggleAudioBar: () -> Unit,
     onOpenArcSummary: () -> Unit,
     onCopyText: () -> Unit,
+    onPrintPdf: () -> Unit = {},
     onToggleSettings: () -> Unit
 ) {
     Surface(
@@ -905,6 +943,16 @@ private fun ReaderTopBar(
                         contentDescription = "Resumir artigo",
                         tint = colors.accent,
                         modifier = Modifier.size(19.dp)
+                    )
+                }
+
+                // Export / Print to PDF
+                IconButton(onClick = onPrintPdf) {
+                    Icon(
+                        imageVector = Icons.Rounded.PictureAsPdf,
+                        contentDescription = "Exportar ou Imprimir Artigo em PDF",
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -1262,7 +1310,7 @@ private fun ReaderSettingsPanel(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Fonte do documento",
+                    text = "Tipografia",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textSecondary
@@ -1270,14 +1318,14 @@ private fun ReaderSettingsPanel(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FontPill(
-                        label = "Livro (Serif)",
+                        label = "Serif",
                         fontFamily = FontFamily.Serif,
                         isSelected = currentFont == ReaderFontFamily.SERIF,
                         colors = colors,
                         onClick = { onSelectFontFamily(ReaderFontFamily.SERIF) }
                     )
                     FontPill(
-                        label = "Moderno",
+                        label = "Sans",
                         fontFamily = FontFamily.SansSerif,
                         isSelected = currentFont == ReaderFontFamily.SANS_SERIF,
                         colors = colors,
@@ -1399,10 +1447,11 @@ private fun FontPill(
     fontFamily: FontFamily,
     isSelected: Boolean,
     colors: ReaderColors,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) colors.accent else colors.border)
             .clickable(onClick = onClick)
@@ -1414,7 +1463,9 @@ private fun FontPill(
             fontFamily = fontFamily,
             fontSize = 12.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Color.White else colors.text
+            color = if (isSelected) Color.White else colors.text,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

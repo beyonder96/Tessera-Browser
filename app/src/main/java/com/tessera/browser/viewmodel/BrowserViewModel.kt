@@ -48,7 +48,11 @@ import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
 import com.tessera.browser.data.PrivacyDashboardState
 import com.tessera.browser.data.BlockedTrackerItem
+import com.tessera.browser.data.ContextMenuTarget
 import com.tessera.browser.privacy.PrivacyTrackerEngine
+import android.print.PrintManager
+import android.print.PrintAttributes
+import android.webkit.WebViewClient
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -205,6 +209,9 @@ data class BrowserUiState(
     val showQuickSettings: Boolean = false,
     val showFullSettings: Boolean = false,
     val isIncognitoMode: Boolean = false,
+    val incognitoBiometricLock: Boolean = false,
+    val isIncognitoLocked: Boolean = false,
+    val isDefaultBrowser: Boolean = false,
     val isReaderModeActive: Boolean = false,
     val isReaderModeAvailable: Boolean = false,
     val isReaderLoading: Boolean = false,
@@ -240,6 +247,7 @@ data class BrowserUiState(
     val peekUrl: String? = null,
     val peekTitle: String? = null,
     val showPeekModal: Boolean = false,
+    val contextMenuTarget: ContextMenuTarget? = null,
 
     // Espaços de Navegação Isolados (Arc Spaces) & Multi-tabs
     val spaces: List<BrowserSpace> = BrowserSpace.DEFAULT_SPACES,
@@ -579,7 +587,56 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleIncognitoMode() {
-        _uiState.update { it.copy(isIncognitoMode = !it.isIncognitoMode) }
+        val willBeIncognito = !_uiState.value.isIncognitoMode
+        _uiState.update {
+            it.copy(
+                isIncognitoMode = willBeIncognito,
+                isIncognitoLocked = willBeIncognito && it.incognitoBiometricLock
+            )
+        }
+    }
+
+    fun setIncognitoBiometricLock(enabled: Boolean) {
+        _uiState.update { it.copy(incognitoBiometricLock = enabled) }
+        saveSettings()
+    }
+
+    fun unlockIncognito() {
+        _uiState.update { it.copy(isIncognitoLocked = false) }
+    }
+
+    fun lockIncognito() {
+        if (_uiState.value.isIncognitoMode && _uiState.value.incognitoBiometricLock) {
+            _uiState.update { it.copy(isIncognitoLocked = true) }
+        }
+    }
+
+    fun exitIncognito() {
+        _uiState.update {
+            it.copy(
+                isIncognitoMode = false,
+                isIncognitoLocked = false
+            )
+        }
+    }
+
+    fun onAppBackgrounded() {
+        if (_uiState.value.isIncognitoMode && _uiState.value.incognitoBiometricLock) {
+            _uiState.update { it.copy(isIncognitoLocked = true) }
+        }
+    }
+
+    fun onAppForegrounded() {
+        // Keeps lock overlay active if incognito is locked
+    }
+
+    fun checkDefaultBrowser(context: Context) {
+        val isDefault = com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context)
+        _uiState.update { it.copy(isDefaultBrowser = isDefault) }
+    }
+
+    fun requestDefaultBrowser(activity: Activity) {
+        com.tessera.browser.util.DefaultBrowserHelper.requestDefaultBrowser(activity)
     }
 
     fun toggleReaderMode() {
@@ -647,15 +704,26 @@ class BrowserViewModel : ViewModel() {
             val readTime = json.optInt("readingTimeMinutes", 1)
             val rawPlainText = json.optString("plainText", "")
 
+            val clutterKeywords = setOf(
+                "registrar", "registro", "login", "entrar", "cadastre-se", "cadastrar",
+                "assine", "assinar", "inscreva-se", "newsletter", "compartilhe", "compartilhar",
+                "comentários", "comentar", "início", "home", "seguir", "siga-nos"
+            )
             val blocksArr = json.optJSONArray("blocks") ?: JSONArray()
             val blocks = mutableListOf<ReaderBlock>()
             for (i in 0 until blocksArr.length()) {
                 val bObj = blocksArr.getJSONObject(i)
                 val typeStr = bObj.optString("type", "PARAGRAPH")
                 val type = try { ReaderBlockType.valueOf(typeStr) } catch (e: Exception) { ReaderBlockType.PARAGRAPH }
-                val text = bObj.optString("text", "")
-                val imgUrl = bObj.optString("imageUrl", "").takeIf { it.isNotBlank() }
-                val caption = bObj.optString("caption", "").takeIf { it.isNotBlank() }
+                val text = bObj.optString("text", "").trim()
+                val imgUrl: String? = bObj.optString("imageUrl", "").takeIf { it.isNotBlank() }
+                val caption: String? = bObj.optString("caption", "").takeIf { it.isNotBlank() }
+
+                val normalized = text.removePrefix("•").trim().lowercase()
+                if ((type == ReaderBlockType.LIST_ITEM || type == ReaderBlockType.PARAGRAPH) && clutterKeywords.contains(normalized)) {
+                    continue
+                }
+
                 if (text.isNotBlank() || !imgUrl.isNullOrBlank()) {
                     blocks.add(ReaderBlock(type, text, imgUrl, caption))
                 }
@@ -987,7 +1055,12 @@ class BrowserViewModel : ViewModel() {
     }
 
     // MULTI-TABS & SPACES MANAGEMENT
-    fun addNewTab(url: String = "https://duckduckgo.com", isHome: Boolean = true, spaceId: String? = null) {
+    fun addNewTab(
+        url: String = "https://duckduckgo.com",
+        isHome: Boolean = true,
+        spaceId: String? = null,
+        selectNow: Boolean = true
+    ) {
         val effectiveSpaceId = spaceId ?: _uiState.value.activeSpaceId
         val newId = UUID.randomUUID().toString()
         val newTab = BrowserTab(
@@ -998,16 +1071,22 @@ class BrowserViewModel : ViewModel() {
             spaceId = effectiveSpaceId
         )
         _uiState.update { state ->
-            state.copy(
-                tabs = state.tabs + newTab,
-                activeTabId = newId,
-                activeSpaceId = effectiveSpaceId,
-                isHomePage = isHome,
-                currentUrl = url,
-                displayUrl = if (isHome) "" else url,
-                canGoBack = false,
-                showTabsModal = false
-            )
+            if (selectNow) {
+                state.copy(
+                    tabs = state.tabs + newTab,
+                    activeTabId = newId,
+                    activeSpaceId = effectiveSpaceId,
+                    isHomePage = isHome,
+                    currentUrl = url,
+                    displayUrl = if (isHome) "" else url,
+                    canGoBack = false,
+                    showTabsModal = false
+                )
+            } else {
+                state.copy(
+                    tabs = state.tabs + newTab
+                )
+            }
         }
         saveTabs()
     }
@@ -2099,6 +2178,7 @@ class BrowserViewModel : ViewModel() {
                 val loadedGroqKey = prefs.getString("groq_api_key", null)
                 val loadedAiProvider = prefs.getString("ai_provider", null)?.let { AiProvider.fromKey(it) }
                 val loadedDigitalMinimalism = if (prefs.contains("digital_minimalism_mode")) prefs.getBoolean("digital_minimalism_mode", true) else null
+                val loadedIncognitoLock = if (prefs.contains("incognito_biometric_lock")) prefs.getBoolean("incognito_biometric_lock", false) else null
                 val savedTotalBlocked = prefs.getInt("total_blocked_trackers", 0)
 
                 // Saved Pages (Offline)
@@ -2190,6 +2270,7 @@ class BrowserViewModel : ViewModel() {
                         groqApiKey = loadedGroqKey ?: current.groqApiKey,
                         aiProvider = loadedAiProvider ?: current.aiProvider,
                         digitalMinimalismMode = loadedDigitalMinimalism ?: current.digitalMinimalismMode,
+                        incognitoBiometricLock = loadedIncognitoLock ?: current.incognitoBiometricLock,
                         privacyState = current.privacyState.copy(
                             totalBlockedCount = savedTotalBlocked,
                             dataSavedBytes = savedTotalBlocked.toLong() * PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST,
@@ -2342,10 +2423,252 @@ class BrowserViewModel : ViewModel() {
                     .putString("groq_api_key", s.groqApiKey)
                     .putString("ai_provider", s.aiProvider.keyName)
                     .putBoolean("digital_minimalism_mode", s.digitalMinimalismMode)
+                    .putBoolean("incognito_biometric_lock", s.incognitoBiometricLock)
                     .apply()
 
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao salvar configurações", e)
+            }
+        }
+    }
+
+    // ==========================================
+    // EXPORTAÇÃO & IMPORTAÇÃO DE FAVORITOS (HTML)
+    // ==========================================
+    fun exportBookmarksToHtml(context: Context): File? {
+        try {
+            val bookmarks = _uiState.value.speedDialItems
+            if (bookmarks.isEmpty()) {
+                Toast.makeText(context, "Não há favoritos para exportar", Toast.LENGTH_SHORT).show()
+                return null
+            }
+
+            val htmlBuilder = StringBuilder()
+            htmlBuilder.append("""
+<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Favoritos - Tessera Browser</H1>
+<DL><p>
+    <DT><H3 ADD_DATE="${System.currentTimeMillis() / 1000}" LAST_MODIFIED="${System.currentTimeMillis() / 1000}">Tessera Bookmarks</H3>
+    <DL><p>
+            """.trimIndent()).append("\n")
+
+            for (item in bookmarks) {
+                val safeTitle = item.title
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                val safeUrl = item.url
+                    .replace("&", "&amp;")
+                    .replace("\"", "&quot;")
+                htmlBuilder.append("        <DT><A HREF=\"$safeUrl\" ADD_DATE=\"${System.currentTimeMillis() / 1000}\">$safeTitle</A>\n")
+            }
+
+            htmlBuilder.append("    </DL><p>\n</DL><p>\n")
+
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val file = File(downloadsDir, "tessera_bookmarks_${System.currentTimeMillis()}.html")
+            file.writeText(htmlBuilder.toString(), Charsets.UTF_8)
+
+            Toast.makeText(context, "Favoritos salvos em Downloads: ${file.name}", Toast.LENGTH_LONG).show()
+
+            val shareUri = try {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            } catch (e: Exception) {
+                Uri.fromFile(file)
+            }
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/html"
+                putExtra(Intent.EXTRA_STREAM, shareUri)
+                putExtra(Intent.EXTRA_SUBJECT, "Favoritos - Tessera Browser")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Compartilhar / Salvar Favoritos"))
+
+            return file
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao exportar favoritos", e)
+            Toast.makeText(context, "Falha ao exportar favoritos", Toast.LENGTH_SHORT).show()
+            return null
+        }
+    }
+
+    fun importBookmarksFromHtml(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri) ?: return@launch
+                val content = inputStream.bufferedReader().use { it.readText() }
+
+                val regex = Regex("""<a\s+[^>]*?href=["']([^"']+)["'][^>]*>(.*?)</a>""", RegexOption.IGNORE_CASE)
+                val matches = regex.findAll(content)
+
+                val existingUrls = _uiState.value.speedDialItems.map { it.url.lowercase().trim() }.toMutableSet()
+                val newItems = mutableListOf<SpeedDialItem>()
+
+                for (match in matches) {
+                    val rawUrl = match.groupValues[1].trim()
+                    if (rawUrl.isBlank() || !rawUrl.startsWith("http", ignoreCase = true)) continue
+
+                    val normalizedUrl = rawUrl.lowercase().trim()
+                    if (existingUrls.contains(normalizedUrl)) continue
+
+                    var rawTitle = match.groupValues[2].replace(Regex("<[^>]*>"), "").trim()
+                    rawTitle = rawTitle
+                        .replace("&amp;", "&")
+                        .replace("&quot;", "\"")
+                        .replace("&#39;", "'")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+
+                    val title = rawTitle.ifBlank { extractDomain(rawUrl) }
+                    val newItem = SpeedDialItem(
+                        id = UUID.randomUUID().toString(),
+                        title = title,
+                        url = rawUrl
+                    )
+                    newItems.add(newItem)
+                    existingUrls.add(normalizedUrl)
+                }
+
+                if (newItems.isNotEmpty()) {
+                    _uiState.update { state ->
+                        state.copy(speedDialItems = state.speedDialItems + newItems)
+                    }
+                    saveBookmarks()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "${newItems.size} favoritos importados com sucesso!", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Nenhum novo favorito encontrado no arquivo", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao importar favoritos", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Falha ao ler arquivo de favoritos", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // BACKUP GERAL (JSON)
+    // ==========================================
+    fun exportFullBackup(context: Context): File? {
+        try {
+            val root = JSONObject()
+            root.put("version", 1)
+            root.put("timestamp", System.currentTimeMillis())
+
+            val bookmarksArr = JSONArray()
+            _uiState.value.speedDialItems.forEach { bookmarksArr.put(it.toJson()) }
+            root.put("bookmarks", bookmarksArr)
+
+            val historyArr = JSONArray()
+            _uiState.value.history.forEach { historyArr.put(it.toJson()) }
+            root.put("history", historyArr)
+
+            val spacesArr = JSONArray()
+            _uiState.value.spaces.forEach { spacesArr.put(it.toJson()) }
+            root.put("spaces", spacesArr)
+
+            val settingsObj = JSONObject().apply {
+                put("isDarkMode", _uiState.value.isDarkMode)
+                put("forceDarkPages", _uiState.value.forceDarkPages)
+                put("adBlockEnabled", _uiState.value.adBlockEnabled)
+                put("cookieBlockerEnabled", _uiState.value.cookieBlockerEnabled)
+                put("searchEngine", _uiState.value.searchEngine.name)
+                put("selectedWallpaperId", _uiState.value.selectedWallpaperId)
+                put("showWeatherWidget", _uiState.value.showWeatherWidget)
+                put("showQuotesWidget", _uiState.value.showQuotesWidget)
+            }
+            root.put("settings", settingsObj)
+
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val file = File(downloadsDir, "tessera_backup_${System.currentTimeMillis()}.json")
+            file.writeText(root.toString(2), Charsets.UTF_8)
+
+            Toast.makeText(context, "Backup salvo em Downloads: ${file.name}", Toast.LENGTH_LONG).show()
+
+            val shareUri = try {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            } catch (e: Exception) {
+                Uri.fromFile(file)
+            }
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, shareUri)
+                putExtra(Intent.EXTRA_SUBJECT, "Backup Geral - Tessera Browser")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Compartilhar Backup"))
+
+            return file
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao exportar backup", e)
+            Toast.makeText(context, "Falha ao gerar arquivo de backup", Toast.LENGTH_SHORT).show()
+            return null
+        }
+    }
+
+    fun importFullBackup(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri) ?: return@launch
+                val content = inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(content)
+
+                val bookmarksArr = root.optJSONArray("bookmarks")
+                val restoredBookmarks = mutableListOf<SpeedDialItem>()
+                if (bookmarksArr != null) {
+                    for (i in 0 until bookmarksArr.length()) {
+                        try {
+                            val item = SpeedDialItem.fromJson(bookmarksArr.getJSONObject(i))
+                            restoredBookmarks.add(item)
+                        } catch (e: Exception) {}
+                    }
+                }
+
+                val historyArr = root.optJSONArray("history")
+                val restoredHistory = mutableListOf<HistoryEntry>()
+                if (historyArr != null) {
+                    for (i in 0 until historyArr.length()) {
+                        try {
+                            val item = HistoryEntry.fromJson(historyArr.getJSONObject(i))
+                            restoredHistory.add(item)
+                        } catch (e: Exception) {}
+                    }
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        speedDialItems = if (restoredBookmarks.isNotEmpty()) restoredBookmarks else state.speedDialItems,
+                        history = if (restoredHistory.isNotEmpty()) restoredHistory else state.history
+                    )
+                }
+                saveBookmarks()
+                saveHistory()
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Backup restaurado com sucesso! (${restoredBookmarks.size} favoritos, ${restoredHistory.size} históricos)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Erro ao restaurar backup", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Arquivo de backup inválido ou corrompido", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -2470,6 +2793,263 @@ class BrowserViewModel : ViewModel() {
                 peekUrl = null,
                 peekTitle = null
             )
+        }
+    }
+
+    // ==========================================
+    // MENU DE CONTEXTO AO TOQUE LONGO
+    // ==========================================
+    fun showContextMenu(target: ContextMenuTarget) {
+        _uiState.update { it.copy(contextMenuTarget = target) }
+    }
+
+    fun dismissContextMenu() {
+        _uiState.update { it.copy(contextMenuTarget = null) }
+    }
+
+    fun openLinkInBackground(context: Context, url: String) {
+        addNewTab(url = url, isHome = false, selectNow = false)
+        Toast.makeText(context, "Aba aberta em segundo plano", Toast.LENGTH_SHORT).show()
+    }
+
+    fun openLinkInIncognito(url: String) {
+        _uiState.update {
+            it.copy(
+                isIncognitoMode = true,
+                isIncognitoLocked = it.incognitoBiometricLock
+            )
+        }
+        addNewTab(url = url, isHome = false, selectNow = true)
+    }
+
+    fun saveImage(context: Context, imageUrl: String, userAgent: String = "") {
+        if (imageUrl.isBlank()) return
+
+        if (imageUrl.startsWith("data:image/", ignoreCase = true)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val mimeType = imageUrl.substringAfter("data:").substringBefore(";")
+                    val extension = when {
+                        mimeType.contains("png") -> "png"
+                        mimeType.contains("webp") -> "webp"
+                        mimeType.contains("gif") -> "gif"
+                        mimeType.contains("svg") -> "svg"
+                        else -> "jpg"
+                    }
+                    val base64Data = imageUrl.substringAfter("base64,")
+                    val imageBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                    val fileName = "tessera_img_${System.currentTimeMillis()}.$extension"
+
+                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                    val targetFile = File(downloadsDir, fileName)
+                    targetFile.writeBytes(imageBytes)
+
+                    val downloadId = System.currentTimeMillis()
+                    val item = DownloadItem(
+                        id = downloadId,
+                        fileName = fileName,
+                        url = "data:image",
+                        mimeType = mimeType,
+                        filePath = targetFile.absolutePath,
+                        status = DownloadStatus.SUCCESSFUL,
+                        timestamp = System.currentTimeMillis(),
+                        totalBytes = imageBytes.size.toLong(),
+                        downloadedBytes = imageBytes.size.toLong()
+                    )
+                    val notice = DownloadNotice(
+                        id = downloadId,
+                        fileName = fileName,
+                        status = DownloadStatus.SUCCESSFUL,
+                        message = "Imagem salva com sucesso!"
+                    )
+                    _uiState.update { state ->
+                        val updated = listOf(item) + state.downloads.filterNot { it.id == downloadId }
+                        state.copy(downloads = updated, activeDownloadNotice = notice)
+                    }
+                    saveDownloadsToPreferences(context)
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Imagem salva em Downloads: $fileName", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("BrowserViewModel", "Erro ao salvar imagem base64", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Falha ao salvar imagem", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } else {
+            enqueueDownload(
+                context = context,
+                url = imageUrl,
+                userAgent = userAgent,
+                contentDisposition = "",
+                mimeType = "image/*"
+            )
+            Toast.makeText(context, "Iniciando download da imagem...", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun searchImageOnWeb(imageUrl: String) {
+        val searchUrl = "https://lens.google.com/uploadbyurl?url=${Uri.encode(imageUrl)}"
+        addNewTab(url = searchUrl, isHome = false, selectNow = true)
+    }
+
+    // ==========================================
+    // IMPRESSÃO E SALVAR COMO PDF NATIVO
+    // ==========================================
+    fun printCurrentPage(context: Context, webView: WebView?) {
+        if (webView == null) {
+            Toast.makeText(context, "Página não disponível para impressão", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: run {
+                Toast.makeText(context, "Serviço de impressão indisponível", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val pageTitle = (webView.title ?: "Documento").replace(Regex("[^a-zA-Z0-9_-]"), "_").take(35)
+            val jobName = "${pageTitle}_Tessera"
+            val printAdapter = webView.createPrintDocumentAdapter(jobName)
+            val printAttributes = PrintAttributes.Builder()
+                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                .build()
+            printManager.print(jobName, printAdapter, printAttributes)
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao imprimir página", e)
+            Toast.makeText(context, "Falha ao abrir diálogo de impressão", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun printReaderArticle(context: Context, article: ReaderArticle) {
+        try {
+            val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: run {
+                Toast.makeText(context, "Serviço de impressão indisponível", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val htmlBuilder = StringBuilder()
+            htmlBuilder.append("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${article.title}</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            color: #111;
+                            background: #fff;
+                            margin: 24px 32px;
+                            line-height: 1.65;
+                            font-size: 15pt;
+                        }
+                        h1 {
+                            font-size: 26pt;
+                            line-height: 1.25;
+                            margin-bottom: 8px;
+                            color: #000;
+                        }
+                        .meta {
+                            font-size: 11pt;
+                            color: #555;
+                            margin-bottom: 24px;
+                            border-bottom: 1px solid #ddd;
+                            padding-bottom: 12px;
+                        }
+                        p {
+                            margin-bottom: 16px;
+                            text-align: justify;
+                        }
+                        h2 { font-size: 18pt; margin-top: 24px; margin-bottom: 12px; }
+                        h3 { font-size: 15pt; margin-top: 20px; margin-bottom: 10px; }
+                        blockquote {
+                            border-left: 4px solid #0288D1;
+                            margin: 16px 0;
+                            padding: 8px 16px;
+                            color: #444;
+                            font-style: italic;
+                        }
+                        img {
+                            max-width: 100%;
+                            height: auto;
+                            display: block;
+                            margin: 16px auto;
+                            border-radius: 6px;
+                        }
+                        .caption {
+                            font-size: 10pt;
+                            color: #777;
+                            text-align: center;
+                            margin-top: -10px;
+                            margin-bottom: 16px;
+                        }
+                        .footer {
+                            margin-top: 36px;
+                            border-top: 1px solid #eee;
+                            padding-top: 12px;
+                            font-size: 9pt;
+                            color: #888;
+                            text-align: center;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>${article.title}</h1>
+                    <div class="meta">
+                        ${if (!article.author.isNullOrBlank()) "Por ${article.author} • " else ""}
+                        ${if (!article.domain.isNullOrBlank()) "Fonte: ${article.domain} • " else ""}
+                        ${if (!article.publishDate.isNullOrBlank()) "${article.publishDate} • " else ""}
+                        Tempo de leitura: ~${article.readingTimeMinutes} min
+                    </div>
+            """.trimIndent())
+
+            for (block in article.blocks) {
+                when (block.type) {
+                    ReaderBlockType.H1 -> htmlBuilder.append("<h1>${block.text}</h1>")
+                    ReaderBlockType.H2 -> htmlBuilder.append("<h2>${block.text}</h2>")
+                    ReaderBlockType.H3 -> htmlBuilder.append("<h3>${block.text}</h3>")
+                    ReaderBlockType.PARAGRAPH -> htmlBuilder.append("<p>${block.text}</p>")
+                    ReaderBlockType.BLOCKQUOTE -> htmlBuilder.append("<blockquote>${block.text}</blockquote>")
+                    ReaderBlockType.LIST_ITEM -> htmlBuilder.append("<li>${block.text}</li>")
+                    ReaderBlockType.IMAGE -> {
+                        if (!block.imageUrl.isNullOrBlank()) {
+                            htmlBuilder.append("<img src=\"${block.imageUrl}\" />")
+                            if (!block.caption.isNullOrBlank()) {
+                                htmlBuilder.append("<div class=\"caption\">${block.caption}</div>")
+                            }
+                        }
+                    }
+                }
+            }
+
+            htmlBuilder.append("""
+                    <div class="footer">
+                        Documento exportado via Tessera Browser (Modo Leitura)
+                    </div>
+                </body>
+                </html>
+            """.trimIndent())
+
+            val printWebView = WebView(context)
+            printWebView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    val safeTitle = article.title.take(30).replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                    val printAdapter = printWebView.createPrintDocumentAdapter("${safeTitle}_Leitor")
+                    val jobName = "${article.title.take(30)} (Tessera Reader)"
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
+                    printManager.print(jobName, printAdapter, printAttributes)
+                }
+            }
+            printWebView.loadDataWithBaseURL("https://${article.domain}", htmlBuilder.toString(), "text/html", "utf-8", null)
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao exportar PDF do artigo", e)
+            Toast.makeText(context, "Erro ao preparar impressão do artigo", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2677,7 +3257,7 @@ class BrowserViewModel : ViewModel() {
                 onFailure = { err ->
                     val errorMessage = AiChatMessage(
                         role = "assistant",
-                        content = "⚠️ "
+                        content = "⚠️ ${err.message ?: "Não foi possível obter resposta no momento."}"
                     )
                     _uiState.update {
                         it.copy(

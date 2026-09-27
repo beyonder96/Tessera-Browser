@@ -17,7 +17,7 @@ import java.util.UUID
  */
 enum class AiProvider(val displayName: String, val modelName: String, val keyName: String) {
     GROQ("Groq Cloud (Llama 3.3)", "llama-3.3-70b-versatile", "groq"),
-    GEMINI("Google Gemini (Flash 2.0)", "gemini-2.0-flash", "gemini");
+    GEMINI("Google Gemini (Flash)", "gemini-3.8-flash", "gemini");
 
     companion object {
         fun fromKey(key: String?): AiProvider {
@@ -247,10 +247,16 @@ object TesseraAiEngine {
             } catch (e: Exception) {
                 "Código HTTP $responseCode"
             }
+            val cleanErrorMessage = try {
+                val errorObj = JSONObject(errorText).optJSONObject("error")
+                errorObj?.optString("message")?.takeIf { it.isNotBlank() } ?: errorText
+            } catch (e: Exception) {
+                errorText
+            }
             when (responseCode) {
                 401, 403 -> throw IllegalArgumentException("Chave Groq inválida ou expirada. Verifique no console.groq.com.")
                 429 -> throw IllegalStateException("Limite de requisições do Groq atingido. Aguarde alguns segundos.")
-                else -> throw IllegalStateException("Erro no Groq ($responseCode): $errorText")
+                else -> throw IllegalStateException("Erro no Groq ($responseCode): $cleanErrorMessage")
             }
         }
     }
@@ -258,8 +264,28 @@ object TesseraAiEngine {
     // ==========================================
     // GOOGLE GEMINI API CLIENT
     // ==========================================
+    private class GeminiModelNotFoundException(message: String) : Exception(message)
+
     private fun executeGeminiRequest(
         apiKey: String,
+        systemPrompt: String,
+        messages: List<AiChatMessage>
+    ): String {
+        return try {
+            sendGeminiCall(apiKey, AiProvider.GEMINI.modelName, systemPrompt, messages)
+        } catch (e: GeminiModelNotFoundException) {
+            Log.w(TAG, "Modelo ${AiProvider.GEMINI.modelName} retornou 404, tentando fallback para gemini-2.5-flash", e)
+            try {
+                sendGeminiCall(apiKey, "gemini-2.5-flash", systemPrompt, messages)
+            } catch (fallbackEx: GeminiModelNotFoundException) {
+                throw IllegalStateException("Modelo Gemini indisponível: ${fallbackEx.message}")
+            }
+        }
+    }
+
+    private fun sendGeminiCall(
+        apiKey: String,
+        modelName: String,
         systemPrompt: String,
         messages: List<AiChatMessage>
     ): String {
@@ -303,7 +329,7 @@ object TesseraAiEngine {
             })
         }
 
-        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/${AiProvider.GEMINI.modelName}:generateContent?key=${apiKey.trim()}"
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=${apiKey.trim()}"
         val url = URL(endpoint)
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -339,10 +365,19 @@ object TesseraAiEngine {
             } catch (e: Exception) {
                 "Código HTTP $responseCode"
             }
+            val cleanErrorMessage = try {
+                val errorObj = JSONObject(errorText).optJSONObject("error")
+                errorObj?.optString("message")?.takeIf { it.isNotBlank() } ?: errorText
+            } catch (e: Exception) {
+                errorText
+            }
+            if (responseCode == 404) {
+                throw GeminiModelNotFoundException(cleanErrorMessage)
+            }
             when (responseCode) {
                 400, 401, 403 -> throw IllegalArgumentException("Chave Gemini inválida ou sem permissão. Verifique em aistudio.google.com.")
                 429 -> throw IllegalStateException("Cota de requisições do Gemini atingida. Tente novamente em instantes.")
-                else -> throw IllegalStateException("Erro no Gemini ($responseCode): $errorText")
+                else -> throw IllegalStateException("Erro no Gemini ($responseCode): $cleanErrorMessage")
             }
         }
     }

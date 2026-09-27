@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.AudioFile
@@ -28,11 +30,14 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderZip
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VideoFile
 import androidx.compose.material3.Icon
@@ -48,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,12 +87,43 @@ fun HistoryBookmarksModal(
     onClearDownloads: () -> Unit = {},
     onOpenSavedPage: (SavedPageItem) -> Unit = {},
     onDeleteSavedPage: (SavedPageItem) -> Unit = {},
+    onExportBookmarksHtml: () -> Unit = {},
+    onImportBookmarksHtml: () -> Unit = {},
     onDismiss: () -> Unit,
     accentColor: Color = Color(0xFF64B5F6),
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
+    var searchQuery by remember { mutableStateOf("") }
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+    val filteredBookmarks = remember(bookmarks, searchQuery) {
+        if (searchQuery.isBlank()) bookmarks
+        else bookmarks.filter {
+            it.title.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val filteredHistory = remember(history, searchQuery) {
+        if (searchQuery.isBlank()) history
+        else history.filter {
+            it.title.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val filteredDownloads = remember(downloads, searchQuery) {
+        if (searchQuery.isBlank()) downloads
+        else downloads.filter {
+            it.fileName.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val filteredSavedPages = remember(savedPages, searchQuery) {
+        if (searchQuery.isBlank()) savedPages
+        else savedPages.filter {
+            it.title.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -229,11 +267,140 @@ fun HistoryBookmarksModal(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Search Bar in Hub
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 13.5.sp
+                ),
+                cursorBrush = SolidColor(accentColor),
+                modifier = Modifier.weight(1f),
+                decorationBox = { innerTextField ->
+                    if (searchQuery.isEmpty()) {
+                        val placeholder = when (selectedTab) {
+                            0 -> "Buscar nos favoritos..."
+                            1 -> "Buscar no histórico..."
+                            2 -> "Buscar em downloads..."
+                            else -> "Buscar em páginas salvas..."
+                        }
+                        Text(
+                            text = placeholder,
+                            color = Color.White.copy(alpha = 0.4f),
+                            fontSize = 13.sp
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+            if (searchQuery.isNotEmpty()) {
+                IconButton(
+                    onClick = { searchQuery = "" },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Limpar busca",
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (selectedTab == 0) {
-            // BOOKMARKS LIST
-            if (bookmarks.isEmpty()) {
+            // BOOKMARKS LIST & ACTION BUTTONS
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Import HTML button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onImportBookmarksHtml)
+                        .padding(vertical = 8.dp, horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileDownload,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Importar HTML",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Export HTML button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onExportBookmarksHtml)
+                        .padding(vertical = 8.dp, horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileUpload,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Exportar HTML",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            if (filteredBookmarks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -241,7 +408,7 @@ fun HistoryBookmarksModal(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nenhum favorito salvo ainda.",
+                        text = if (searchQuery.isNotBlank()) "Nenhum favorito encontrado para \"$searchQuery\"." else "Nenhum favorito salvo ainda.",
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 14.sp
                     )
@@ -251,7 +418,7 @@ fun HistoryBookmarksModal(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(bookmarks, key = { it.id }) { item ->
+                    items(filteredBookmarks, key = { it.id }) { item ->
                         val cardShape = RoundedCornerShape(16.dp)
                         Row(
                             modifier = Modifier
@@ -305,7 +472,7 @@ fun HistoryBookmarksModal(
             }
         } else if (selectedTab == 1) {
             // HISTORY LIST
-            if (history.isEmpty()) {
+            if (filteredHistory.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -313,7 +480,7 @@ fun HistoryBookmarksModal(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Histórico de navegação limpo.",
+                        text = if (searchQuery.isNotBlank()) "Nenhum histórico encontrado para \"$searchQuery\"." else "Histórico de navegação limpo.",
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 14.sp
                     )
@@ -340,7 +507,7 @@ fun HistoryBookmarksModal(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(history, key = { it.id }) { item ->
+                    items(filteredHistory, key = { it.id }) { item ->
                         val cardShape = RoundedCornerShape(16.dp)
                         Row(
                             modifier = Modifier
@@ -381,34 +548,42 @@ fun HistoryBookmarksModal(
             }
         } else if (selectedTab == 2) {
             // DOWNLOADS LIST (selectedTab == 2)
-            if (downloads.isEmpty()) {
+            if (filteredDownloads.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Download,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.25f),
-                            modifier = Modifier.size(52.dp)
-                        )
+                    if (searchQuery.isNotBlank()) {
                         Text(
-                            text = "Nenhum download recente",
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "Nenhum download encontrado para \"$searchQuery\".",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp
                         )
-                        Text(
-                            text = "Arquivos baixados da web aparecerão aqui.",
-                            color = Color.White.copy(alpha = 0.45f),
-                            fontSize = 13.sp
-                        )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Download,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.25f),
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Text(
+                                text = "Nenhum download recente",
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Arquivos baixados da web aparecerão aqui.",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             } else {
@@ -420,7 +595,7 @@ fun HistoryBookmarksModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${downloads.size} ${if (downloads.size == 1) "item" else "itens"}",
+                        text = "${filteredDownloads.size} ${if (filteredDownloads.size == 1) "item" else "itens"}",
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -440,7 +615,7 @@ fun HistoryBookmarksModal(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(downloads, key = { it.id }) { item ->
+                    items(filteredDownloads, key = { it.id }) { item ->
                         val cardShape = RoundedCornerShape(16.dp)
                         val iconInfo = when (item.fileType) {
                             DownloadFileType.APK -> Pair(Icons.Rounded.Android, Color(0xFF66BB6A))
@@ -556,36 +731,44 @@ fun HistoryBookmarksModal(
             }
         } else if (selectedTab == 3) {
             // SAVED OFFLINE PAGES LIST
-            if (savedPages.isEmpty()) {
+            if (filteredSavedPages.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.OfflinePin,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(40.dp)
-                        )
+                    if (searchQuery.isNotBlank()) {
                         Text(
-                            text = "Nenhuma página salva offline",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "Nenhuma página salva offline encontrada para \"$searchQuery\".",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp
                         )
-                        Text(
-                            text = "No menu de Configurações, toque em \"Salvar para ler offline\" para acessar artigos mesmo sem sinal de internet.",
-                            color = Color.White.copy(alpha = 0.45f),
-                            fontSize = 12.5.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.OfflinePin,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.3f),
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Text(
+                                text = "Nenhuma página salva offline",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "No menu de Configurações, toque em \"Salvar para ler offline\" para acessar artigos mesmo sem sinal de internet.",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 12.5.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
                 }
             } else {
@@ -593,7 +776,7 @@ fun HistoryBookmarksModal(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(savedPages, key = { it.id }) { item ->
+                    items(filteredSavedPages, key = { it.id }) { item ->
                         val cardShape = RoundedCornerShape(16.dp)
                         val formattedSize = remember(item.fileSize) {
                             if (item.fileSize > 1024 * 1024) {

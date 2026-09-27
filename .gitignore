@@ -12,3 +12,4 @@ build/
 app/build/
 *.apk
 *.aab
+.kotlin/

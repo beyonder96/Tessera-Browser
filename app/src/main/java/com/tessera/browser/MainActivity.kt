@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +18,7 @@ import com.tessera.browser.ui.TesseraBrowserScreen
 import com.tessera.browser.ui.theme.TesseraTheme
 import com.tessera.browser.viewmodel.BrowserViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: BrowserViewModel by lazy {
         ViewModelProvider(this)[BrowserViewModel::class.java]
@@ -89,6 +89,17 @@ class MainActivity : ComponentActivity() {
                 viewModel.showPipPermissionDialog(true)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.checkDefaultBrowser(this)
+        viewModel.onAppForegrounded()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.onAppBackgrounded()
     }
 
     private fun handleIntent(intent: Intent?) {

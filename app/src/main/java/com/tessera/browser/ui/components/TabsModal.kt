@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -142,7 +143,7 @@ fun TabsModal(
         matchesQuery && matchesPin && matchesGroup
     }
 
-    val sheetBg = if (isDarkMode) Color(0xF71C1715) else Color(0xFAFBFBFD)
+    val sheetBg = if (isDarkMode) Color(0xFF1C1715) else Color(0xFFFBFBFD)
     val cardBg = if (isDarkMode) Color(0xFF26201D) else Color.White
     val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
     val contentColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1C1C1E)
@@ -151,15 +152,13 @@ fun TabsModal(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.85f)
-            .shadow(24.dp, sheetShape)
-            .clip(sheetShape)
+            .fillMaxSize()
             .background(sheetBg)
-            .border(1.dp, cardBorder, sheetShape)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
         ) {
             // 1. DRAG HANDLE
             Box(
@@ -413,8 +412,12 @@ fun TabsModal(
                 }
             }
 
-            // 4. SUB-BAR: Tab Groups Filter Chips (Somente se existirem grupos cadastrados)
-            if (tabGroups.isNotEmpty()) {
+            val pinnedTabsCount = currentSpaceTabs.count { it.isPinned }
+            val hasPinnedTabs = pinnedTabsCount > 0
+            val showSubBar = tabGroups.isNotEmpty() || hasPinnedTabs
+
+            // 4. SUB-BAR: Tab Groups & Pinned Filter Chips
+            if (showSubBar) {
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -424,7 +427,7 @@ fun TabsModal(
                 ) {
                     // Chip "Todas"
                     item {
-                        val isAllSelected = activeFilterGroupId == null
+                        val isAllSelected = activeFilterGroupId == null && !filterPinnedOnly
                         val pillShape = RoundedCornerShape(14.dp)
                         Box(
                             modifier = Modifier
@@ -433,7 +436,10 @@ fun TabsModal(
                                     if (isAllSelected) accentColor
                                     else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
                                 )
-                                .clickable { activeFilterGroupId = null }
+                                .clickable {
+                                    activeFilterGroupId = null
+                                    filterPinnedOnly = false
+                                }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -446,9 +452,48 @@ fun TabsModal(
                         }
                     }
 
+                    // Chip "Fixadas" (Aparece se houver guias fixadas)
+                    if (hasPinnedTabs) {
+                        item {
+                            val pillShape = RoundedCornerShape(14.dp)
+                            Box(
+                                modifier = Modifier
+                                    .clip(pillShape)
+                                    .background(
+                                        if (filterPinnedOnly) accentColor
+                                        else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+                                    )
+                                    .clickable {
+                                        filterPinnedOnly = !filterPinnedOnly
+                                        if (filterPinnedOnly) activeFilterGroupId = null
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PushPin,
+                                        contentDescription = null,
+                                        tint = if (filterPinnedOnly) Color.White else accentColor,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "Fixadas ($pinnedTabsCount)",
+                                        color = if (filterPinnedOnly) Color.White else contentColor,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (filterPinnedOnly) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Chips dos grupos criados
                     items(tabGroups, key = { it.id }) { group ->
-                        val isSelected = activeFilterGroupId == group.id
+                        val isSelected = !filterPinnedOnly && activeFilterGroupId == group.id
                         val count = tabs.count { it.groupId == group.id }
                         val pillShape = RoundedCornerShape(14.dp)
                         var showGroupMenu by remember { mutableStateOf(false) }
@@ -466,6 +511,7 @@ fun TabsModal(
                                     pillShape
                                 )
                                 .clickable {
+                                    filterPinnedOnly = false
                                     activeFilterGroupId = if (isSelected) null else group.id
                                 }
                                 .padding(horizontal = 9.dp, vertical = 5.dp),
@@ -695,18 +741,6 @@ fun TabsModal(
                             }
                         )
                         DropdownMenuItem(
-                            text = {
-                                Text(if (filterPinnedOnly) "Mostrar todas as guias" else "Apenas guias fixadas")
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMoreMenu = false
-                                filterPinnedOnly = !filterPinnedOnly
-                            }
-                        )
-                        DropdownMenuItem(
                             text = { Text("Novo grupo de abas") },
                             leadingIcon = {
                                 Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -777,25 +811,21 @@ fun TabsModal(
                     }
                 }
 
-                // Indicador de Filtro Fixado ou Espaço
+                // Botão Concluído no Dock Inferior (Fácil acesso com o polegar)
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(if (filterPinnedOnly) accentColor.copy(alpha = 0.15f) else cardBg)
-                        .border(
-                            1.dp,
-                            if (filterPinnedOnly) accentColor.copy(alpha = 0.4f) else cardBorder,
-                            CircleShape
-                        )
-                        .clickable { filterPinnedOnly = !filterPinnedOnly },
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, CircleShape)
+                        .clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.PushPin,
-                        contentDescription = "Filtrar Fixadas",
-                        tint = if (filterPinnedOnly) accentColor else mutedColor,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Concluído",
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -1388,21 +1418,13 @@ private fun TabGridCard(
                     }
 
                     DropdownMenuItem(
-                        text = { Text("+ Criar novo grupo...") },
-                        onClick = {
-                            showContextMenu = false
-                            onCreateNewGroup()
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Fechar esta guia", color = Color(0xFFEF5350)) },
+                        text = { Text(if (allGroups.isEmpty()) "Adicionar a novo grupo..." else "+ Criar outro grupo...") },
                         leadingIcon = {
-                            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color(0xFFEF5350), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
                         },
                         onClick = {
                             showContextMenu = false
-                            onClose()
+                            onCreateNewGroup()
                         }
                     )
                 }

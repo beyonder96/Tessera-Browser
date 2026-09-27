@@ -29,13 +29,18 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.OfflinePin
@@ -111,6 +116,10 @@ fun TesseraSettingsScreen(
     groqApiKey: String? = null,
     aiProvider: AiProvider = AiProvider.GROQ,
     digitalMinimalismMode: Boolean = true,
+    isDefaultBrowser: Boolean = false,
+    onRequestDefaultBrowser: () -> Unit = {},
+    incognitoBiometricLock: Boolean = false,
+    onIncognitoBiometricLockChanged: (Boolean) -> Unit = {},
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
     onShowWallpaperChanged: (Boolean) -> Unit,
@@ -135,6 +144,8 @@ fun TesseraSettingsScreen(
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSiteSettings: () -> Unit,
+    onExportBackup: () -> Unit = {},
+    onImportBackup: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -217,12 +228,74 @@ fun TesseraSettingsScreen(
         ) {
 
             // ==========================================
-            // SEÇÃO 1: MECANISMO DE BUSCA
+            // SEÇÃO 1: NAVEGADOR PADRÃO & BUSCA
             // ==========================================
             SettingsSection(
-                title = "Mecanismo de busca",
+                title = "Navegador padrão & Busca",
                 headerColor = sectionHeaderColor
             ) {
+                // Card do Navegador Padrão do Sistema
+                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(onClick = onRequestDefaultBrowser)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isDefaultBrowser) Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                        else (if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1)).copy(alpha = 0.15f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isDefaultBrowser) Icons.Rounded.CheckCircle else Icons.Rounded.Language,
+                                    contentDescription = null,
+                                    tint = if (isDefaultBrowser) Color(0xFF4CAF50)
+                                    else if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Navegador padrão do sistema",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isDefaultBrowser) "Tessera Browser é seu navegador padrão ✓"
+                                    else "Toque para definir o Tessera como navegador padrão",
+                                    fontSize = 12.sp,
+                                    color = if (isDefaultBrowser) Color(0xFF4CAF50) else textSecondary
+                                )
+                            }
+                        }
+
+                        if (!isDefaultBrowser) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
                 SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -788,6 +861,46 @@ fun TesseraSettingsScreen(
                                 )
                             }
                         }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Bloquear Modo Anônimo com Biometria
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Fingerprint,
+                                    contentDescription = null,
+                                    tint = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Bloquear guias anônimas ao sair",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Exigir biometria ou PIN do aparelho para desbloquear guias anônimas",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+                            TesseraSwitch(
+                                checked = incognitoBiometricLock,
+                                onCheckedChange = onIncognitoBiometricLockChanged,
+                                isDarkMode = isDarkMode
+                            )
+                        }
                     }
                 }
             }
@@ -896,7 +1009,7 @@ fun TesseraSettingsScreen(
                                             color = if (isGemini) geminiColor else textPrimary
                                         )
                                         Text(
-                                            text = "Gemini 2.0 Flash",
+                                            text = "Gemini Flash",
                                             fontSize = 11.sp,
                                             color = textSecondary
                                         )
@@ -981,7 +1094,7 @@ fun TesseraSettingsScreen(
                                         color = textPrimary
                                     )
                                     Text(
-                                        text = if (!geminiApiKey.isNullOrBlank()) "Chave ativa (Gemini 2.0 Flash configurado)" else "Toque para configurar sua chave gratuita",
+                                        text = if (!geminiApiKey.isNullOrBlank()) "Chave ativa (Gemini Flash configurado)" else "Toque para configurar sua chave gratuita",
                                         fontSize = 12.sp,
                                         color = if (!geminiApiKey.isNullOrBlank()) Color(0xFF81C784) else textSecondary
                                     )
@@ -1166,6 +1279,96 @@ fun TesseraSettingsScreen(
                                     )
                                     Text(
                                         text = "Acessar histórico de navegação, favoritos e páginas salvas",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Exportar Backup Geral (JSON)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(onClick = onExportBackup)
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Backup,
+                                    contentDescription = null,
+                                    tint = if (isDarkMode) Color(0xFFFFB74D) else Color(0xFFF57C00),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Exportar Backup Geral (JSON)",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Salvar favoritos, histórico, espaços e ajustes em arquivo",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Restaurar Backup Geral (JSON)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(onClick = onImportBackup)
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Restore,
+                                    contentDescription = null,
+                                    tint = if (isDarkMode) Color(0xFFBA68C8) else Color(0xFF7B1FA2),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Restaurar Backup Geral (JSON)",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Restaurar favoritos, histórico e dados de um backup .json",
                                         fontSize = 12.sp,
                                         color = textSecondary
                                     )

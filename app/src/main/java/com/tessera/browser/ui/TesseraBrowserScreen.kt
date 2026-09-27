@@ -6,6 +6,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -93,6 +95,12 @@ import com.tessera.browser.data.SafeBrowsingThreatInfo
 import com.tessera.browser.ai.AiProvider
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
+import com.tessera.browser.data.ContextMenuTarget
+import com.tessera.browser.ui.components.ContextMenuModal
+import androidx.fragment.app.FragmentActivity
+import com.tessera.browser.ui.components.IncognitoLockOverlay
+import com.tessera.browser.util.BiometricAuthHelper
+import com.tessera.browser.util.DefaultBrowserHelper
 import com.tessera.browser.ui.components.PeekPreviewModal
 import com.tessera.browser.pip.PipManager
 import com.tessera.browser.ui.components.PipPermissionDialog
@@ -239,6 +247,8 @@ private val READER_EXTRACTION_SCRIPT = """
                         cId === 'toc' || cName.indexOf('vector-toc') !== -1 || cName.indexOf('mw-jump-link') !== -1 ||
                         cName.indexOf('hatnote') !== -1 || cName.indexOf('ambox') !== -1 || cName.indexOf('sistersitebox') !== -1 ||
                         cName.indexOf('ad-container') !== -1 || cName.indexOf('advertisement') !== -1 ||
+                        cName.indexOf('auth') !== -1 || cName.indexOf('login') !== -1 || cName.indexOf('register') !== -1 ||
+                        cName.indexOf('user-menu') !== -1 || cName.indexOf('account') !== -1 || cName.indexOf('top-bar') !== -1 ||
                         cId.indexOf('google_ads') !== -1 || cName.indexOf('google_ads') !== -1) {
                         return true;
                     }
@@ -353,6 +363,10 @@ private val READER_EXTRACTION_SCRIPT = """
                         if (isClutter(liNode)) continue;
                         var liText = (liNode.innerText || liNode.textContent || '').trim();
                         liText = liText.replace(/\[\d+\]|\[editar.*?\]/g, '').trim();
+                        var lowerLi = liText.toLowerCase();
+                        if (/^(registrar|registro|login|entrar|cadastre-se|cadastrar|assine|assinar|inscreva-se|newsletter|compartilhe|compartilhar|curtir|tweet|whatsapp|comentários|comentar|início|home)$/i.test(lowerLi)) {
+                            continue;
+                        }
                         if (liText.length > 5 && !seenTexts.has(liText)) {
                             seenTexts.add(liText);
                             blocks.push({
@@ -608,6 +622,25 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var safeBrowsingCallback by remember { mutableStateOf<SafeBrowsingResponse?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val fragmentActivity = context as? FragmentActivity
+
+    val promptBiometricUnlock: () -> Unit = remember(fragmentActivity) {
+        {
+            fragmentActivity?.let { act ->
+                BiometricAuthHelper.authenticate(
+                    activity = act,
+                    title = "Modo Anônimo Protegido",
+                    subtitle = "Confirme sua identidade para acessar as guias anônimas",
+                    onSuccess = {
+                        viewModel.unlockIncognito()
+                    },
+                    onError = { }
+                )
+            } ?: run {
+                viewModel.unlockIncognito()
+            }
+        }
+    }
 
     // Request POST_NOTIFICATIONS on Android 13+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -619,6 +652,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         viewModel.fetchWeather(context)
         viewModel.fetchQuotes()
         viewModel.initPersistence(context)
+        viewModel.checkDefaultBrowser(context)
 
         // Initialize Google Safe Browsing
         try {
@@ -635,6 +669,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    LaunchedEffect(state.showFullSettings) {
+        if (state.showFullSettings) {
+            viewModel.checkDefaultBrowser(context)
         }
     }
 
@@ -707,6 +747,22 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
+    val importBookmarksLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importBookmarksFromHtml(context, uri)
+        }
+    }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importFullBackup(context, uri)
+        }
+    }
+
     var isAirBarExpanded by remember { mutableStateOf(false) }
     var isSearchEditing by remember { mutableStateOf(false) }
 
@@ -722,8 +778,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     // 8. Collapse expanded AirBar
     // 9. WebView history back
     // 10. Go Home
-    BackHandler(enabled = state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
-        if (state.safeBrowsingThreat != null) {
+    BackHandler(enabled = (state.isIncognitoMode && state.isIncognitoLocked) || state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+        if (state.isIncognitoMode && state.isIncognitoLocked) {
+            viewModel.exitIncognito()
+        } else if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
             if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
@@ -922,15 +980,90 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 )
                             }
 
-                            // Arc Peek / Link Preview on long-press
+                            // Menu de Contexto Completo ao toque longo (Links, Imagens, Telefone, E-mail)
                             setOnLongClickListener {
                                 val result = hitTestResult
                                 val type = result.type
-                                if (type == WebView.HitTestResult.SRC_ANCHOR_TYPE || type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
-                                    val linkUrl = result.extra
-                                    if (!linkUrl.isNullOrBlank()) {
-                                        viewModel.showPeekModal(linkUrl)
+                                val extra = result.extra
+
+                                when (type) {
+                                    WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                                        val handler = object : android.os.Handler(android.os.Looper.getMainLooper()) {
+                                            override fun handleMessage(msg: android.os.Message) {
+                                                val linkUrl = msg.data.getString("url")?.takeIf { it.isNotBlank() } ?: extra
+                                                val imageUrl = msg.data.getString("src")
+                                                val title = msg.data.getString("title")
+                                                viewModel.showContextMenu(
+                                                    ContextMenuTarget(
+                                                        linkUrl = linkUrl,
+                                                        imageUrl = imageUrl,
+                                                        title = title,
+                                                        hitType = type
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        val msg = handler.obtainMessage()
+                                        requestFocusNodeHref(msg)
                                         return@setOnLongClickListener true
+                                    }
+                                    WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                                        if (!extra.isNullOrBlank()) {
+                                            viewModel.showContextMenu(
+                                                ContextMenuTarget(
+                                                    linkUrl = extra,
+                                                    hitType = type
+                                                )
+                                            )
+                                            return@setOnLongClickListener true
+                                        }
+                                    }
+                                    WebView.HitTestResult.IMAGE_TYPE -> {
+                                        if (!extra.isNullOrBlank()) {
+                                            viewModel.showContextMenu(
+                                                ContextMenuTarget(
+                                                    imageUrl = extra,
+                                                    hitType = type
+                                                )
+                                            )
+                                            return@setOnLongClickListener true
+                                        }
+                                    }
+                                    WebView.HitTestResult.PHONE_TYPE -> {
+                                        if (!extra.isNullOrBlank()) {
+                                            viewModel.showContextMenu(
+                                                ContextMenuTarget(
+                                                    linkUrl = "tel:$extra",
+                                                    title = extra,
+                                                    hitType = type
+                                                )
+                                            )
+                                            return@setOnLongClickListener true
+                                        }
+                                    }
+                                    WebView.HitTestResult.EMAIL_TYPE -> {
+                                        if (!extra.isNullOrBlank()) {
+                                            viewModel.showContextMenu(
+                                                ContextMenuTarget(
+                                                    linkUrl = "mailto:$extra",
+                                                    title = extra,
+                                                    hitType = type
+                                                )
+                                            )
+                                            return@setOnLongClickListener true
+                                        }
+                                    }
+                                    WebView.HitTestResult.GEO_TYPE -> {
+                                        if (!extra.isNullOrBlank()) {
+                                            viewModel.showContextMenu(
+                                                ContextMenuTarget(
+                                                    linkUrl = "geo:0,0?q=" + Uri.encode(extra),
+                                                    title = extra,
+                                                    hitType = type
+                                                )
+                                            )
+                                            return@setOnLongClickListener true
+                                        }
                                     }
                                 }
                                 false
@@ -1790,7 +1923,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             visible = state.showTabsModal,
             enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)),
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier.fillMaxSize()
         ) {
             TabsModal(
                 tabs = state.tabs,
@@ -1866,6 +1999,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.openSavedPage(it)
                 },
                 onDeleteSavedPage = { viewModel.deleteSavedPage(it) },
+                onExportBookmarksHtml = { viewModel.exportBookmarksToHtml(context) },
+                onImportBookmarksHtml = { importBookmarksLauncher.launch("text/html") },
                 onDismiss = { viewModel.dismissHistoryModal() },
                 accentColor = state.activeWallpaper.accentColor
             )
@@ -2084,6 +2219,28 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 groqApiKey = state.groqApiKey,
                 aiProvider = state.aiProvider,
                 digitalMinimalismMode = state.digitalMinimalismMode,
+                isDefaultBrowser = state.isDefaultBrowser,
+                onRequestDefaultBrowser = {
+                    fragmentActivity?.let { act ->
+                        viewModel.requestDefaultBrowser(act)
+                    } ?: run {
+                        DefaultBrowserHelper.requestDefaultBrowser(context)
+                    }
+                },
+                incognitoBiometricLock = state.incognitoBiometricLock,
+                onIncognitoBiometricLockChanged = { enabled ->
+                    if (enabled) {
+                        if (BiometricAuthHelper.isBiometricAvailable(context)) {
+                            viewModel.setIncognitoBiometricLock(true)
+                            Toast.makeText(context, "Bloqueio biométrico ativado para guias anônimas", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Biometria ou bloqueio de tela não configurado no aparelho", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        viewModel.setIncognitoBiometricLock(false)
+                        Toast.makeText(context, "Bloqueio biométrico desativado", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
@@ -2130,6 +2287,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenSiteSettings = {
                     viewModel.dismissFullSettings()
                     viewModel.openSiteSettings(state.displayUrl)
+                },
+                onExportBackup = {
+                    viewModel.exportFullBackup(context)
+                },
+                onImportBackup = {
+                    importBackupLauncher.launch("*/*")
                 },
                 onBack = { viewModel.dismissFullSettings() }
             )
@@ -2237,6 +2400,116 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             }
         }
 
+        // MENU DE CONTEXTO AO TOQUE LONGO
+        if (state.contextMenuTarget != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        viewModel.dismissContextMenu()
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.contextMenuTarget != null,
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            state.contextMenuTarget?.let { target ->
+                ContextMenuModal(
+                    target = target,
+                    isDarkMode = state.isDarkMode,
+                    accentColor = state.activeWallpaper.accentColor,
+                    onOpenInNewTab = { url ->
+                        viewModel.addNewTab(url = url, isHome = false, selectNow = true)
+                    },
+                    onOpenInBackground = { url ->
+                        viewModel.openLinkInBackground(context, url)
+                    },
+                    onOpenInIncognito = { url ->
+                        viewModel.openLinkInIncognito(url)
+                    },
+                    onPeekPreview = { url ->
+                        viewModel.showPeekModal(url, target.title)
+                    },
+                    onCopyLink = { url ->
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Link", url)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Link copiado para a área de transferência", Toast.LENGTH_SHORT).show()
+                    },
+                    onShareLink = { url ->
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, target.title ?: "Link")
+                            putExtra(Intent.EXTRA_TEXT, url)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar Link"))
+                    },
+                    onDownloadLink = { url ->
+                        viewModel.enqueueDownload(
+                            context = context,
+                            url = url,
+                            userAgent = webViewInstance?.settings?.userAgentString ?: ""
+                        )
+                        Toast.makeText(context, "Iniciando download...", Toast.LENGTH_SHORT).show()
+                    },
+                    onSaveImage = { imgUrl ->
+                        viewModel.saveImage(
+                            context = context,
+                            imageUrl = imgUrl,
+                            userAgent = webViewInstance?.settings?.userAgentString ?: ""
+                        )
+                    },
+                    onCopyImageUrl = { imgUrl ->
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Link da Imagem", imgUrl)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Link da imagem copiado!", Toast.LENGTH_SHORT).show()
+                    },
+                    onShareImage = { imgUrl ->
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Imagem")
+                            putExtra(Intent.EXTRA_TEXT, imgUrl)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar Imagem"))
+                    },
+                    onOpenImageInNewTab = { imgUrl ->
+                        viewModel.addNewTab(url = imgUrl, isHome = false, selectNow = true)
+                    },
+                    onSearchImageOnWeb = { imgUrl ->
+                        viewModel.searchImageOnWeb(imgUrl)
+                    },
+                    onDialPhone = { phone ->
+                        try {
+                            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                            context.startActivity(dialIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Não foi possível abrir o discador", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onSendEmail = { email ->
+                        try {
+                            val emailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
+                            context.startActivity(emailIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Não foi possível abrir o app de e-mail", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onDismiss = {
+                        viewModel.dismissContextMenu()
+                    }
+                )
+            }
+        }
+
         // HTML5 FULLSCREEN VIDEO OVERLAY
         if (customView != null) {
             Box(
@@ -2313,6 +2586,11 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     val art = state.readerArticle
                     if (art != null) {
                         viewModel.openAiAssistant(art.title, art.domain, state.displayUrl, art.plainText)
+                    }
+                },
+                onPrintPdf = {
+                    state.readerArticle?.let { article ->
+                        viewModel.printReaderArticle(context, article)
                     }
                 }
             )
@@ -2451,6 +2729,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onDismiss = {
                     viewModel.showPipPermissionDialog(false)
                 }
+            )
+        }
+
+        // INCOGNITO BIOMETRIC LOCK OVERLAY (Aero-Dark Security Glass)
+        if (state.isIncognitoMode && state.isIncognitoLocked) {
+            IncognitoLockOverlay(
+                isLocked = state.isIncognitoLocked,
+                onUnlockRequest = promptBiometricUnlock,
+                onExitIncognito = { viewModel.exitIncognito() },
+                accentColor = state.activeWallpaper.accentColor,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

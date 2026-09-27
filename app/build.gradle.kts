@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation("androidx.media:media:1.7.0")
+    implementation("androidx.biometric:biometric:1.1.0")
 
     // Compose BOM
     implementation(platform(libs.compose.bom))
