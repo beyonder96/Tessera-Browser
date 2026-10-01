@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
@@ -120,6 +121,8 @@ fun TesseraSettingsScreen(
     onRequestDefaultBrowser: () -> Unit = {},
     incognitoBiometricLock: Boolean = false,
     onIncognitoBiometricLockChanged: (Boolean) -> Unit = {},
+    openLinksInExternalApps: Boolean = true,
+    onOpenLinksInExternalAppsChanged: (Boolean) -> Unit = {},
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
     onShowWallpaperChanged: (Boolean) -> Unit,
@@ -898,6 +901,46 @@ fun TesseraSettingsScreen(
                             TesseraSwitch(
                                 checked = incognitoBiometricLock,
                                 onCheckedChange = onIncognitoBiometricLockChanged,
+                                isDarkMode = isDarkMode
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Abrir Links em Apps Externos (Instagram, WhatsApp, X, etc.)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                    contentDescription = null,
+                                    tint = if (isDarkMode) Color(0xFFFFB74D) else Color(0xFFF57C00),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Abrir links em aplicativos externos",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Direcionar automaticamente links do Instagram, WhatsApp, YouTube, X e outros para seus aplicativos instalados",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+                            TesseraSwitch(
+                                checked = openLinksInExternalApps,
+                                onCheckedChange = onOpenLinksInExternalAppsChanged,
                                 isDarkMode = isDarkMode
                             )
                         }

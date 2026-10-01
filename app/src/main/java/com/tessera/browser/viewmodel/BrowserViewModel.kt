@@ -248,6 +248,7 @@ data class BrowserUiState(
     val peekTitle: String? = null,
     val showPeekModal: Boolean = false,
     val contextMenuTarget: ContextMenuTarget? = null,
+    val openLinksInExternalApps: Boolean = true,
 
     // Espaços de Navegação Isolados (Arc Spaces) & Multi-tabs
     val spaces: List<BrowserSpace> = BrowserSpace.DEFAULT_SPACES,
@@ -2179,6 +2180,7 @@ class BrowserViewModel : ViewModel() {
                 val loadedAiProvider = prefs.getString("ai_provider", null)?.let { AiProvider.fromKey(it) }
                 val loadedDigitalMinimalism = if (prefs.contains("digital_minimalism_mode")) prefs.getBoolean("digital_minimalism_mode", true) else null
                 val loadedIncognitoLock = if (prefs.contains("incognito_biometric_lock")) prefs.getBoolean("incognito_biometric_lock", false) else null
+                val loadedOpenInExternal = if (prefs.contains("open_links_in_external_apps")) prefs.getBoolean("open_links_in_external_apps", true) else null
                 val savedTotalBlocked = prefs.getInt("total_blocked_trackers", 0)
 
                 // Saved Pages (Offline)
@@ -2271,6 +2273,7 @@ class BrowserViewModel : ViewModel() {
                         aiProvider = loadedAiProvider ?: current.aiProvider,
                         digitalMinimalismMode = loadedDigitalMinimalism ?: current.digitalMinimalismMode,
                         incognitoBiometricLock = loadedIncognitoLock ?: current.incognitoBiometricLock,
+                        openLinksInExternalApps = loadedOpenInExternal ?: current.openLinksInExternalApps,
                         privacyState = current.privacyState.copy(
                             totalBlockedCount = savedTotalBlocked,
                             dataSavedBytes = savedTotalBlocked.toLong() * PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST,
@@ -2424,6 +2427,7 @@ class BrowserViewModel : ViewModel() {
                     .putString("ai_provider", s.aiProvider.keyName)
                     .putBoolean("digital_minimalism_mode", s.digitalMinimalismMode)
                     .putBoolean("incognito_biometric_lock", s.incognitoBiometricLock)
+                    .putBoolean("open_links_in_external_apps", s.openLinksInExternalApps)
                     .apply()
 
             } catch (e: Exception) {
@@ -3293,14 +3297,32 @@ class BrowserViewModel : ViewModel() {
 
         suggestionJob?.cancel()
         suggestionJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(150) // Small debounce
+            delay(350) // Debounce de 350ms para evitar rajadas de requisições a cada tecla
             try {
                 val suggestUrl = _uiState.value.searchEngine.buildSuggestUrl(trimmed)
                 val url = URL(suggestUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.connectTimeout = 3000
                 conn.readTimeout = 3000
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+
+                // Header de User-Agent autêntico do Chrome Mobile
+                val app = appContext
+                val realUa = if (app != null) {
+                    try {
+                        val def = android.webkit.WebSettings.getDefaultUserAgent(app)
+                        def.replace("; wv", "").replace("Version/4.0 ", "")
+                    } catch (e: Exception) {
+                        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+                    }
+                } else {
+                    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+                }
+
+                conn.setRequestProperty("User-Agent", realUa)
+                conn.setRequestProperty("Accept", "application/json, text/plain, */*")
+                conn.setRequestProperty("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+                conn.setRequestProperty("Sec-CH-UA-Mobile", "?1")
+                conn.setRequestProperty("Sec-CH-UA-Platform", "\"Android\"")
 
                 if (conn.responseCode == 200) {
                     val reader = BufferedReader(InputStreamReader(conn.inputStream))
@@ -3472,6 +3494,21 @@ class BrowserViewModel : ViewModel() {
     fun setShowQuotesWidget(enabled: Boolean) {
         _uiState.update { it.copy(showQuotesWidget = enabled) }
         saveSettings()
+    }
+
+    fun setOpenLinksInExternalApps(enabled: Boolean) {
+        _uiState.update { it.copy(openLinksInExternalApps = enabled) }
+        saveSettings()
+    }
+
+    fun openCurrentUrlInExternalApp(context: Context) {
+        val url = _uiState.value.currentUrl
+        if (url.isNotBlank() && url.startsWith("http")) {
+            val opened = com.tessera.browser.util.DeepLinkHelper.openUrlInExternalApp(context, url)
+            if (!opened) {
+                Toast.makeText(context, "Nenhum aplicativo externo encontrado para este link", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun getWeatherConditionText(code: Int, isDay: Boolean): String {

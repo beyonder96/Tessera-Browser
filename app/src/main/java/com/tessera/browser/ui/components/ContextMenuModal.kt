@@ -79,6 +79,7 @@ fun ContextMenuModal(
     onSearchImageOnWeb: (String) -> Unit,
     onDialPhone: ((String) -> Unit)? = null,
     onSendEmail: ((String) -> Unit)? = null,
+    onOpenInExternalApp: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -306,6 +307,23 @@ fun ContextMenuModal(
                             onOpenInIncognito(link)
                         }
                     )
+
+                    // 4.1 Abrir no Aplicativo Instalado (Instagram, YouTube, etc.)
+                    if (onOpenInExternalApp != null) {
+                        ContextMenuItem(
+                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                            title = "Abrir no Aplicativo",
+                            subtitle = "Abrir no aplicativo instalado no aparelho",
+                            iconTint = Color(0xFFFFB74D),
+                            textColor = textColor,
+                            subColor = subColor,
+                            cardBg = cardBg,
+                            onClick = {
+                                onDismiss()
+                                onOpenInExternalApp(link)
+                            }
+                        )
+                    }
 
                     // 5. Copiar Endereço do Link
                     ContextMenuItem(

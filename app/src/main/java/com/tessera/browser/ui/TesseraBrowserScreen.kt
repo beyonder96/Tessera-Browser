@@ -93,6 +93,7 @@ import androidx.webkit.WebViewFeature
 import android.webkit.SafeBrowsingResponse
 import com.tessera.browser.data.SafeBrowsingThreatInfo
 import com.tessera.browser.ai.AiProvider
+import com.tessera.browser.ui.components.TesseraWebView
 import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.data.ContextMenuTarget
@@ -135,8 +136,16 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
 private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+private fun getEffectiveMobileUserAgent(context: Context): String {
+    return try {
+        val defaultUa = android.webkit.WebSettings.getDefaultUserAgent(context)
+        defaultUa.replace("; wv", "").replace("Version/4.0 ", "")
+    } catch (e: Exception) {
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.107 Mobile Safari/537.36"
+    }
+}
 
 private val AdBlockHosts = setOf(
     "doubleclick.net", "googleadservices.com", "googlesyndication.com",
@@ -945,7 +954,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             .padding(top = 6.dp)
                     },
                     factory = { ctx ->
-                        WebView(ctx).apply {
+                        TesseraWebView(ctx).apply {
+                            isIncognitoMode = state.isIncognitoMode
                             isNestedScrollingEnabled = true
 
                             val cookieManager = CookieManager.getInstance()
@@ -966,7 +976,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 javaScriptCanOpenWindowsAutomatically = true
 
                                 // Standard modern Chrome mobile/desktop UA
-                                userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else MOBILE_USER_AGENT
+                                userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(ctx)
 
                                 applyForceDark(this, state.forceDarkPages)
                                 setGeolocationEnabled(true)
@@ -1154,36 +1164,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     request: WebResourceRequest?
                                 ): Boolean {
                                     val urlString = request?.url?.toString() ?: return false
-                                    if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
-                                        if (urlString.startsWith("intent://") || urlString.startsWith("intent:")) {
-                                            return try {
-                                                val intent = Intent.parseUri(urlString, Intent.URI_INTENT_SCHEME)
-                                                if (intent != null) {
-                                                    val packageManager = context.packageManager
-                                                    val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-                                                    if (resolveInfo != null) {
-                                                        context.startActivity(intent)
-                                                        return true
-                                                    }
-                                                    val fallbackUrl = intent.getStringExtra("browser_fallback_url")
-                                                    if (!fallbackUrl.isNullOrBlank()) {
-                                                        view?.loadUrl(fallbackUrl)
-                                                        return true
-                                                    }
-                                                }
-                                                true
-                                            } catch (e: Exception) {
-                                                true
-                                            }
-                                        }
-                                        return try {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(urlString))
-                                            context.startActivity(intent)
-                                            true
-                                        } catch (e: Exception) {
-                                            true
-                                        }
-                                    }
 
                                     // Intercept direct downloadable files
                                     val cleanUrl = urlString.split("?").firstOrNull()?.lowercase() ?: ""
@@ -1219,6 +1199,18 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         return true
                                     }
 
+                                    // Intercept external applications (Instagram, WhatsApp, X, Spotify, YouTube, etc.) & intents
+                                    val currentContext = view?.context ?: context
+                                    if (com.tessera.browser.util.DeepLinkHelper.handleUrlOverride(
+                                            context = currentContext,
+                                            view = view,
+                                            urlString = urlString,
+                                            openLinksInExternalApps = state.openLinksInExternalApps
+                                        )
+                                    ) {
+                                        return true
+                                    }
+
                                     return false
                                 }
 
@@ -1229,10 +1221,28 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     if (state.adBlockEnabled) {
                                         val host = request?.url?.host?.lowercase() ?: ""
                                         val urlString = request?.url?.toString()?.lowercase() ?: ""
+
+                                        // NUNCA interceptar ou quebrar reCAPTCHA, Google Accounts ou scripts de verificação de integridade
+                                        val isRecaptchaOrCoreAuth = host.contains("recaptcha") ||
+                                                urlString.contains("/recaptcha") ||
+                                                host.contains("gstatic.com") ||
+                                                host == "accounts.google.com"
+
+                                        if (isRecaptchaOrCoreAuth) {
+                                            return super.shouldInterceptRequest(view, request)
+                                        }
+
+                                        // Em páginas de busca do Google, não bloquear os scripts primários de verificação do motor de busca
+                                        val isGoogleSearchDomain = host == "www.google.com" || host == "google.com"
+                                        if (isGoogleSearchDomain && !host.contains("doubleclick") && !host.contains("googleadservices")) {
+                                            if (!urlString.contains("/pagead/")) {
+                                                return super.shouldInterceptRequest(view, request)
+                                            }
+                                        }
+
                                         val isAd = AdBlockHosts.any { host.endsWith(it) } ||
                                                 urlString.contains("/pagead/") ||
-                                                urlString.contains("/adservice/") ||
-                                                urlString.contains("/ads/")
+                                                urlString.contains("/adservice/")
                                         if (isAd) {
                                             viewModel.recordBlockedTracker(host, urlString)
                                             return WebResourceResponse(
@@ -1288,14 +1298,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
 
-                                        // Injeção de AdBlock Cosmético (Ocultação de espaços vazios)
-                                        if (state.adBlockEnabled) {
+                                        val pageHost = try { Uri.parse(url).host?.lowercase() } catch (e: Exception) { null } ?: ""
+                                        val isGoogleOrRecaptcha = pageHost.contains("google.") || pageHost.contains("recaptcha") || pageHost.contains("gstatic.")
+
+                                        // Injeção de AdBlock Cosmético (Ocultação de espaços vazios, exceto domínios Google/reCAPTCHA)
+                                        if (state.adBlockEnabled && !isGoogleOrRecaptcha) {
                                             view?.evaluateJavascript(COSMETIC_ADBLOCK_SCRIPT, null)
                                         }
 
-
-                                        // Cookie banner blocker injection (Opera-style)
-                                        if (state.cookieBlockerEnabled) {
+                                        // Cookie banner blocker injection (Opera-style, exceto domínios Google/reCAPTCHA)
+                                        if (state.cookieBlockerEnabled && !isGoogleOrRecaptcha) {
                                             view?.evaluateJavascript(
                                                 """
                                                 (function() {
@@ -1598,8 +1610,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         }
                     },
                     update = { view ->
+                        (view as? TesseraWebView)?.isIncognitoMode = state.isIncognitoMode
                         applyForceDark(view.settings, state.forceDarkPages)
-                        val targetUa = if (state.isDesktopMode) DESKTOP_USER_AGENT else MOBILE_USER_AGENT
+                        val targetUa = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(view.context)
                         if (view.settings.userAgentString != targetUa) {
                             view.settings.userAgentString = targetUa
                             view.settings.useWideViewPort = true
@@ -2185,6 +2198,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         viewModel.requestEnterPip(activity)
                     }
                 },
+                onOpenInExternalApp = {
+                    viewModel.openCurrentUrlInExternalApp(context)
+                },
                 geminiApiKey = state.geminiApiKey,
                 onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
                 onDismiss = { viewModel.dismissQuickSettings() }
@@ -2241,6 +2257,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         Toast.makeText(context, "Bloqueio biométrico desativado", Toast.LENGTH_SHORT).show()
                     }
                 },
+                openLinksInExternalApps = state.openLinksInExternalApps,
+                onOpenLinksInExternalAppsChanged = { viewModel.setOpenLinksInExternalApps(it) },
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
@@ -2501,6 +2519,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             context.startActivity(emailIntent)
                         } catch (e: Exception) {
                             Toast.makeText(context, "Não foi possível abrir o app de e-mail", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onOpenInExternalApp = { link ->
+                        val opened = com.tessera.browser.util.DeepLinkHelper.openUrlInExternalApp(context, link)
+                        if (!opened) {
+                            Toast.makeText(context, "Nenhum aplicativo instalado para este link", Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDismiss = {

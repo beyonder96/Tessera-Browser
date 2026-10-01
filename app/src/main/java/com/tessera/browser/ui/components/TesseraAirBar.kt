@@ -85,6 +85,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PlatformImeOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -206,12 +207,21 @@ fun TesseraAirBar(
         label = "airbar_tint"
     )
 
-    val effectiveAccent = if (animatedTintColor != Color.Transparent) animatedTintColor else accentColor
+    val incognitoAccent = Color(0xFFA855F7) // Ultra-vivid Neon Amethyst
+    val effectiveAccent = if (isIncognito) {
+        incognitoAccent
+    } else if (animatedTintColor != Color.Transparent) {
+        animatedTintColor
+    } else {
+        accentColor
+    }
 
     val baseDarkOmni = Color(0xE024201E)
     val baseLightOmni = Color(0xEEFFFFFF)
 
-    val omniBg = if (isDarkMode) {
+    val omniBg = if (isIncognito) {
+        Color(0xF513101E) // Deep Obsidian Stealth Glass
+    } else if (isDarkMode) {
         if (animatedTintColor != Color.Transparent) {
             lerp(baseDarkOmni, animatedTintColor.copy(alpha = 0.94f), 0.20f)
         } else {
@@ -227,6 +237,14 @@ fun TesseraAirBar(
 
     val dockBg = if (isHomePage) {
         SolidColor(Color.Transparent)
+    } else if (isIncognito) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0x000F0B18),
+                Color(0xCC0F0B18),
+                Color(0xFA0F0B18)
+            )
+        )
     } else if (isDarkMode) {
         if (animatedTintColor != Color.Transparent) {
             Brush.verticalGradient(
@@ -257,7 +275,16 @@ fun TesseraAirBar(
         }
     }
 
-    val omniBorderBrush = if (animatedTintColor != Color.Transparent) {
+    val omniBorderBrush = if (isIncognito) {
+        Brush.horizontalGradient(
+            listOf(
+                Color(0xFFA855F7).copy(alpha = 0.60f),
+                Color(0xFF7C3AED).copy(alpha = 0.35f),
+                Color.White.copy(alpha = 0.20f),
+                Color(0xFFA855F7).copy(alpha = 0.50f)
+            )
+        )
+    } else if (animatedTintColor != Color.Transparent) {
         Brush.horizontalGradient(
             colors = if (isDarkMode) {
                 listOf(
@@ -284,8 +311,8 @@ fun TesseraAirBar(
         )
     }
 
-    val contentColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF8E8E93)
+    val contentColor = if (isIncognito || isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
+    val mutedColor = if (isIncognito) Color(0xFFC4B5FD).copy(alpha = 0.65f) else if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF8E8E93)
 
     Box(
         modifier = modifier
@@ -409,7 +436,7 @@ fun TesseraAirBar(
                         ) {
                             if (queryText.isEmpty()) {
                                 Text(
-                                    text = "Pesquisar ou digitar endereço",
+                                    text = if (isIncognito) "Pesquisa anônima e privada" else "Pesquisar ou digitar endereço",
                                     color = mutedColor,
                                     fontSize = 14.5.sp,
                                     maxLines = 1
@@ -431,7 +458,13 @@ fun TesseraAirBar(
                                     fontWeight = FontWeight.Medium
                                 ),
                                 cursorBrush = SolidColor(effectiveAccent),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Go,
+                                    autoCorrectEnabled = !isIncognito,
+                                    platformImeOptions = if (isIncognito) PlatformImeOptions(
+                                        privateImeOptions = "com.tessera.browser.INCOGNITO,org.chromium.chrome.browser.incognito_mode,com.google.android.inputmethod.latin.noSuggestions"
+                                    ) else null
+                                ),
                                 keyboardActions = KeyboardActions(
                                     onGo = {
                                         if (queryText.isNotBlank()) {
@@ -596,6 +629,35 @@ fun TesseraAirBar(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
+                            if (isIncognito) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(effectiveAccent.copy(alpha = 0.20f))
+                                        .border(0.6.dp, effectiveAccent.copy(alpha = 0.50f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_incognito),
+                                            contentDescription = "Anônimo",
+                                            tint = effectiveAccent,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Text(
+                                            text = "ANÔNIMO",
+                                            color = effectiveAccent,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(5.dp))
+                            }
+
                             val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
                             val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
 
@@ -761,7 +823,10 @@ fun TesseraAirBar(
                             .size(44.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isIncognito) effectiveAccent.copy(alpha = 0.15f) else Color.Transparent
+                                if (isIncognito) effectiveAccent.copy(alpha = 0.22f) else Color.Transparent
+                            )
+                            .then(
+                                if (isIncognito) Modifier.border(1.dp, effectiveAccent.copy(alpha = 0.60f), CircleShape) else Modifier
                             )
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -811,18 +876,27 @@ fun TesseraAirBar(
                             .shadow(
                                 elevation = 16.dp,
                                 shape = CircleShape,
-                                ambientColor = Color(0x6680D8FF),
-                                spotColor = Color(0x99B388FF)
+                                ambientColor = if (isIncognito) Color(0x997E22CE) else Color(0x6680D8FF),
+                                spotColor = if (isIncognito) Color(0xDDA855F7) else Color(0x99B388FF)
                             )
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF80D8FF), // Vivid Soft Cyan
-                                        Color(0xFF82B1FF), // Soft Sky Blue
-                                        Color(0xFFB388FF), // Soft Lilac
-                                        Color(0xFFEA80FC)  // Soft Rose Violet
-                                    )
+                                    colors = if (isIncognito) {
+                                        listOf(
+                                            Color(0xFF581C87), // Deep Amethyst
+                                            Color(0xFF7E22CE), // Vivid Purple
+                                            Color(0xFFA855F7), // Neon Violet
+                                            Color(0xFFF3E8FF)  // Glowing Specular Orchid
+                                        )
+                                    } else {
+                                        listOf(
+                                            Color(0xFF80D8FF), // Vivid Soft Cyan
+                                            Color(0xFF82B1FF), // Soft Sky Blue
+                                            Color(0xFFB388FF), // Soft Lilac
+                                            Color(0xFFEA80FC)  // Soft Rose Violet
+                                        )
+                                    }
                                 )
                             )
                             .border(
@@ -830,7 +904,7 @@ fun TesseraAirBar(
                                 brush = Brush.verticalGradient(
                                     listOf(
                                         Color.White.copy(alpha = 0.95f),
-                                        Color.White.copy(alpha = 0.35f)
+                                        if (isIncognito) Color(0xFFA855F7).copy(alpha = 0.50f) else Color.White.copy(alpha = 0.35f)
                                     )
                                 ),
                                 shape = CircleShape

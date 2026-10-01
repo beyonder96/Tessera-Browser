@@ -1,4 +1,4 @@
-﻿package com.tessera.browser.data
+package com.tessera.browser.data
 
 import androidx.compose.ui.graphics.Color
 import com.tessera.browser.R
@@ -18,7 +18,7 @@ enum class SearchEngine(
         displayName = "Google",
         searchUrlTemplate = "https://www.google.com/search?q=%s",
         homeUrl = "https://www.google.com",
-        suggestUrlTemplate = "https://suggestqueries.google.com/complete/search?client=firefox&q=%s",
+        suggestUrlTemplate = "https://suggestqueries.google.com/complete/search?client=chrome&q=%s",
         iconRes = R.drawable.ic_brand_google,
         accentColor = Color(0xFF4285F4)
     ),

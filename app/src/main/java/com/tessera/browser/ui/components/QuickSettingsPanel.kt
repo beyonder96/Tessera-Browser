@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AppShortcut
 import androidx.compose.material.icons.rounded.Check
@@ -131,6 +132,7 @@ fun QuickSettingsPanel(
     isAutoPipEnabled: Boolean = true,
     onAutoPipChanged: (Boolean) -> Unit = {},
     onEnterPip: () -> Unit = {},
+    onOpenInExternalApp: () -> Unit = {},
     geminiApiKey: String? = null,
     onGeminiApiKeyChanged: (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -437,6 +439,10 @@ fun QuickSettingsPanel(
                 PageActionItem(Icons.Rounded.SmartDisplay, "Janela Flutuante", Color(0xFF42A5F5)) {
                     onDismiss()
                     onEnterPip()
+                },
+                PageActionItem(Icons.AutoMirrored.Rounded.OpenInNew, "Abrir no App", Color(0xFFFFB74D)) {
+                    onDismiss()
+                    onOpenInExternalApp()
                 }
             )
 
