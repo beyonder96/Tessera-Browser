@@ -102,20 +102,20 @@ fun HorizontalTabsStrip(
             val pillShape = RoundedCornerShape(18.dp)
 
             val pillBg = when {
-                isActive && isIncognito -> Color(0xF0201833)
-                isActive && isDarkMode -> Color(0xF02C2622)
-                isActive -> Color(0xF8FFFFFF)
-                isIncognito -> Color(0x331E1530)
-                isDarkMode -> Color(0x33FFFFFF)
-                else -> Color(0x33000000)
+                isActive && isIncognito -> Color(0xF524183E)
+                isActive && isDarkMode -> Color(0xF82C2622)
+                isActive -> Color(0xFFFFFFFF)
+                isIncognito -> Color(0xF0181126)
+                isDarkMode -> Color(0xF2201C19)
+                else -> Color(0xF2F0EBE6)
             }
 
             val pillBorder = when {
-                isActive && isIncognito -> accentColor.copy(alpha = 0.80f)
-                isActive -> accentColor.copy(alpha = 0.70f)
-                isIncognito -> Color.White.copy(alpha = 0.12f)
-                isDarkMode -> Color.White.copy(alpha = 0.10f)
-                else -> Color.Black.copy(alpha = 0.08f)
+                isActive && isIncognito -> accentColor.copy(alpha = 0.85f)
+                isActive -> accentColor.copy(alpha = 0.80f)
+                isIncognito -> Color.White.copy(alpha = 0.16f)
+                isDarkMode -> Color.White.copy(alpha = 0.14f)
+                else -> Color.Black.copy(alpha = 0.10f)
             }
 
             val hostDomain = remember(tab.url, tab.isHomePage) {
@@ -142,15 +142,11 @@ fun HorizontalTabsStrip(
                 modifier = Modifier
                     .height(34.dp)
                     .widthIn(min = 105.dp, max = 160.dp)
-                    .then(
-                        if (isActive) {
-                            Modifier.shadow(
-                                elevation = 6.dp,
-                                shape = pillShape,
-                                ambientColor = accentColor.copy(alpha = 0.20f),
-                                spotColor = Color.Black.copy(alpha = 0.15f)
-                            )
-                        } else Modifier
+                    .shadow(
+                        elevation = if (isActive) 6.dp else 2.5.dp,
+                        shape = pillShape,
+                        ambientColor = if (isActive) accentColor.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f),
+                        spotColor = Color.Black.copy(alpha = 0.15f)
                     )
                     .clip(pillShape)
                     .background(pillBg)
@@ -235,19 +231,25 @@ fun HorizontalTabsStrip(
         // Trailing Add Tab Button (+)
         item {
             val addBtnBg = when {
-                isIncognito -> Color(0x331E1530)
-                isDarkMode -> Color(0x33FFFFFF)
-                else -> Color(0x33000000)
+                isIncognito -> Color(0xF0181126)
+                isDarkMode -> Color(0xF2201C19)
+                else -> Color(0xF2F0EBE6)
             }
             val addBorder = when {
-                isIncognito -> Color.White.copy(alpha = 0.14f)
-                isDarkMode -> Color.White.copy(alpha = 0.12f)
+                isIncognito -> Color.White.copy(alpha = 0.16f)
+                isDarkMode -> Color.White.copy(alpha = 0.14f)
                 else -> Color.Black.copy(alpha = 0.10f)
             }
 
             Box(
                 modifier = Modifier
                     .size(34.dp)
+                    .shadow(
+                        elevation = 3.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.20f),
+                        spotColor = Color.Black.copy(alpha = 0.15f)
+                    )
                     .clip(CircleShape)
                     .background(addBtnBg)
                     .border(0.8.dp, addBorder, CircleShape)

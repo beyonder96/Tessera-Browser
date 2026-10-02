@@ -168,7 +168,7 @@ fun PodcastMiniPlayerCapsule(
                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                             ) {
                                 Text(
-                                    text = "🎙️ ${state.selectedVoice.id}",
+                                    text = state.selectedVoice.id.uppercase(),
                                     color = Color(0xFF9E7BFF),
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold

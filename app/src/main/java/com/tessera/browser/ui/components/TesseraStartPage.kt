@@ -189,7 +189,11 @@ fun TesseraStartPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(text = currentSpaceEmoji, fontSize = 13.sp)
+                SpaceVectorIcon(
+                    identifier = currentSpaceEmoji,
+                    tint = currentSpaceColor,
+                    modifier = Modifier.size(15.dp)
+                )
                 Text(
                     text = currentSpaceName,
                     color = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E),

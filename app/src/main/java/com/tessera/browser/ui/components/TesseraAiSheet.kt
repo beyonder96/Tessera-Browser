@@ -56,8 +56,12 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.CompareArrows
+import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.TipsAndUpdates
@@ -780,30 +784,40 @@ fun TesseraAiSheet(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 val quickSuggestions = listOf(
-                                    "💡 Explique para leigos",
-                                    "⚖️ Quais os prós e contras?",
-                                    "📌 Principais dados e números",
-                                    "❓ Qual o impacto prático?"
+                                    Pair("Explique para leigos", Icons.Rounded.Lightbulb),
+                                    Pair("Quais os prós e contras?", Icons.Rounded.CompareArrows),
+                                    Pair("Principais dados e números", Icons.Rounded.BarChart),
+                                    Pair("Qual o impacto prático?", Icons.Rounded.HelpOutline)
                                 )
-                                quickSuggestions.forEach { prompt ->
-                                    val cleanPrompt = prompt.replace(Regex("^[💡⚖️📌❓]\\s*"), "")
+                                quickSuggestions.forEach { (promptText, iconVector) ->
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(surfaceCardBg)
                                             .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            selectedTab = 1
-                                            onAskQuestion(cleanPrompt)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                                            .clickable {
+                                                selectedTab = 1
+                                                onAskQuestion(promptText)
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 7.dp)
                                     ) {
-                                        Text(
-                                            text = prompt,
-                                            color = textColor,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = iconVector,
+                                                contentDescription = null,
+                                                tint = providerAccentColor,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = promptText,
+                                                color = textColor,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
                                 }
                             }

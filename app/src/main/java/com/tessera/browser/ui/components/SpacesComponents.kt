@@ -137,10 +137,15 @@ fun SpacesCarouselBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Emoji do Espaço
-                    Text(
-                        text = space.iconEmoji,
-                        fontSize = 14.sp
+                    // Ícone do Espaço
+                    SpaceVectorIcon(
+                        identifier = space.iconEmoji,
+                        tint = if (isActive) {
+                            if (isDarkMode) Color.White else spaceColor
+                        } else {
+                            if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF495057)
+                        },
+                        modifier = Modifier.size(16.dp)
                     )
 
                     // Nome e contador de abas
@@ -376,7 +381,11 @@ fun SpaceEditDialog(
                                 .clickable { selectedEmoji = emoji },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = emoji, fontSize = 18.sp)
+                            SpaceVectorIcon(
+                                identifier = emoji,
+                                tint = if (isSelected) Color(selectedColor) else (if (isDarkMode) Color.White.copy(alpha = 0.70f) else Color(0xFF495057)),
+                                modifier = Modifier.size(19.dp)
+                            )
                         }
                     }
                 }
@@ -482,7 +491,11 @@ fun MoveTabToSpaceDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(space.iconEmoji, fontSize = 16.sp)
+                        SpaceVectorIcon(
+                            identifier = space.iconEmoji,
+                            tint = if (isCurrent) Color.Gray else Color(space.colorArgb),
+                            modifier = Modifier.size(17.dp)
+                        )
                         Text(
                             text = space.name + if (isCurrent) " (Atual)" else "",
                             fontWeight = if (isCurrent) FontWeight.Normal else FontWeight.SemiBold,
@@ -639,7 +652,11 @@ fun SpaceQuickSwitcherModal(
                                 .border(1.dp, spaceColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = space.iconEmoji, fontSize = 20.sp)
+                            SpaceVectorIcon(
+                                identifier = space.iconEmoji,
+                                tint = spaceColor,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
                         Column {

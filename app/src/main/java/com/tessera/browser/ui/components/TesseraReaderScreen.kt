@@ -434,10 +434,10 @@ fun TesseraReaderScreen(
                                         // Theme Badge Indicator
                                         Text(
                                             text = when (theme) {
-                                                ReaderTheme.SEPIA -> "👁️ Conforto Ocular"
-                                                ReaderTheme.DARK -> "🌙 Noturno"
-                                                ReaderTheme.AMOLED -> "🖤 AMOLED"
-                                                ReaderTheme.LIGHT -> "☀️ Claro"
+                                                ReaderTheme.SEPIA -> "Conforto Ocular"
+                                                ReaderTheme.DARK -> "Modo Escuro"
+                                                ReaderTheme.AMOLED -> "Preto Puro"
+                                                ReaderTheme.LIGHT -> "Modo Claro"
                                             },
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Medium,
@@ -513,7 +513,7 @@ fun TesseraReaderScreen(
                                                 color = colors.textSecondary
                                             )
                                             Text(
-                                                text = "🖍️ ${readerHighlights.size} marcas",
+                                                text = "${readerHighlights.size} destaques",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = colors.accent

@@ -233,9 +233,9 @@ fun PodcastFullPlayerModal(
                             ) {
                                 Text(
                                     text = if (state.isNeuralVoiceActive || state.selectedVoice.isNeural) {
-                                        "🎙️ Voz Neural: ${state.selectedVoice.displayName}"
+                                        "Voz Neural: ${state.selectedVoice.displayName}"
                                     } else {
-                                        "📱 Voz do Sistema (Offline)"
+                                        "Voz do Sistema (Offline)"
                                     },
                                     color = Color.White,
                                     fontSize = 11.sp,

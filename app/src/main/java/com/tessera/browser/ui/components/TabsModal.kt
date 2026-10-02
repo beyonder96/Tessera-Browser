@@ -198,9 +198,10 @@ fun TabsModal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = currentSpace.iconEmoji,
-                            fontSize = 14.sp
+                        SpaceVectorIcon(
+                            identifier = currentSpace.iconEmoji,
+                            tint = if (isDarkMode) Color.White else spaceColor,
+                            modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = currentSpace.name,
@@ -250,7 +251,11 @@ fun TabsModal(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Text(text = sp.iconEmoji, fontSize = 15.sp)
+                                        SpaceVectorIcon(
+                                            identifier = sp.iconEmoji,
+                                            tint = Color(sp.colorArgb),
+                                            modifier = Modifier.size(16.dp)
+                                        )
                                         Text(
                                             text = sp.name,
                                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
@@ -931,19 +936,28 @@ fun TabsModal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(text = "Ícone Emoji:", fontSize = 13.sp)
-                        val emojiPresets = listOf("🚀", "💼", "📚", "🎨", "🛍️", "🏖️", "🎧")
-                        emojiPresets.forEach { emoji ->
-                            val isSel = newSpaceEmoji == emoji
+                        Text(text = "Ícone:", fontSize = 13.sp)
+                        val iconPresets = listOf("🌐", "💼", "🏠", "📚", "🚀", "🎨", "🎧")
+                        iconPresets.forEach { iconKey ->
+                            val isSel = newSpaceEmoji == iconKey
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) accentColor.copy(alpha = 0.2f) else Color.Transparent)
-                                    .clickable { newSpaceEmoji = emoji },
+                                    .background(if (isSel) accentColor.copy(alpha = 0.20f) else Color.Transparent)
+                                    .border(
+                                        width = if (isSel) 1.dp else 0.dp,
+                                        color = if (isSel) accentColor else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { newSpaceEmoji = iconKey },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(text = emoji, fontSize = 16.sp)
+                                SpaceVectorIcon(
+                                    identifier = iconKey,
+                                    tint = if (isSel) accentColor else mutedColor,
+                                    modifier = Modifier.size(17.dp)
+                                )
                             }
                         }
                     }

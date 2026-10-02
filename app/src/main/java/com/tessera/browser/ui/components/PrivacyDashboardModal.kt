@@ -23,13 +23,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DataUsage
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
@@ -294,13 +299,23 @@ fun PrivacyDashboardModal(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "✨ Nenhum rastreador invasivo ativo nesta página.\nSeus dados estão protegidos.",
-                        color = mutedColor,
-                        fontSize = 12.5.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 18.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Nenhum rastreador invasivo ativo nesta página.\nSeus dados estão protegidos.",
+                            color = mutedColor,
+                            fontSize = 12.5.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
                 }
             } else {
                 Column(
@@ -511,10 +526,28 @@ private fun BlockedTrackerItemCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.weight(1f)
         ) {
-            Text(
-                text = item.category.iconEmoji,
-                fontSize = 18.sp
-            )
+            val categoryIcon = when (item.category) {
+                com.tessera.browser.data.TrackerCategory.ADVERTISING -> Icons.Rounded.Campaign
+                com.tessera.browser.data.TrackerCategory.ANALYTICS -> Icons.Rounded.BarChart
+                com.tessera.browser.data.TrackerCategory.SOCIAL -> Icons.Rounded.Share
+                com.tessera.browser.data.TrackerCategory.FINGERPRINTING -> Icons.Rounded.Fingerprint
+                com.tessera.browser.data.TrackerCategory.SECURITY -> Icons.Rounded.Shield
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF06B6D4).copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = categoryIcon,
+                    contentDescription = item.category.displayName,
+                    tint = Color(0xFF06B6D4),
+                    modifier = Modifier.size(17.dp)
+                )
+            }
 
             Column {
                 Text(

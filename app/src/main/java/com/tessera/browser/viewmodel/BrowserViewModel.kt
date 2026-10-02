@@ -307,7 +307,7 @@ data class BrowserUiState(
     // Search Autocomplete & Trends
     val searchSuggestions: List<String> = emptyList(),
     val trendingTopics: List<String> = listOf(
-        "🔥 Inteligência Artificial",
+        "Inteligência Artificial",
         "Notícias do Dia",
         "Clima & Previsão",
         "Lançamentos de Jogos",
@@ -3265,7 +3265,7 @@ class BrowserViewModel : ViewModel() {
                 onFailure = { err ->
                     val errorMessage = AiChatMessage(
                         role = "assistant",
-                        content = "⚠️ ${err.message ?: "Não foi possível obter resposta no momento."}"
+                        content = err.message ?: "Não foi possível obter resposta no momento."
                     )
                     _uiState.update {
                         it.copy(

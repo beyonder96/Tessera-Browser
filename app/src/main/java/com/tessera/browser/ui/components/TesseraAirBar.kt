@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
@@ -247,37 +248,37 @@ fun TesseraAirBar(
     } else if (isIncognito) {
         Brush.verticalGradient(
             listOf(
-                Color(0x000F0B18),
-                Color(0xCC0F0B18),
-                Color(0xFA0F0B18)
+                Color(0x440F0B18),
+                Color(0xDD0F0B18),
+                Color(0xFC0F0B18)
             )
         )
     } else if (isDarkMode) {
         if (animatedTintColor != Color.Transparent) {
             Brush.verticalGradient(
                 listOf(
-                    Color(0x00120E0D),
-                    lerp(Color(0x88120E0D), animatedTintColor.copy(alpha = 0.35f), 0.28f),
-                    lerp(Color(0xEE120E0D), animatedTintColor.copy(alpha = 0.55f), 0.28f)
+                    Color(0x55120E0D),
+                    lerp(Color(0xBB120E0D), animatedTintColor.copy(alpha = 0.40f), 0.28f),
+                    lerp(Color(0xFC120E0D), animatedTintColor.copy(alpha = 0.60f), 0.28f)
                 )
             )
         } else {
             Brush.verticalGradient(
-                listOf(Color(0x00120E0D), Color(0xAA120E0D), Color(0xEE120E0D))
+                listOf(Color(0x55120E0D), Color(0xCC120E0D), Color(0xFC120E0D))
             )
         }
     } else {
         if (animatedTintColor != Color.Transparent) {
             Brush.verticalGradient(
                 listOf(
-                    Color(0x00FFFFFF),
-                    lerp(Color(0xCCFFFFFF), animatedTintColor.copy(alpha = 0.20f), 0.25f),
-                    lerp(Color(0xFAFFFFFF), animatedTintColor.copy(alpha = 0.35f), 0.25f)
+                    Color(0x40FFFFFF),
+                    lerp(Color(0xE0FFFFFF), animatedTintColor.copy(alpha = 0.22f), 0.25f),
+                    lerp(Color(0xFCFFFFFF), animatedTintColor.copy(alpha = 0.35f), 0.25f)
                 )
             )
         } else {
             Brush.verticalGradient(
-                listOf(Color(0x00FFFFFF), Color(0xCCFFFFFF), Color(0xFAFFFFFF))
+                listOf(Color(0x40FFFFFF), Color(0xE0FFFFFF), Color(0xFCFFFFFF))
             )
         }
     }
@@ -897,44 +898,66 @@ fun TesseraAirBar(
                         )
                     }
 
-                    // 3. Botão IA (Gorgeous 3D Iridescent Glowing Pearl Orb)
+                    // 3. Botão IA (Futuristic Neural Intelligence Sparkle Emblem)
+                    val aiBorderBrush = if (isIncognito) {
+                        Brush.sweepGradient(
+                            listOf(
+                                Color(0xFFA855F7),
+                                Color(0xFFC084FC),
+                                Color(0xFF7C3AED),
+                                Color(0xFFE879F9),
+                                Color(0xFFA855F7)
+                            )
+                        )
+                    } else {
+                        Brush.sweepGradient(
+                            listOf(
+                                Color(0xFF00E5FF), // Electric Cyan
+                                Color(0xFF6366F1), // Royal Indigo
+                                Color(0xFFA855F7), // Vivid Violet
+                                Color(0xFFEC4899), // Neon Rose
+                                Color(0xFF00E5FF)  // Electric Cyan
+                            )
+                        )
+                    }
+
+                    val aiBaseBg = if (isIncognito) {
+                        Brush.radialGradient(
+                            listOf(
+                                Color(0xFF2A1547), // Deep purple core
+                                Color(0xFF0F0B18)  // Obsidian perimeter
+                            )
+                        )
+                    } else if (isDarkMode) {
+                        Brush.radialGradient(
+                            listOf(
+                                Color(0xFF1E1B4B), // Luminous indigo core
+                                Color(0xFF0C0A14)  // Dark glass perimeter
+                            )
+                        )
+                    } else {
+                        Brush.radialGradient(
+                            listOf(
+                                Color(0xFFFFFFFF), // Pure bright core
+                                Color(0xFFEEF2FF)  // Soft ice lavender perimeter
+                            )
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .size(46.dp)
                             .shadow(
-                                elevation = 16.dp,
+                                elevation = 12.dp,
                                 shape = CircleShape,
-                                ambientColor = if (isIncognito) Color(0x997E22CE) else Color(0x6680D8FF),
-                                spotColor = if (isIncognito) Color(0xDDA855F7) else Color(0x99B388FF)
+                                ambientColor = if (isIncognito) Color(0x99A855F7) else Color(0x776366F1),
+                                spotColor = if (isIncognito) Color(0xCCA855F7) else Color(0x9900E5FF)
                             )
                             .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = if (isIncognito) {
-                                        listOf(
-                                            Color(0xFF581C87), // Deep Amethyst
-                                            Color(0xFF7E22CE), // Vivid Purple
-                                            Color(0xFFA855F7), // Neon Violet
-                                            Color(0xFFF3E8FF)  // Glowing Specular Orchid
-                                        )
-                                    } else {
-                                        listOf(
-                                            Color(0xFF80D8FF), // Vivid Soft Cyan
-                                            Color(0xFF82B1FF), // Soft Sky Blue
-                                            Color(0xFFB388FF), // Soft Lilac
-                                            Color(0xFFEA80FC)  // Soft Rose Violet
-                                        )
-                                    }
-                                )
-                            )
+                            .background(aiBaseBg)
                             .border(
-                                width = 1.2.dp,
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        Color.White.copy(alpha = 0.95f),
-                                        if (isIncognito) Color(0xFFA855F7).copy(alpha = 0.50f) else Color.White.copy(alpha = 0.35f)
-                                    )
-                                ),
+                                width = 1.4.dp,
+                                brush = aiBorderBrush,
                                 shape = CircleShape
                             )
                             .clickable(
@@ -947,14 +970,24 @@ fun TesseraAirBar(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Soft specular glossy highlight on top of the orb
+                        // Subtle inner ambient illumination halo
                         Box(
                             modifier = Modifier
-                                .size(16.dp)
-                                .align(Alignment.TopCenter)
-                                .padding(top = 4.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.45f))
+                                .background(
+                                    if (isIncognito) Color(0xFFA855F7).copy(alpha = 0.20f)
+                                    else if (isDarkMode) Color(0xFF6366F1).copy(alpha = 0.22f)
+                                    else Color(0xFF6366F1).copy(alpha = 0.10f)
+                                )
+                        )
+
+                        // AI Nova Sparkle Icon
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = "Tessera AI Assistant",
+                            tint = if (isDarkMode || isIncognito) Color.White else Color(0xFF4F46E5),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 

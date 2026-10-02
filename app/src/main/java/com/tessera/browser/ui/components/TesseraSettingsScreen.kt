@@ -1048,7 +1048,7 @@ fun TesseraSettingsScreen(
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = "⚡ Groq Cloud",
+                                            text = "Groq Cloud",
                                             fontSize = 13.sp,
                                             fontWeight = if (isGroq) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isGroq) groqColor else textPrimary
@@ -1076,7 +1076,7 @@ fun TesseraSettingsScreen(
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = "✨ Google Gemini",
+                                            text = "Google Gemini",
                                             fontSize = 13.sp,
                                             fontWeight = if (isGemini) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isGemini) geminiColor else textPrimary
