@@ -103,6 +103,7 @@ fun TesseraSettingsScreen(
     selectedWallpaperId: String,
     customWallpaperUri: String? = null,
     showFavoritesBar: Boolean,
+    showPillTabsBar: Boolean = true,
     showWeatherWidget: Boolean,
     showQuotesWidget: Boolean,
     tesseraAiEnabled: Boolean,
@@ -129,6 +130,7 @@ fun TesseraSettingsScreen(
     onSelectWallpaper: (String) -> Unit,
     onUploadWallpaper: () -> Unit,
     onShowFavoritesBarChanged: (Boolean) -> Unit,
+    onShowPillTabsBarChanged: (Boolean) -> Unit = {},
     onShowWeatherWidgetChanged: (Boolean) -> Unit,
     onShowQuotesWidgetChanged: (Boolean) -> Unit,
     onTesseraAiChanged: (Boolean) -> Unit,
@@ -509,6 +511,34 @@ fun TesseraSettingsScreen(
                             TesseraSwitch(
                                 checked = showFavoritesBar,
                                 onCheckedChange = onShowFavoritesBarChanged,
+                                isDarkMode = isDarkMode
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+
+                        // Barra de Abas em Pílulas (Estilo Opera Air)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                                Text(
+                                    text = "Abas em Pílulas (Opera Air)",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary
+                                )
+                                Text(
+                                    text = "Exibe carrossel de abas horizontais flutuantes acima da barra de pesquisa",
+                                    fontSize = 12.sp,
+                                    color = textSecondary
+                                )
+                            }
+                            TesseraSwitch(
+                                checked = showPillTabsBar,
+                                onCheckedChange = onShowPillTabsBarChanged,
                                 isDarkMode = isDarkMode
                             )
                         }

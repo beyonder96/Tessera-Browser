@@ -345,6 +345,7 @@ data class BrowserUiState(
     val selectedWallpaperId: String = "summer_villa",
     val customWallpaperUri: String? = null,
     val showFavoritesBar: Boolean = true,
+    val showPillTabsBar: Boolean = true,
     val tesseraAiEnabled: Boolean = true,
     val aiToolbarButton: Boolean = true,
     val aiTextHighlightPrompts: Boolean = true,
@@ -2154,6 +2155,7 @@ class BrowserViewModel : ViewModel() {
                 val selectedWallpaper = prefs.getString("selected_wallpaper_id", null)
                 val customWallpaper = prefs.getString("custom_wallpaper_uri", null)
                 val showFavorites = if (prefs.contains("show_favorites_bar")) prefs.getBoolean("show_favorites_bar", true) else null
+                val showPillTabs = if (prefs.contains("show_pill_tabs_bar")) prefs.getBoolean("show_pill_tabs_bar", true) else null
                 val tesseraAi = if (prefs.contains("tessera_ai_enabled")) prefs.getBoolean("tessera_ai_enabled", true) else null
                 val adBlock = if (prefs.contains("ad_block_enabled")) prefs.getBoolean("ad_block_enabled", true) else null
                 val showWeather = if (prefs.contains("show_weather_widget")) prefs.getBoolean("show_weather_widget", true) else null
@@ -2256,6 +2258,7 @@ class BrowserViewModel : ViewModel() {
                         selectedWallpaperId = selectedWallpaper ?: current.selectedWallpaperId,
                         customWallpaperUri = customWallpaper ?: current.customWallpaperUri,
                         showFavoritesBar = showFavorites ?: current.showFavoritesBar,
+                        showPillTabsBar = showPillTabs ?: current.showPillTabsBar,
                         tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
                         adBlockEnabled = adBlock ?: current.adBlockEnabled,
                         cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
@@ -2411,6 +2414,7 @@ class BrowserViewModel : ViewModel() {
                     .putString("selected_wallpaper_id", s.selectedWallpaperId)
                     .putString("custom_wallpaper_uri", s.customWallpaperUri)
                     .putBoolean("show_favorites_bar", s.showFavoritesBar)
+                    .putBoolean("show_pill_tabs_bar", s.showPillTabsBar)
                     .putBoolean("tessera_ai_enabled", s.tesseraAiEnabled)
                     .putBoolean("ad_block_enabled", s.adBlockEnabled)
                     .putBoolean("cookie_blocker_enabled", s.cookieBlockerEnabled)
@@ -3454,6 +3458,11 @@ class BrowserViewModel : ViewModel() {
 
     fun setShowFavoritesBar(enabled: Boolean) {
         _uiState.update { it.copy(showFavoritesBar = enabled) }
+        saveSettings()
+    }
+
+    fun setShowPillTabsBar(enabled: Boolean) {
+        _uiState.update { it.copy(showPillTabsBar = enabled) }
         saveSettings()
     }
 

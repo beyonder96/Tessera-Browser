@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.R
 import com.tessera.browser.data.SpeedDialItem
+import com.tessera.browser.viewmodel.BrowserTab
 
 /**
  * Tessera AirBar — Iconic Two-Tier Ergonomic Floating Navigation Bar.
@@ -153,6 +154,12 @@ fun TesseraAirBar(
     currentSpaceName: String = "Geral",
     currentSpaceColor: Color = Color(0xFF0288D1),
     onOpenSpaces: () -> Unit = {},
+    tabs: List<BrowserTab> = emptyList(),
+    activeTabId: String = "",
+    showTabStrip: Boolean = true,
+    onSelectTab: (String) -> Unit = {},
+    onCloseTab: (String) -> Unit = {},
+    onNewTab: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var queryText by remember { mutableStateOf(displayUrl) }
@@ -354,6 +361,27 @@ fun TesseraAirBar(
                         .clip(RoundedCornerShape(1.dp)),
                     color = effectiveAccent,
                     trackColor = Color.Transparent
+                )
+            }
+
+            // =========================================================================
+            // 0. OPERA AIR PILL TABS STRIP (Floating tabs above Omnibar)
+            // =========================================================================
+            AnimatedVisibility(
+                visible = !isEditing && showTabStrip && tabs.isNotEmpty(),
+                enter = fadeIn(tween(180)) + expandVertically(tween(180)),
+                exit = fadeOut(tween(140)) + shrinkVertically(tween(140))
+            ) {
+                HorizontalTabsStrip(
+                    tabs = tabs,
+                    activeTabId = activeTabId,
+                    accentColor = effectiveAccent,
+                    isDarkMode = isDarkMode,
+                    isIncognito = isIncognito,
+                    onSelectTab = onSelectTab,
+                    onCloseTab = onCloseTab,
+                    onNewTab = onNewTab,
+                    modifier = Modifier.padding(bottom = 2.dp)
                 )
             }
 

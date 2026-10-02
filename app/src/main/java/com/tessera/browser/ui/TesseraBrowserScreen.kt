@@ -1910,7 +1910,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         currentSpaceEmoji = state.currentSpace.iconEmoji,
                         currentSpaceName = state.currentSpace.name,
                         currentSpaceColor = Color(state.currentSpace.colorArgb),
-                        onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
+                        onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) },
+                        tabs = state.currentSpaceTabs,
+                        activeTabId = state.activeTabId,
+                        showTabStrip = state.showPillTabsBar,
+                        onSelectTab = { tabId -> viewModel.selectTab(tabId) },
+                        onCloseTab = { tabId -> viewModel.closeTab(tabId) },
+                        onNewTab = { viewModel.addNewTab() }
                     )
                 }
             }
@@ -2221,6 +2227,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 selectedWallpaperId = state.selectedWallpaperId,
                 customWallpaperUri = state.customWallpaperUri,
                 showFavoritesBar = state.showFavoritesBar,
+                showPillTabsBar = state.showPillTabsBar,
                 showWeatherWidget = state.showWeatherWidget,
                 showQuotesWidget = state.showQuotesWidget,
                 tesseraAiEnabled = state.tesseraAiEnabled,
@@ -2269,6 +2276,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     )
                 },
                 onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
+                onShowPillTabsBarChanged = { viewModel.setShowPillTabsBar(it) },
                 onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
                 onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
                 onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
