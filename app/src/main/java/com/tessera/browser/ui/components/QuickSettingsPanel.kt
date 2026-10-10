@@ -71,6 +71,8 @@ import coil.compose.SubcomposeAsyncImage
 import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.ui.theme.ApplePalette
+import com.tessera.browser.ui.theme.AppleShapes
 
 /**
  * Painel de Configurações Rápidas (Quick Settings BottomSheet).
@@ -138,43 +140,20 @@ fun QuickSettingsPanel(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val panelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     val verticalScrollState = rememberScrollState()
 
-    val panelBg = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xF51E1916), Color(0xF815110E))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF8F8FA))
-        )
-    }
+    val panelBg = ApplePalette.liquidGlassBrush(isDarkMode)
+    val panelBorder = ApplePalette.hairlineBorderBrush(isDarkMode)
 
-    val panelBorder = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.22f),
-                Color.White.copy(alpha = 0.05f)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color.Black.copy(alpha = 0.08f),
-                Color.Black.copy(alpha = 0.03f)
-            )
-        )
-    }
-
-    val titleColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF19191C)
-    val iconButtonTint = if (isDarkMode) Color.White.copy(alpha = 0.8f) else Color(0xFF48484A)
-    val primaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF1C1C1E)
-    val secondaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF48484A)
-    val sectionHeaderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
-    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0x0A000000)
-    val cardArrowTint = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
-    val accentColor = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4)
+    val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val iconButtonTint = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val primaryTextColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val secondaryTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val sectionHeaderColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val cardArrowTint = if (isDarkMode) ApplePalette.DarkLabelTertiary else ApplePalette.LightLabelTertiary
+    val accentColor = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
 
     Column(
         modifier = modifier
@@ -680,29 +659,40 @@ private fun QuickToggleMiniCard(
     isDarkMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0x0A000000)
-    val primaryTextColor = if (isDarkMode) Color.White.copy(alpha = 0.88f) else Color(0xFF1C1C1E)
-    val sectionHeaderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF8E8E93)
+    val cardShape = AppleShapes.SquircleMedium
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val primaryTextColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val sectionHeaderColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(cardShape)
             .background(cardBg)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .border(0.8.dp, cardBorder, cardShape)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.weight(1f)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(18.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = if (isDarkMode) 0.18f else 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
             Column {
                 Text(
                     text = title,
@@ -1000,11 +990,11 @@ fun TesseraSwitch(
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
             checkedThumbColor = Color.White,
-            checkedTrackColor = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF0078D4),
+            checkedTrackColor = ApplePalette.Green,
             checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color.White,
-            uncheckedTrackColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0x24000000),
-            uncheckedBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color(0x18000000)
+            uncheckedThumbColor = Color.White,
+            uncheckedTrackColor = if (isDarkMode) Color(0x3D787880) else Color(0x28787880),
+            uncheckedBorderColor = Color.Transparent
         )
     )
 }

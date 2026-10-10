@@ -120,6 +120,7 @@ import com.tessera.browser.ui.components.TesseraAiSheet
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.ui.components.TranslateBar
 import com.tessera.browser.viewmodel.BrowserViewModel
 import com.tessera.browser.viewmodel.ReaderArticle
@@ -900,7 +901,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
-    val rootBg = if (state.isDarkMode) Color(0xFF120E0D) else Color(0xFFF7F8FA)
+    val rootBg = if (state.isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
 
     Box(
         modifier = Modifier

@@ -1,10 +1,13 @@
 package com.tessera.browser.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,11 +28,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,15 +57,20 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.tessera.browser.data.SpeedDialItem
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.ui.theme.ApplePalette
+import com.tessera.browser.ui.theme.AppleShapes
 import com.tessera.browser.viewmodel.QuotesData
 import com.tessera.browser.viewmodel.WeatherData
+import java.util.Calendar
 
 /**
- * Tessera Start Page — Minimalist, elegant, breathable Home screen.
- * Inspired by Opera & Dia Browser aesthetics:
- * - Top header with active Arc Space indicator & Menu button.
- * - Clean central wordmark & compact Speed Dial shortcuts.
- * - Breathing whitespace, no cluttered vertical bento towers.
+ * Tessera Start Page — Apple Safari iOS 18 Edition.
+ *
+ * Uma experiência arejada, sofisticada e minimalista no padrão Apple Human Interface Guidelines:
+ * - Cabeçalho translúcido com seletor de Espaço em cápsula de vidro e menu de ações.
+ * - Saudação e wordmark "TESSERA" com tipografia refinada Cupertino.
+ * - Grade tátil de Favoritos Safari em squircles contínuos com microinteração de compressão física.
+ * - Cartões compactos estilo iOS WidgetKit (Clima, Relatório de Privacidade e Citação inspiradora).
  */
 @Composable
 fun TesseraStartPage(
@@ -86,12 +97,12 @@ fun TesseraStartPage(
     onOpenPrivacyDashboard: () -> Unit = {},
     currentSpaceEmoji: String = "🌐",
     currentSpaceName: String = "Geral",
-    currentSpaceColor: Color = Color(0xFF0288D1),
+    currentSpaceColor: Color = ApplePalette.BlueDark,
     onOpenSpaces: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // 1. Dynamic Wallpaper Background or Solid Dark/Light Canvas
+        // 1. FUNDO DINÂMICO (WALLPAPER OU BASE PURA OLED / PORCELANA)
         if (showWallpaper) {
             Box(
                 modifier = Modifier
@@ -100,7 +111,7 @@ fun TesseraStartPage(
                         scaleX = 1.08f
                         scaleY = 1.08f
                     }
-                    .blur(radius = 14.dp)
+                    .blur(radius = 16.dp)
             ) {
                 if (activeWallpaper.id == "custom" && !customWallpaperUri.isNullOrBlank()) {
                     SubcomposeAsyncImage(
@@ -130,7 +141,7 @@ fun TesseraStartPage(
                 }
             }
 
-            // Ambient lighting vignette layer for readability
+            // Camada de vinheta e iluminação ambiente para legibilidade
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -149,11 +160,11 @@ fun TesseraStartPage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (isDarkMode) Color(0xFF120E0D) else Color(0xFFF7F8FA))
+                    .background(if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground)
             )
         }
 
-        // 2. Top Header: Space Switcher Pill (Left) & Menu/Settings Button (Right)
+        // 2. CABEÇALHO SUPERIOR SAFARI: SELETOR DE ESPAÇO & MENU DE CONFIGURAÇÕES
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -164,10 +175,10 @@ fun TesseraStartPage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Space Switcher Pill (Arc Spaces)
-            val spacePillShape = RoundedCornerShape(20.dp)
-            val pillBg = if (isDarkMode) Color.Black.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.75f)
-            val pillBorder = if (isDarkMode) currentSpaceColor.copy(alpha = 0.50f) else currentSpaceColor.copy(alpha = 0.35f)
+            // Cápsula de Espaço (Apple Glass Pill)
+            val spacePillShape = AppleShapes.Capsule
+            val pillBg = if (isDarkMode) Color(0x661C1C1E) else Color(0xAAFFFFFF)
+            val pillBorder = if (isDarkMode) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
 
             Row(
                 modifier = Modifier
@@ -179,15 +190,15 @@ fun TesseraStartPage(
                     )
                     .clip(spacePillShape)
                     .background(pillBg)
-                    .border(1.dp, pillBorder, spacePillShape)
+                    .border(0.8.dp, pillBorder, spacePillShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onOpenSpaces
                     )
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 SpaceVectorIcon(
                     identifier = currentSpaceEmoji,
@@ -196,23 +207,23 @@ fun TesseraStartPage(
                 )
                 Text(
                     text = currentSpaceName,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E),
-                    fontSize = 12.5.sp,
+                    color = if (isDarkMode) Color.White else Color(0xFF1C1C1E),
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.35f),
+                    tint = if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color.Black.copy(alpha = 0.35f),
                     modifier = Modifier.size(15.dp)
                 )
             }
 
-            // Menu / QuickSettings Button (Right)
-            val menuBtnShape = RoundedCornerShape(14.dp)
+            // Botão de Opções / Menu no Canto Direito (Squircle de Vidro)
+            val menuBtnShape = AppleShapes.SquircleSmall
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(40.dp)
                     .shadow(
                         elevation = 4.dp,
                         shape = menuBtnShape,
@@ -221,7 +232,7 @@ fun TesseraStartPage(
                     )
                     .clip(menuBtnShape)
                     .background(pillBg)
-                    .border(1.dp, if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f), menuBtnShape)
+                    .border(0.8.dp, pillBorder, menuBtnShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -232,20 +243,27 @@ fun TesseraStartPage(
                 Icon(
                     imageVector = Icons.Rounded.MoreVert,
                     contentDescription = "Configurações e Menu",
-                    tint = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF1E1E1E),
+                    tint = if (isDarkMode) Color.White.copy(alpha = 0.90f) else Color(0xFF1C1C1E),
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // 3. Central Clean Container (Wordmark & Speed Dial Shortcuts)
+        // 3. CONTEÚDO PRINCIPAL (HERO, FAVORITOS SAFARI & WIDGETS COMPACTOS)
         val scrollState = rememberScrollState()
+        val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+        val greeting = when (hour) {
+            in 5..11 -> "Bom dia"
+            in 12..17 -> "Boa tarde"
+            else -> "Boa noite"
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .displayCutoutPadding()
-                .padding(top = 90.dp),
+                .padding(top = 80.dp),
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
@@ -254,50 +272,123 @@ fun TesseraStartPage(
                     .widthIn(max = 520.dp)
                     .verticalScroll(scrollState)
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(28.dp),
+                verticalArrangement = Arrangement.spacedBy(26.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(30.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Elegant Minimal Wordmark "TESSERA"
-                Text(
-                    text = "TESSERA",
-                    color = if (showWallpaper || isDarkMode) Color.White else Color(0xFF1E1E1E),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 6.sp,
-                    style = TextStyle(
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.35f),
-                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                            blurRadius = 8f
-                        )
+                // Wordmark e Saudação Estilo Cupertino
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = greeting,
+                        color = if (showWallpaper || isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF8E8E93),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp
                     )
-                )
 
-                // Opera / Dia Browser Style Speed Dial (Clean icon tiles, no bloated borders)
-                if (favorites.isNotEmpty()) {
-                    OperaSpeedDialGrid(
-                        items = favorites,
-                        isDarkMode = isDarkMode,
-                        onItemClick = onOpenUrl,
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "TESSERA",
+                        color = if (showWallpaper || isDarkMode) Color.White else Color(0xFF1C1C1E),
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 5.sp,
+                        style = TextStyle(
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = Color.Black.copy(alpha = 0.25f),
+                                offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                blurRadius = 8f
+                            )
+                        )
                     )
                 }
 
-                // Breathing room to clear bottom floating dock
-                Spacer(modifier = Modifier.height(140.dp))
+                // Seção: Favoritos Safari iOS 18
+                if (favorites.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "FAVORITOS",
+                            color = if (showWallpaper || isDarkMode) Color.White.copy(alpha = 0.55f) else Color(0xFF8E8E93),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+
+                        SafariFavoritesGrid(
+                            items = favorites,
+                            isDarkMode = isDarkMode,
+                            onItemClick = onOpenUrl,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                // Seção: Widgets Compactos estilo iOS WidgetKit (Clima, Privacidade, Citação)
+                val hasWidgets = (showWeatherWidget && weatherData != null) ||
+                        (totalBlockedCount > 0) ||
+                        (showQuotesWidget && quotesData != null)
+
+                if (hasWidgets) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "DESTAQUES",
+                            color = if (showWallpaper || isDarkMode) Color.White.copy(alpha = 0.55f) else Color(0xFF8E8E93),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+
+                        // Widget 1: Clima (WeatherKit Card)
+                        if (showWeatherWidget && weatherData != null) {
+                            AppleWeatherWidgetCard(
+                                weather = weatherData,
+                                isDarkMode = isDarkMode,
+                                onRefresh = onRefreshWeather
+                            )
+                        }
+
+                        // Widget 2: Relatório de Privacidade Safari
+                        if (totalBlockedCount > 0) {
+                            ApplePrivacyReportCard(
+                                totalBlocked = totalBlockedCount,
+                                isDarkMode = isDarkMode,
+                                onClick = onOpenPrivacyDashboard
+                            )
+                        }
+
+                        // Widget 3: Cotações & Mercado Financeiro (Apple Stocks Style)
+                        if (showQuotesWidget && quotesData != null) {
+                            AppleQuotesWidgetCard(
+                                quotes = quotesData,
+                                isDarkMode = isDarkMode
+                            )
+                        }
+                    }
+                }
+
+                // Espaço de respiro para desobstruir a Cápsula Unificada Safari inferior
+                Spacer(modifier = Modifier.height(130.dp))
             }
         }
     }
 }
 
 /**
- * Opera / Dia Browser style Speed Dial grid.
- * Displays shortcuts in a clean, floating, squircle grid with crisp favicons and short labels.
+ * Grade de Favoritos Safari iOS 18 com tiles em Squircle contínuo e microinteração de compressão física.
  */
 @Composable
-fun OperaSpeedDialGrid(
+fun SafariFavoritesGrid(
     items: List<SpeedDialItem>,
     isDarkMode: Boolean,
     onItemClick: (String) -> Unit,
@@ -317,44 +408,59 @@ fun OperaSpeedDialGrid(
                 verticalAlignment = Alignment.Top
             ) {
                 rowItems.forEach { item ->
-                    OperaShortcutTile(
+                    SafariFavoriteTile(
                         item = item,
                         isDarkMode = isDarkMode,
                         onClick = { onItemClick(item.url) }
                     )
                 }
                 repeat(4 - rowItems.size) {
-                    Spacer(modifier = Modifier.width(68.dp))
+                    Spacer(modifier = Modifier.width(72.dp))
                 }
             }
         }
     }
 }
 
+/**
+ * Tile individual de favorito Safari com acabamento tátil Apple.
+ */
 @Composable
-fun OperaShortcutTile(
+fun SafariFavoriteTile(
     item: SpeedDialItem,
     isDarkMode: Boolean,
     onClick: () -> Unit
 ) {
-    val squircleShape = RoundedCornerShape(18.dp)
-    val tileBg = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.85f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1.0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "safari_tile_press"
+    )
+
+    val squircleShape = AppleShapes.SquircleMedium
+    val tileBg = if (isDarkMode) Color(0x33FFFFFF) else Color(0xE6FFFFFF)
     val tileBorder = if (isDarkMode) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.90f) else Color(0xFF1E1E1E)
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1C1C1E)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(68.dp)
+            .width(72.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(58.dp)
                 .shadow(
                     elevation = 6.dp,
                     shape = squircleShape,
@@ -363,10 +469,10 @@ fun OperaShortcutTile(
                 )
                 .clip(squircleShape)
                 .background(tileBg)
-                .border(1.dp, tileBorder, squircleShape),
+                .border(0.8.dp, tileBorder, squircleShape),
             contentAlignment = Alignment.Center
         ) {
-            ShortcutIcon(item = item, size = 26.dp)
+            ShortcutIcon(item = item, size = 28.dp)
         }
 
         Spacer(modifier = Modifier.height(7.dp))
@@ -381,6 +487,230 @@ fun OperaShortcutTile(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+/**
+ * Card compacto de Clima estilo iOS WidgetKit.
+ */
+@Composable
+private fun AppleWeatherWidgetCard(
+    weather: WeatherData,
+    isDarkMode: Boolean,
+    onRefresh: () -> Unit
+) {
+    val cardShape = AppleShapes.SquircleLarge
+    val cardBg = if (isDarkMode) Color(0xD91C1C1E) else Color(0xF2FFFFFF)
+    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.1f))
+            .clip(cardShape)
+            .background(cardBg)
+            .border(0.8.dp, cardBorder, cardShape)
+            .clickable(onClick = onRefresh)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(ApplePalette.Orange.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.WbSunny,
+                    contentDescription = null,
+                    tint = ApplePalette.Orange,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Column {
+                Text(
+                    text = weather.cityName.ifBlank { "Clima Atual" },
+                    color = if (isDarkMode) Color.White else Color(0xFF1C1C1E),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = weather.conditionText.ifBlank { "Céu limpo" },
+                    color = if (isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF8E8E93),
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Text(
+            text = "${weather.temperature.toInt()}°",
+            color = if (isDarkMode) Color.White else Color(0xFF1C1C1E),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/**
+ * Card compacto de Relatório de Privacidade Safari.
+ */
+@Composable
+private fun ApplePrivacyReportCard(
+    totalBlocked: Int,
+    isDarkMode: Boolean,
+    onClick: () -> Unit
+) {
+    val cardShape = AppleShapes.SquircleLarge
+    val cardBg = if (isDarkMode) Color(0xD91C1C1E) else Color(0xF2FFFFFF)
+    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.1f))
+            .clip(cardShape)
+            .background(cardBg)
+            .border(0.8.dp, cardBorder, cardShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(ApplePalette.Mint.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Shield,
+                    contentDescription = null,
+                    tint = ApplePalette.Mint,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Column {
+                Text(
+                    text = "Relatório de Privacidade",
+                    color = if (isDarkMode) Color.White else Color(0xFF1C1C1E),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "$totalBlocked rastreadores bloqueados",
+                    color = if (isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF8E8E93),
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = if (isDarkMode) Color.White.copy(alpha = 0.40f) else Color(0xFF8E8E93),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+/**
+ * Card compacto de Cotações & Mercado estilo Apple Stocks WidgetKit.
+ */
+@Composable
+private fun AppleQuotesWidgetCard(
+    quotes: QuotesData,
+    isDarkMode: Boolean
+) {
+    if (quotes.items.isEmpty()) return
+
+    val cardShape = AppleShapes.SquircleLarge
+    val cardBg = if (isDarkMode) Color(0xD91C1C1E) else Color(0xF2FFFFFF)
+    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.1f))
+            .clip(cardShape)
+            .background(cardBg)
+            .border(0.8.dp, cardBorder, cardShape)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "COTAÇÕES & MERCADO",
+                color = if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color(0xFF8E8E93),
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "Tempo Real",
+                color = ApplePalette.Green,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            quotes.items.take(3).forEach { item ->
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = item.symbol,
+                        color = if (isDarkMode) Color.White else Color(0xFF1C1C1E),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = item.value,
+                        color = if (isDarkMode) Color.White.copy(alpha = 0.70f) else Color(0xFF48484A),
+                        fontSize = 11.5.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                if (item.isPositive) ApplePalette.Green.copy(alpha = 0.18f)
+                                else ApplePalette.Red.copy(alpha = 0.18f)
+                            )
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = item.change,
+                            color = if (item.isPositive) ApplePalette.Green else ApplePalette.Red,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

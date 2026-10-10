@@ -81,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import com.tessera.browser.R
 import com.tessera.browser.data.BrowserSpace
 import com.tessera.browser.data.TabGroup
+import com.tessera.browser.ui.theme.ApplePalette
+import com.tessera.browser.ui.theme.AppleShapes
 import com.tessera.browser.viewmodel.BrowserTab
 
 /**
@@ -143,12 +145,12 @@ fun TabsModal(
         matchesQuery && matchesPin && matchesGroup
     }
 
-    val sheetBg = if (isDarkMode) Color(0xFF1C1715) else Color(0xFFFBFBFD)
-    val cardBg = if (isDarkMode) Color(0xFF26201D) else Color.White
-    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
-    val contentColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1C1C1E)
-    val mutedColor = if (isDarkMode) Color(0xFF9E9EA4) else Color(0xFF73737A)
-    val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val sheetBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
+    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
     Box(
         modifier = modifier
@@ -1020,10 +1022,10 @@ private fun TabGridCard(
     onMoveToSpaceClick: () -> Unit = {},
     onCreateNewGroup: () -> Unit = {}
 ) {
-    val cardShape = RoundedCornerShape(16.dp)
-    val cardBg = if (isDarkMode) Color(0xFF26201D) else Color.White
-    val contentColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1E1E1E)
-    val mutedColor = if (isDarkMode) Color(0xFF9E9EA4) else Color(0xFF73737A)
+    val cardShape = AppleShapes.SquircleMedium
+    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
+    val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
     var showContextMenu by remember { mutableStateOf(false) }
 
     val hostDomain = remember(tab.url, tab.isHomePage) {
@@ -1048,8 +1050,8 @@ private fun TabGridCard(
             .clip(cardShape)
             .background(cardBg)
             .border(
-                width = if (isActive) 2.dp else 1.dp,
-                color = if (isActive) accentColor else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f),
+                width = if (isActive) 2.dp else 0.8.dp,
+                color = if (isActive) accentColor else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline,
                 shape = cardShape
             )
             .combinedClickable(
@@ -1149,16 +1151,16 @@ private fun TabGridCard(
         Spacer(modifier = Modifier.height(6.dp))
 
         // MINIATURE REALISTIC PREVIEW CONTAINER
-        val previewShape = RoundedCornerShape(10.dp)
+        val previewShape = AppleShapes.SquircleSmall
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(previewShape)
-                .background(if (isDarkMode) Color(0xFF191412) else Color(0xFFF3F4F6))
+                .background(if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated)
                 .border(
                     width = 0.8.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
+                    color = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline,
                     shape = previewShape
                 )
         ) {
