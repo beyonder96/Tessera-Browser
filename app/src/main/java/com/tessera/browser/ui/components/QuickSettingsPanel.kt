@@ -143,8 +143,8 @@ fun QuickSettingsPanel(
     val panelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     val verticalScrollState = rememberScrollState()
 
-    val panelBg = ApplePalette.liquidGlassBrush(isDarkMode)
-    val panelBorder = ApplePalette.hairlineBorderBrush(isDarkMode)
+    val panelBg = if (isDarkMode) ApplePalette.OledSurface else ApplePalette.MatteSurface
+    val panelBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
 
     val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val iconButtonTint = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
@@ -152,16 +152,14 @@ fun QuickSettingsPanel(
     val secondaryTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
     val sectionHeaderColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
     val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
-    val cardArrowTint = if (isDarkMode) ApplePalette.DarkLabelTertiary else ApplePalette.LightLabelTertiary
     val accentColor = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .fillMaxHeight(0.85f)
             .clip(panelShape)
             .background(panelBg)
-            .border(width = 1.dp, brush = panelBorder, shape = panelShape)
+            .border(width = 1.dp, color = panelBorder, shape = panelShape)
             .padding(horizontal = 20.dp)
             .verticalScroll(verticalScrollState)
     ) {
@@ -174,7 +172,7 @@ fun QuickSettingsPanel(
                 .clip(CircleShape)
                 .background(if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.15f))
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -183,20 +181,20 @@ fun QuickSettingsPanel(
         ) {
             Column {
                 Text(
-                    text = "Configurações rápidas",
+                    text = "Ações & Ferramentas",
                     color = titleColor,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Ajustes rápidos de navegação e página",
+                    text = if (isWebPageActive) "Página ativa & navegador" else "Navegador & ferramentas rápidas",
                     color = sectionHeaderColor,
-                    fontSize = 11.5.sp
+                    fontSize = 12.sp
                 )
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Botão de atalho para todas as configurações
+                // Atalho para Configurações Completas
                 IconButton(
                     onClick = {
                         onDismiss()
@@ -208,11 +206,11 @@ fun QuickSettingsPanel(
                         imageVector = Icons.Rounded.Settings,
                         contentDescription = "Todas as configurações",
                         tint = accentColor,
-                        modifier = Modifier.size(21.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                // Botão de fechar
+                // Fechar
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier.size(36.dp)
@@ -227,13 +225,11 @@ fun QuickSettingsPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 1. GRADE DE ALTERNÂNCIAS RÁPIDAS (Quick Toggles)
+        // 1. LINHA DE AÇÕES RÁPIDAS (ESTILO SHARE SHEET)
         Text(
-            text = "ALTERNÂNCIAS RÁPIDAS",
+            text = "AÇÕES RÁPIDAS",
             color = sectionHeaderColor,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -241,354 +237,255 @@ fun QuickSettingsPanel(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Toggle 1: Ambiente (Tema Claro / Escuro)
+        val actionItems = buildList {
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.Share,
+                    label = "Compartilhar",
+                    tint = Color(0xFF64B5F6),
+                    onClick = {
+                        onDismiss()
+                        onSharePage()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.AutoMirrored.Rounded.MenuBook,
+                    label = "Leitura",
+                    tint = Color(0xFFFFB74D),
+                    onClick = {
+                        onDismiss()
+                        onOpenReaderMode()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.Search,
+                    label = "Buscar",
+                    tint = Color(0xFF81C784),
+                    onClick = {
+                        onDismiss()
+                        onFindInPage()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.Computer,
+                    label = if (isDesktopMode) "Versão PC (Ativo)" else "Versão PC",
+                    tint = if (isDesktopMode) accentColor else Color(0xFFBA68C8),
+                    isActive = isDesktopMode,
+                    onClick = {
+                        onDesktopModeChanged(!isDesktopMode)
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.Translate,
+                    label = "Traduzir",
+                    tint = Color(0xFF26A69A),
+                    onClick = {
+                        onDismiss()
+                        onTranslatePage()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.Print,
+                    label = "Salvar PDF",
+                    tint = Color(0xFFFF8A65),
+                    onClick = {
+                        onDismiss()
+                        onPrintPage()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.AppShortcut,
+                    label = "Atalho Home",
+                    tint = Color(0xFF4DD0E1),
+                    onClick = {
+                        onDismiss()
+                        onAddToHomeScreen()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.Rounded.QrCode2,
+                    label = "Código QR",
+                    tint = Color(0xFF90A4AE),
+                    onClick = {
+                        onDismiss()
+                        onShowQrCode()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
+                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                    label = "Abrir no App",
+                    tint = Color(0xFFFFD54F),
+                    onClick = {
+                        onDismiss()
+                        onOpenInExternalApp()
+                    }
+                )
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            actionItems.forEach { action ->
+                QuickActionTile(
+                    item = action,
+                    cardBg = cardBg,
+                    textColor = primaryTextColor,
+                    borderColor = panelBorder
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        SettingsDivider(isDarkMode = isDarkMode)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 2. FERRAMENTAS E PROTEÇÃO (ESTILO TABELA AGRUPADA NATIVA)
+        Text(
+            text = "FERRAMENTAS & PROTEÇÃO",
+            color = sectionHeaderColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(cardBg)
+                .border(1.dp, panelBorder, RoundedCornerShape(16.dp))
+        ) {
+            // AdBlock
+            QuickSettingToggleRow(
+                icon = Icons.Rounded.Shield,
+                iconTint = if (adBlockEnabled) Color(0xFF64B5F6) else sectionHeaderColor,
+                title = "Bloqueador de Anúncios",
+                subtitle = if (adBlockEnabled) "Ativo • Rastreadores bloqueados" else "Desativado",
+                checked = adBlockEnabled,
+                onCheckedChange = onAdBlockChanged,
+                isDarkMode = isDarkMode
+            )
+
+            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
+
+            // Modo Escuro
+            QuickSettingToggleRow(
+                icon = if (isDarkMode) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
+                iconTint = if (isDarkMode) Color(0xFFFFA726) else Color(0xFFF57C00),
+                title = "Tema Escuro OLED",
+                subtitle = if (isDarkMode) "Ativo • Preto absoluto" else "Modo claro ativo",
+                checked = isDarkMode,
+                onCheckedChange = onDarkModeChanged,
+                isDarkMode = isDarkMode
+            )
+
+            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
+
+            // Forçar Dark Mode em Sites
+            QuickSettingToggleRow(
+                icon = Icons.Rounded.DarkMode,
+                iconTint = if (forceDarkPages) Color(0xFFBA68C8) else sectionHeaderColor,
+                title = "Forçar Modo Escuro em Sites",
+                subtitle = if (forceDarkPages) "Invertendo páginas web claras" else "Padrão do site",
+                checked = forceDarkPages,
+                onCheckedChange = onForceDarkPagesChanged,
+                isDarkMode = isDarkMode
+            )
+
+            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
+
+            // Bloquear Avisos de Cookies
+            QuickSettingToggleRow(
+                icon = Icons.Rounded.Cookie,
+                iconTint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else sectionHeaderColor,
+                title = "Bloquear Avisos de Cookies",
+                subtitle = if (cookieBlockerEnabled) "Ocultando popups LGPD/GDPR" else "Padrão",
+                checked = cookieBlockerEnabled,
+                onCheckedChange = onCookieBlockerChanged,
+                isDarkMode = isDarkMode
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // 3. ATALHOS RÁPIDOS (Histórico, Downloads, Privacidade)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            QuickNavButton(
+                icon = Icons.Rounded.History,
+                label = "Histórico",
+                cardBg = cardBg,
+                borderColor = panelBorder,
+                tint = Color(0xFF64B5F6),
+                textColor = primaryTextColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onDismiss()
+                    onOpenHistory()
+                }
+            )
+
+            QuickNavButton(
+                icon = Icons.Rounded.Download,
+                label = "Downloads",
+                cardBg = cardBg,
+                borderColor = panelBorder,
+                tint = Color(0xFF81C784),
+                textColor = primaryTextColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onDismiss()
+                    onOpenDownloads()
+                }
+            )
+
+            QuickNavButton(
+                icon = Icons.Rounded.Shield,
+                label = "Privacidade",
+                cardBg = cardBg,
+                borderColor = panelBorder,
+                tint = Color(0xFF00E676),
+                textColor = primaryTextColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onDismiss()
+                    onOpenPrivacyDashboard()
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // 4. BOTÃO ELEGANTE: TODAS AS CONFIGURAÇÕES
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(cardBg)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = if (isDarkMode) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
-                    contentDescription = null,
-                    tint = if (isDarkMode) Color(0xFFFFA726) else Color(0xFFF57C00),
-                    modifier = Modifier.size(20.dp)
-                )
-                Column {
-                    Text(
-                        text = "Ambiente",
-                        color = primaryTextColor,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = if (isDarkMode) "Modo escuro" else "Modo claro",
-                        color = sectionHeaderColor,
-                        fontSize = 11.5.sp
-                    )
-                }
-            }
-            ThemeTogglePill(
-                isDarkMode = isDarkMode,
-                onToggle = { onDarkModeChanged(!isDarkMode) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Grade 2 colunas com toggles compactos
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Card: Modo Desktop / Computador
-            QuickToggleMiniCard(
-                icon = Icons.Rounded.Computer,
-                iconTint = if (isDesktopMode) Color(0xFF42A5F5) else sectionHeaderColor,
-                title = "Versão PC",
-                subtitle = if (isDesktopMode) "Ativa" else "Celular",
-                checked = isDesktopMode,
-                onCheckedChange = onDesktopModeChanged,
-                isDarkMode = isDarkMode,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Card: Bloqueador de Anúncios (AdBlock)
-            QuickToggleMiniCard(
-                icon = Icons.Rounded.Shield,
-                iconTint = if (adBlockEnabled) Color(0xFF64B5F6) else sectionHeaderColor,
-                title = "AdBlock",
-                subtitle = if (adBlockEnabled) "Ativo" else "Inativo",
-                checked = adBlockEnabled,
-                onCheckedChange = onAdBlockChanged,
-                isDarkMode = isDarkMode,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Card: Forçar Páginas Escuras
-            QuickToggleMiniCard(
-                icon = Icons.Rounded.DarkMode,
-                iconTint = if (forceDarkPages) Color(0xFFBA68C8) else sectionHeaderColor,
-                title = "Sites escuros",
-                subtitle = if (forceDarkPages) "Forçado" else "Padrão",
-                checked = forceDarkPages,
-                onCheckedChange = onForceDarkPagesChanged,
-                isDarkMode = isDarkMode,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Card: Bloquear Avisos de Cookies LGPD
-            QuickToggleMiniCard(
-                icon = Icons.Rounded.Cookie,
-                iconTint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else sectionHeaderColor,
-                title = "Sem cookies",
-                subtitle = if (cookieBlockerEnabled) "Bloqueando" else "Padrão",
-                checked = cookieBlockerEnabled,
-                onCheckedChange = onCookieBlockerChanged,
-                isDarkMode = isDarkMode,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Card: PiP Automático ao Sair
-        QuickToggleMiniCard(
-            icon = Icons.Rounded.SmartDisplay,
-            iconTint = if (isAutoPipEnabled) Color(0xFF26A69A) else sectionHeaderColor,
-            title = "PiP Automático",
-            subtitle = if (isAutoPipEnabled) "Janela flutuante ao sair" else "Desativado",
-            checked = isAutoPipEnabled,
-            onCheckedChange = onAutoPipChanged,
-            isDarkMode = isDarkMode,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // 2. SEÇÃO: FERRAMENTAS DA PÁGINA (Somente quando navegando)
-        if (isWebPageActive) {
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsDivider(isDarkMode = isDarkMode)
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "AÇÕES DA PÁGINA ATIVA",
-                color = sectionHeaderColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Grade 2 colunas com ações rápidas
-            val actionItems = listOf(
-                PageActionItem(Icons.AutoMirrored.Rounded.MenuBook, "Modo de Leitura", Color(0xFF42A5F5)) {
-                    onDismiss()
-                    onOpenReaderMode()
-                },
-                PageActionItem(Icons.Rounded.Search, "Localizar na Página", Color(0xFF66BB6A)) {
-                    onDismiss()
-                    onFindInPage()
-                },
-                PageActionItem(Icons.Rounded.Translate, "Traduzir Página", Color(0xFF26A69A)) {
-                    onDismiss()
-                    onTranslatePage()
-                },
-                PageActionItem(Icons.Rounded.Share, "Compartilhar", Color(0xFFAB47BC)) {
-                    onDismiss()
-                    onSharePage()
-                },
-                PageActionItem(Icons.Rounded.Print, "Salvar em PDF", Color(0xFFFFA726)) {
-                    onDismiss()
-                    onPrintPage()
-                },
-                PageActionItem(Icons.Rounded.AppShortcut, "Adicionar à Home", Color(0xFF29B6F6)) {
-                    onDismiss()
-                    onAddToHomeScreen()
-                },
-                PageActionItem(Icons.Rounded.OfflinePin, "Salvar Offline", Color(0xFF8D6E63)) {
-                    onDismiss()
-                    onSavePageOffline()
-                },
-                PageActionItem(Icons.Rounded.QrCode2, "Código QR", Color(0xFF78909C)) {
-                    onDismiss()
-                    onShowQrCode()
-                },
-                PageActionItem(Icons.Rounded.Lock, "Permissões do Site", Color(0xFFEF5350)) {
-                    onDismiss()
-                    onOpenSiteSettings()
-                },
-                PageActionItem(Icons.Rounded.Shield, "Escudo de Privacidade", Color(0xFF00E676)) {
-                    onDismiss()
-                    onOpenPrivacyDashboard()
-                },
-                PageActionItem(Icons.Rounded.SmartDisplay, "Janela Flutuante", Color(0xFF42A5F5)) {
-                    onDismiss()
-                    onEnterPip()
-                },
-                PageActionItem(Icons.AutoMirrored.Rounded.OpenInNew, "Abrir no App", Color(0xFFFFB74D)) {
-                    onDismiss()
-                    onOpenInExternalApp()
-                }
-            )
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                actionItems.chunked(2).forEach { pair ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        pair.forEach { action ->
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(cardBg)
-                                    .clickable(onClick = action.onClick)
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = action.icon,
-                                    contentDescription = null,
-                                    tint = action.tint,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = action.title,
-                                    color = secondaryTextColor,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                        if (pair.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. PERSONALIZAÇÃO RÁPIDA: PAPEL DE PAREDE
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Papel de parede da tela inicial",
-                color = primaryTextColor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-            TesseraSwitch(
-                checked = showWallpaper,
-                onCheckedChange = onShowWallpaperChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        if (showWallpaper) {
-            Spacer(modifier = Modifier.height(10.dp))
-            WallpaperCarousel(
-                wallpapers = AvailableWallpapers,
-                selectedId = selectedWallpaperId,
-                customWallpaperUri = customWallpaperUri,
-                onUpload = onUploadWallpaper,
-                onSelect = onSelectWallpaper,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        // 4. ATALHOS RÁPIDOS
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Histórico e Favoritos
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onOpenHistory()
-                    }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.History,
-                    contentDescription = null,
-                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Histórico & Hub",
-                    color = primaryTextColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Downloads
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBg)
-                    .clickable {
-                        onDismiss()
-                        onOpenDownloads()
-                    }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Download,
-                    contentDescription = null,
-                    tint = if (isDarkMode) Color(0xFF81C784) else Color(0xFF2E7D32),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Downloads",
-                    color = primaryTextColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        // 5. CARD DESTACADO: TODAS AS CONFIGURAÇÕES
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                    if (isDarkMode) {
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFF00E5FF).copy(alpha = 0.15f), Color(0xFF7C4DFF).copy(alpha = 0.15f))
-                        )
-                    } else {
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFFE3F2FD), Color(0xFFEDE7F6))
-                        )
-                    }
-                )
-                .border(
-                    width = 1.2.dp,
-                    color = if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.4f) else Color(0xFF0288D1).copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(18.dp)
-                )
+                .border(1.dp, panelBorder, RoundedCornerShape(16.dp))
                 .clickable {
                     onDismiss()
                     onOpenFullSettings()
@@ -603,27 +500,27 @@ fun QuickSettingsPanel(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color(0xFF0288D1).copy(alpha = 0.15f)),
+                        .background(accentColor.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Settings,
                         contentDescription = null,
-                        tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
+                        tint = accentColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 Column {
                     Text(
-                        text = "Todas as configurações",
+                        text = "Todas as Configurações",
                         color = primaryTextColor,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Mecanismo de busca, IA, privacidade e mais",
+                        text = "Buscador, papéis de parede, IA e personalização",
                         color = sectionHeaderColor,
                         fontSize = 11.5.sp
                     )
@@ -632,7 +529,7 @@ fun QuickSettingsPanel(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
+                tint = secondaryTextColor,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -641,47 +538,82 @@ fun QuickSettingsPanel(
     }
 }
 
-private data class PageActionItem(
+private data class QuickActionItem(
     val icon: ImageVector,
-    val title: String,
+    val label: String,
     val tint: Color,
+    val isActive: Boolean = false,
     val onClick: () -> Unit
 )
 
 @Composable
-private fun QuickToggleMiniCard(
+private fun QuickActionTile(
+    item: QuickActionItem,
+    cardBg: Color,
+    textColor: Color,
+    borderColor: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = item.onClick)
+            .padding(vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (item.isActive) item.tint.copy(alpha = 0.2f) else cardBg)
+                .border(
+                    width = if (item.isActive) 1.5.dp else 1.dp,
+                    color = if (item.isActive) item.tint else borderColor,
+                    shape = RoundedCornerShape(16.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.label,
+                tint = item.tint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = item.label,
+            color = textColor,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun QuickSettingToggleRow(
     icon: ImageVector,
     iconTint: Color,
     title: String,
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    isDarkMode: Boolean,
-    modifier: Modifier = Modifier
+    isDarkMode: Boolean
 ) {
-    val cardShape = AppleShapes.SquircleMedium
-    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
-    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
-    val primaryTextColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
-    val sectionHeaderColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-
     Row(
-        modifier = modifier
-            .clip(cardShape)
-            .background(cardBg)
-            .border(0.8.dp, cardBorder, cardShape)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.weight(1f)
         ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(iconTint.copy(alpha = if (isDarkMode) 0.18f else 0.12f)),
                 contentAlignment = Alignment.Center
@@ -690,19 +622,19 @@ private fun QuickToggleMiniCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Column {
                 Text(
                     text = title,
-                    color = primaryTextColor,
-                    fontSize = 13.sp,
+                    color = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = subtitle,
-                    color = sectionHeaderColor,
+                    color = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary,
                     fontSize = 11.sp
                 )
             }
@@ -711,6 +643,44 @@ private fun QuickToggleMiniCard(
             checked = checked,
             onCheckedChange = onCheckedChange,
             isDarkMode = isDarkMode
+        )
+    }
+}
+
+@Composable
+private fun QuickNavButton(
+    icon: ImageVector,
+    label: String,
+    cardBg: Color,
+    borderColor: Color,
+    tint: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(cardBg)
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
         )
     }
 }

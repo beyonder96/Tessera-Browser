@@ -98,6 +98,8 @@ import com.tessera.browser.viewmodel.ReaderBlockType
 import com.tessera.browser.viewmodel.ReaderFontFamily
 import com.tessera.browser.viewmodel.ReaderTheme
 
+import com.tessera.browser.ui.theme.ApplePalette
+
 private data class ReaderColors(
     val canvasBackground: Color,
     val sheetBackground: Color,
@@ -113,45 +115,25 @@ private data class ReaderColors(
 private fun rememberReaderColors(theme: ReaderTheme): ReaderColors {
     return remember(theme) {
         when (theme) {
-            ReaderTheme.LIGHT -> ReaderColors(
-                canvasBackground = Color(0xFFE8ECEF),
-                sheetBackground = Color(0xFFFFFFFF),
-                text = Color(0xFF1E1E22),
-                textSecondary = Color(0xFF6B7280),
-                surface = Color(0xFFF3F4F6),
-                border = Color(0xFFE5E7EB),
-                quoteBorder = Color(0xFF3B82F6),
-                accent = Color(0xFF2563EB)
+            ReaderTheme.LIGHT, ReaderTheme.SEPIA -> ReaderColors(
+                canvasBackground = Color(0xFFECE7DA),
+                sheetBackground = ApplePalette.NewspaperPaper,
+                text = ApplePalette.NewspaperInk,
+                textSecondary = Color(0xFF5A5852),
+                surface = Color(0xFFEFECE2),
+                border = Color(0xFFE2DDD0),
+                quoteBorder = ApplePalette.NewspaperInk,
+                accent = ApplePalette.NewspaperInk
             )
-            ReaderTheme.SEPIA -> ReaderColors(
-                canvasBackground = Color(0xFFEFE6CF),
-                sheetBackground = Color(0xFFFBF6E9),
-                text = Color(0xFF3C2814),
-                textSecondary = Color(0xFF7E6B52),
-                surface = Color(0xFFF4ECDA),
-                border = Color(0xFFE3D6BC),
-                quoteBorder = Color(0xFFB45309),
-                accent = Color(0xFFB45309)
-            )
-            ReaderTheme.DARK -> ReaderColors(
-                canvasBackground = Color(0xFF131316),
-                sheetBackground = Color(0xFF1E1E24),
-                text = Color(0xFFE5E5EB),
-                textSecondary = Color(0xFFA1A1AC),
-                surface = Color(0xFF2A2A32),
-                border = Color(0xFF34343E),
-                quoteBorder = Color(0xFF60A5FA),
-                accent = Color(0xFF60A5FA)
-            )
-            ReaderTheme.AMOLED -> ReaderColors(
-                canvasBackground = Color(0xFF000000),
-                sheetBackground = Color(0xFF0A0A0D),
-                text = Color(0xFFD4D4DE),
-                textSecondary = Color(0xFF767684),
-                surface = Color(0xFF16161B),
-                border = Color(0xFF24242C),
-                quoteBorder = Color(0xFF38BDF8),
-                accent = Color(0xFF38BDF8)
+            ReaderTheme.DARK, ReaderTheme.AMOLED -> ReaderColors(
+                canvasBackground = ApplePalette.DarkBackground,
+                sheetBackground = ApplePalette.DarkBackground,
+                text = ApplePalette.NewspaperInkDark,
+                textSecondary = Color(0xFF9E9C94),
+                surface = ApplePalette.DarkSurface,
+                border = ApplePalette.DarkHairline,
+                quoteBorder = ApplePalette.NewspaperInkDark,
+                accent = ApplePalette.NewspaperInkDark
             )
         }
     }

@@ -1299,6 +1299,24 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
 
+                                        // Captura de thumbnail da página para o carrossel de abas
+                                        view?.let { wv ->
+                                            if (wv.width > 0 && wv.height > 0) {
+                                                try {
+                                                    val thumbWidth = 360
+                                                    val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
+                                                    val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                                                    val canvas = android.graphics.Canvas(bmp)
+                                                    val scale = thumbWidth.toFloat() / wv.width.toFloat()
+                                                    canvas.scale(scale, scale)
+                                                    wv.draw(canvas)
+                                                    viewModel.updateTabThumbnail(state.activeTabId, bmp)
+                                                } catch (e: Exception) {
+                                                    // Silencioso em layouts extremos
+                                                }
+                                            }
+                                        }
+
                                         val pageHost = try { Uri.parse(url).host?.lowercase() } catch (e: Exception) { null } ?: ""
                                         val isGoogleOrRecaptcha = pageHost.contains("google.") || pageHost.contains("recaptcha") || pageHost.contains("gstatic.")
 
@@ -1700,9 +1718,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onDismiss = { viewModel.dismissDownloadNotice() }
             )
 
-            // Floating TesseraAirBar (Docked at bottom on BOTH Home and Web browsing modes)
+            // Docked TesseraAirBar (Ancorada no rodapé sólido)
             AnimatedVisibility(
                 visible = state.isBarVisible && !state.isInPipMode,
+                modifier = Modifier.fillMaxWidth(),
                 enter = slideInVertically(
                     initialOffsetY = { it },
                     animationSpec = tween(280)
@@ -1897,7 +1916,25 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onToggleReaderMode = {
                             launchReaderMode()
                         },
-                        onOpenTabs = { viewModel.toggleTabsModal() },
+                        onOpenTabs = {
+                            webViewInstance?.let { wv ->
+                                if (wv.width > 0 && wv.height > 0) {
+                                    try {
+                                        val thumbWidth = 360
+                                        val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
+                                        val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                                        val canvas = android.graphics.Canvas(bmp)
+                                        val scale = thumbWidth.toFloat() / wv.width.toFloat()
+                                        canvas.scale(scale, scale)
+                                        wv.draw(canvas)
+                                        viewModel.updateTabThumbnail(state.activeTabId, bmp)
+                                    } catch (e: Exception) {
+                                        // Silencioso
+                                    }
+                                }
+                            }
+                            viewModel.toggleTabsModal()
+                        },
                         onOpenHistory = { viewModel.toggleHistoryModal() },
                         onOpenSettings = { viewModel.toggleQuickSettings() },
                         onOpenSiteSettings = { viewModel.openSiteSettings(state.displayUrl) },
@@ -1948,6 +1985,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             TabsModal(
                 tabs = state.tabs,
                 activeTabId = state.activeTabId,
+                tabThumbnails = state.tabThumbnails,
                 tabGroups = state.tabGroups,
                 spaces = state.spaces,
                 activeSpaceId = state.activeSpaceId,

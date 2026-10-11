@@ -1,6 +1,7 @@
 package com.tessera.browser.viewmodel
 
 import android.Manifest
+import android.graphics.Bitmap
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
@@ -315,9 +316,9 @@ data class BrowserUiState(
         "Cinema & Séries"
     ),
 
-    // Widgets da Home
-    val showWeatherWidget: Boolean = true,
-    val showQuotesWidget: Boolean = true,
+    // Widgets da Home (Desativados por padrão para experiência Zen)
+    val showWeatherWidget: Boolean = false,
+    val showQuotesWidget: Boolean = false,
     val weatherData: WeatherData? = WeatherData(
         cityName = "São Paulo",
         temperature = 24,
@@ -337,15 +338,16 @@ data class BrowserUiState(
         isLoading = false
     ),
 
-    // Configuração Fácil
+    // Configuração Fácil & Aparência
     val isDarkMode: Boolean = false,
     val forceDarkPages: Boolean = false,
     val siteThemeColor: Color? = null,
-    val showWallpaper: Boolean = true,
+    val showWallpaper: Boolean = false,
     val selectedWallpaperId: String = "summer_villa",
     val customWallpaperUri: String? = null,
-    val showFavoritesBar: Boolean = true,
-    val showPillTabsBar: Boolean = true,
+    val showFavoritesBar: Boolean = false,
+    val showPillTabsBar: Boolean = false,
+    val tabThumbnails: Map<String, Bitmap> = emptyMap(),
     val tesseraAiEnabled: Boolean = true,
     val aiToolbarButton: Boolean = true,
     val aiTextHighlightPrompts: Boolean = true,
@@ -1169,7 +1171,28 @@ class BrowserViewModel : ViewModel() {
                 )
             }
         }
+        removeTabThumbnail(tabId)
         saveTabs()
+    }
+
+    fun updateTabThumbnail(tabId: String, bitmap: Bitmap) {
+        _uiState.update { state ->
+            val updated = state.tabThumbnails.toMutableMap()
+            updated[tabId] = bitmap
+            state.copy(tabThumbnails = updated)
+        }
+    }
+
+    fun removeTabThumbnail(tabId: String) {
+        _uiState.update { state ->
+            if (state.tabThumbnails.containsKey(tabId)) {
+                val updated = state.tabThumbnails.toMutableMap()
+                updated.remove(tabId)
+                state.copy(tabThumbnails = updated)
+            } else {
+                state
+            }
+        }
     }
 
     fun archiveInactiveTabs(thresholdHours: Long = 24) {

@@ -1,16 +1,18 @@
 package com.tessera.browser.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,34 +25,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Layers
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.PushPin
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,34 +59,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tessera.browser.R
 import com.tessera.browser.data.BrowserSpace
 import com.tessera.browser.data.TabGroup
 import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.ui.theme.AppleShapes
 import com.tessera.browser.viewmodel.BrowserTab
+import kotlin.math.absoluteValue
+import kotlin.math.roundToInt
 
 /**
- * Modal profissional e despoluído de gerenciamento de abas do Tessera Browser.
- * Oferece visualização em grade 2 colunas limpa, seletor compacto de espaços,
- * filtragem sutil por grupos e navegação intuitiva.
+ * Gerenciador de Abas Arc Search Style — Tessera Browser.
+ * Carrossel horizontal imersivo com cartões grandes, física suave,
+ * preview REAL em Bitmap da WebView e gesto de swipe up para fechar.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TabsModal(
     tabs: List<BrowserTab>,
     activeTabId: String,
+    tabThumbnails: Map<String, Bitmap> = emptyMap(),
     tabGroups: List<TabGroup> = emptyList(),
     onSelectTab: (String) -> Unit,
     onCloseTab: (String) -> Unit,
@@ -115,42 +109,23 @@ fun TabsModal(
     onUpdateSpace: (spaceId: String, name: String, emoji: String, colorArgb: Long) -> Unit = { _, _, _, _ -> },
     onDeleteSpace: (spaceId: String) -> Unit = {},
     onMoveTabToSpace: (tabId: String, targetSpaceId: String) -> Unit = { _, _ -> },
-    accentColor: Color = Color(0xFF0288D1),
+    accentColor: Color = ApplePalette.BlueDark,
     isDarkMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchVisible by remember { mutableStateOf(false) }
-    var showMoreMenu by remember { mutableStateOf(false) }
     var showSpaceSelectorMenu by remember { mutableStateOf(false) }
-    var filterPinnedOnly by remember { mutableStateOf(false) }
-    var activeFilterGroupId by remember { mutableStateOf<String?>(null) }
-    var showCreateGroupDialog by remember { mutableStateOf(false) }
     var showCreateSpaceDialog by remember { mutableStateOf(false) }
-    var newGroupTitle by remember { mutableStateOf("") }
-    var newGroupColor by remember { mutableStateOf(TabGroup.PRESET_COLORS.first()) }
     var newSpaceName by remember { mutableStateOf("") }
     var newSpaceEmoji by remember { mutableStateOf("📁") }
-    var tabToAssignGroup by remember { mutableStateOf<BrowserTab?>(null) }
-    var tabToMoveSpace by remember { mutableStateOf<BrowserTab?>(null) }
 
     val currentSpace = spaces.find { it.id == activeSpaceId } ?: spaces.firstOrNull() ?: BrowserSpace.DEFAULT_SPACES.first()
     val currentSpaceTabs = tabs.filter { it.spaceId == activeSpaceId }
-    val filteredTabs = currentSpaceTabs.filter { tab ->
-        val matchesQuery = searchQuery.isBlank() ||
-                tab.title.contains(searchQuery, ignoreCase = true) ||
-                tab.url.contains(searchQuery, ignoreCase = true)
-        val matchesPin = !filterPinnedOnly || tab.isPinned
-        val matchesGroup = activeFilterGroupId == null || tab.groupId == activeFilterGroupId
-        matchesQuery && matchesPin && matchesGroup
-    }
 
     val sheetBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
     val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
     val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-    val sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
     Box(
         modifier = modifier
@@ -162,43 +137,27 @@ fun TabsModal(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // 1. DRAG HANDLE
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(36.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(mutedColor.copy(alpha = 0.35f))
-                )
-            }
-
-            // 2. HEADER BAR: Space Selector Capsule + Counter + Actions (Search & Done)
+            // 1. CABEÇALHO SUPERIOR SÓLIDO
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 6.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Space Selector Dropdown Pill
+                // Cápsula do Espaço Ativo
                 Box {
-                    val spaceShape = RoundedCornerShape(16.dp)
+                    val spaceShape = AppleShapes.Capsule
                     val spaceColor = Color(currentSpace.colorArgb)
                     Row(
                         modifier = Modifier
                             .clip(spaceShape)
-                            .background(spaceColor.copy(alpha = if (isDarkMode) 0.18f else 0.12f))
-                            .border(1.dp, spaceColor.copy(alpha = 0.35f), spaceShape)
+                            .background(cardBg)
+                            .border(1.dp, cardBorder, spaceShape)
                             .clickable { showSpaceSelectorMenu = true }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SpaceVectorIcon(
                             identifier = currentSpace.iconEmoji,
@@ -214,12 +173,12 @@ fun TabsModal(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(spaceColor.copy(alpha = 0.25f))
+                                .background(if (isDarkMode) Color(0x33FFFFFF) else Color(0x1A000000))
                                 .padding(horizontal = 6.dp, vertical = 1.dp)
                         ) {
                             Text(
                                 text = "${currentSpaceTabs.size}",
-                                color = if (isDarkMode) Color.White else spaceColor,
+                                color = contentColor,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -317,485 +276,136 @@ fun TabsModal(
                     }
                 }
 
-                // Top Right Controls (Search Toggle + Concluído)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                // Botão Concluído / Fechar Modal
+                TextButton(
+                    onClick = onDismiss,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(if (isSearchVisible) accentColor.copy(alpha = 0.15f) else Color.Transparent)
-                            .clickable {
-                                isSearchVisible = !isSearchVisible
-                                if (!isSearchVisible) searchQuery = ""
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = "Buscar guias",
-                            tint = if (isSearchVisible) accentColor else mutedColor,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    TextButton(
-                        onClick = onDismiss,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "Concluído",
-                            color = accentColor,
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = "Concluído",
+                        color = accentColor,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
-            // 3. SEARCH BAR EXPANSÍVEL
-            AnimatedVisibility(
-                visible = isSearchVisible,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 4.dp)
-                ) {
-                    val searchShape = RoundedCornerShape(12.dp)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(38.dp)
-                            .clip(searchShape)
-                            .background(cardBg)
-                            .border(1.dp, cardBorder, searchShape)
-                            .padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = mutedColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (searchQuery.isEmpty()) {
-                                Text(
-                                    text = "Filtrar por título ou endereço...",
-                                    color = mutedColor,
-                                    fontSize = 12.5.sp
-                                )
-                            }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = contentColor,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Normal
-                                ),
-                                cursorBrush = SolidColor(accentColor),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Limpar busca",
-                                tint = mutedColor,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clickable { searchQuery = "" }
-                            )
-                        }
-                    }
-                }
-            }
-
-            val pinnedTabsCount = currentSpaceTabs.count { it.isPinned }
-            val hasPinnedTabs = pinnedTabsCount > 0
-            val showSubBar = tabGroups.isNotEmpty() || hasPinnedTabs
-
-            // 4. SUB-BAR: Tab Groups & Pinned Filter Chips
-            if (showSubBar) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Chip "Todas"
-                    item {
-                        val isAllSelected = activeFilterGroupId == null && !filterPinnedOnly
-                        val pillShape = RoundedCornerShape(14.dp)
-                        Box(
-                            modifier = Modifier
-                                .clip(pillShape)
-                                .background(
-                                    if (isAllSelected) accentColor
-                                    else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
-                                )
-                                .clickable {
-                                    activeFilterGroupId = null
-                                    filterPinnedOnly = false
-                                }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Todas (${currentSpaceTabs.size})",
-                                color = if (isAllSelected) Color.White else contentColor,
-                                fontSize = 11.5.sp,
-                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    // Chip "Fixadas" (Aparece se houver guias fixadas)
-                    if (hasPinnedTabs) {
-                        item {
-                            val pillShape = RoundedCornerShape(14.dp)
-                            Box(
-                                modifier = Modifier
-                                    .clip(pillShape)
-                                    .background(
-                                        if (filterPinnedOnly) accentColor
-                                        else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
-                                    )
-                                    .clickable {
-                                        filterPinnedOnly = !filterPinnedOnly
-                                        if (filterPinnedOnly) activeFilterGroupId = null
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PushPin,
-                                        contentDescription = null,
-                                        tint = if (filterPinnedOnly) Color.White else accentColor,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "Fixadas ($pinnedTabsCount)",
-                                        color = if (filterPinnedOnly) Color.White else contentColor,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = if (filterPinnedOnly) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Chips dos grupos criados
-                    items(tabGroups, key = { it.id }) { group ->
-                        val isSelected = !filterPinnedOnly && activeFilterGroupId == group.id
-                        val count = tabs.count { it.groupId == group.id }
-                        val pillShape = RoundedCornerShape(14.dp)
-                        var showGroupMenu by remember { mutableStateOf(false) }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(pillShape)
-                                .background(
-                                    if (isSelected) Color(group.colorArgb)
-                                    else Color(group.colorArgb).copy(alpha = if (isDarkMode) 0.18f else 0.12f)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) Color.White.copy(alpha = 0.35f) else Color(group.colorArgb).copy(alpha = 0.3f),
-                                    pillShape
-                                )
-                                .clickable {
-                                    filterPinnedOnly = false
-                                    activeFilterGroupId = if (isSelected) null else group.id
-                                }
-                                .padding(horizontal = 9.dp, vertical = 5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) Color.White else Color(group.colorArgb))
-                                )
-                                Text(
-                                    text = "${group.title} ($count)",
-                                    color = if (isSelected) Color.White else contentColor,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(15.dp)
-                                        .clip(CircleShape)
-                                        .clickable { showGroupMenu = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.MoreHoriz,
-                                        contentDescription = null,
-                                        tint = if (isSelected) Color.White.copy(alpha = 0.85f) else mutedColor,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    DropdownMenu(
-                                        expanded = showGroupMenu,
-                                        onDismissRequest = { showGroupMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Excluir grupo (manter guias)") },
-                                            onClick = {
-                                                showGroupMenu = false
-                                                if (activeFilterGroupId == group.id) activeFilterGroupId = null
-                                                onDeleteGroup(group.id, false)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Fechar grupo e guias", color = Color(0xFFEF5350)) },
-                                            onClick = {
-                                                showGroupMenu = false
-                                                if (activeFilterGroupId == group.id) activeFilterGroupId = null
-                                                onDeleteGroup(group.id, true)
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Botão "+ Grupo"
-                    item {
-                        val addShape = RoundedCornerShape(14.dp)
-                        Box(
-                            modifier = Modifier
-                                .clip(addShape)
-                                .background(if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f))
-                                .clickable {
-                                    newGroupTitle = ""
-                                    newGroupColor = TabGroup.PRESET_COLORS.first()
-                                    showCreateGroupDialog = true
-                                }
-                                .padding(horizontal = 9.dp, vertical = 5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    tint = accentColor,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Text(
-                                    text = "Grupo",
-                                    color = accentColor,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 5. GRADE PRINCIPAL DE ABAS (2 COLUNAS MODERNAS E LIMPAS)
+            // 2. CARROSSEL CENTRAL DE CARTÕES GRANDES (ARC SEARCH STYLE)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                if (filteredTabs.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
+                if (currentSpaceTabs.isEmpty()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.padding(32.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(cardBg)
+                                .border(1.dp, cardBorder, CircleShape),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(cardBg)
-                                    .border(1.dp, cardBorder, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Layers,
-                                    contentDescription = null,
-                                    tint = mutedColor,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-                            Text(
-                                text = when {
-                                    filterPinnedOnly -> "Nenhuma guia fixada"
-                                    searchQuery.isNotBlank() -> "Nenhum resultado para \"$searchQuery\""
-                                    activeFilterGroupId != null -> "Nenhuma guia neste grupo"
-                                    else -> "Nenhuma guia aberta neste espaço"
-                                },
-                                color = contentColor,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Abra uma nova guia para continuar navegando",
-                                color = mutedColor,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
+                            Icon(
+                                imageVector = Icons.Rounded.Layers,
+                                contentDescription = null,
+                                tint = mutedColor,
+                                modifier = Modifier.size(30.dp)
                             )
                         }
+                        Text(
+                            text = "Nenhuma guia aberta",
+                            color = contentColor,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Toque em Nova Guia para começar a navegar",
+                            color = mutedColor,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(filteredTabs, key = { it.id }) { tab ->
-                            val isActive = tab.id == activeTabId
-                            val tabGroup = tabGroups.find { it.id == tab.groupId }
+                    val initialIndex = remember(currentSpaceTabs, activeTabId) {
+                        currentSpaceTabs.indexOfFirst { it.id == activeTabId }.coerceAtLeast(0)
+                    }
+                    val pagerState = rememberPagerState(
+                        initialPage = initialIndex,
+                        pageCount = { currentSpaceTabs.size }
+                    )
 
-                            TabGridCard(
-                                tab = tab,
-                                isActive = isActive,
-                                tabGroup = tabGroup,
-                                allGroups = tabGroups,
-                                allSpaces = spaces,
-                                isDarkMode = isDarkMode,
-                                accentColor = accentColor,
-                                onClick = { onSelectTab(tab.id) },
-                                onClose = { onCloseTab(tab.id) },
-                                onTogglePin = { onTogglePin(tab.id) },
-                                onAssignGroup = { gid -> onAddTabToGroup(tab.id, gid) },
-                                onRemoveFromGroup = { onRemoveTabFromGroup(tab.id) },
-                                onMoveToSpaceClick = { tabToMoveSpace = tab },
-                                onCreateNewGroup = {
-                                    tabToAssignGroup = tab
-                                    newGroupTitle = ""
-                                    newGroupColor = TabGroup.PRESET_COLORS.first()
-                                    showCreateGroupDialog = true
-                                }
-                            )
-                        }
+                    HorizontalPager(
+                        state = pagerState,
+                        contentPadding = PaddingValues(horizontal = 42.dp),
+                        pageSpacing = 16.dp,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        val tab = currentSpaceTabs[page]
+                        val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+                        val scale = 1f - (pageOffset * 0.12f).coerceIn(0f, 0.22f)
+                        val alpha = 1f - (pageOffset * 0.40f).coerceIn(0f, 0.50f)
+                        val rotZ = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction) * -2f
+
+                        ArcTabCard(
+                            tab = tab,
+                            isActive = tab.id == activeTabId,
+                            thumbnail = tabThumbnails[tab.id],
+                            isDarkMode = isDarkMode,
+                            accentColor = accentColor,
+                            scale = scale,
+                            alpha = alpha,
+                            rotationZ = rotZ,
+                            onClick = {
+                                onSelectTab(tab.id)
+                                onDismiss()
+                            },
+                            onClose = { onCloseTab(tab.id) }
+                        )
                     }
                 }
             }
 
-            // 6. BARRA INFERIOR DE AÇÕES (Dock Minimalista com Botão Central em Destaque)
+            // 3. BARRA INFERIOR SÓLIDA DE AÇÕES
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(sheetBg)
+                    .background(cardBg)
                     .border(width = 0.8.dp, color = cardBorder)
                     .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Menu de Opções Adicionais (•••)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(cardBg)
-                        .border(1.dp, cardBorder, CircleShape)
-                        .clickable { showMoreMenu = true },
-                    contentAlignment = Alignment.Center
+                // Fechar Todas
+                TextButton(
+                    onClick = onCloseAllTabs,
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreHoriz,
-                        contentDescription = "Mais opções",
-                        tint = contentColor,
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = "Fechar Todas",
+                        color = Color(0xFFFF453A),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium
                     )
-
-                    DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Histórico de navegação") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMoreMenu = false
-                                onOpenHistory()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Novo grupo de abas") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMoreMenu = false
-                                newGroupTitle = ""
-                                newGroupColor = TabGroup.PRESET_COLORS.first()
-                                showCreateGroupDialog = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Arquivar guias inativas (24h)") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMoreMenu = false
-                                onArchiveInactiveTabs()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Fechar todas as guias", color = Color(0xFFEF5350)) },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Close, contentDescription = null, tint = Color(0xFFEF5350), modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMoreMenu = false
-                                onCloseAllTabs()
-                            }
-                        )
-                    }
                 }
 
-                // Botão Central: [+ Nova Guia] em Cápsula Elegante com Glow
+                // Botão Central: [+ Nova Guia]
                 val newTabShape = RoundedCornerShape(22.dp)
                 Box(
                     modifier = Modifier
                         .height(44.dp)
-                        .shadow(
-                            elevation = 6.dp,
-                            shape = newTabShape,
-                            ambientColor = accentColor.copy(alpha = 0.35f),
-                            spotColor = accentColor.copy(alpha = 0.25f)
-                        )
                         .clip(newTabShape)
                         .background(accentColor)
-                        .clickable(onClick = onNewTab)
+                        .clickable(onClick = {
+                            onNewTab()
+                            onDismiss()
+                        })
                         .padding(horizontal = 22.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -812,109 +422,26 @@ fun TabsModal(
                         Text(
                             text = "Nova Guia",
                             color = Color.White,
-                            fontSize = 14.sp,
+                            fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                // Botão Concluído no Dock Inferior (Fácil acesso com o polegar)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(cardBg)
-                        .border(1.dp, cardBorder, CircleShape)
-                        .clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center
+                // Histórico Rápido
+                TextButton(
+                    onClick = onOpenHistory,
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = "Concluído",
-                        tint = accentColor,
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = "Histórico",
+                        color = contentColor,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
         }
-    }
-
-    // DIÁLOGO: CRIAR NOVO GRUPO
-    if (showCreateGroupDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showCreateGroupDialog = false
-                tabToAssignGroup = null
-            },
-            title = { Text("Novo Grupo de Guias", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    OutlinedTextField(
-                        value = newGroupTitle,
-                        onValueChange = { newGroupTitle = it },
-                        label = { Text("Nome do grupo") },
-                        placeholder = { Text("Ex: Trabalho, Estudos, Finanças") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Text(
-                        text = "Escolha uma cor de identificação:",
-                        fontSize = 13.sp,
-                        color = contentColor,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TabGroup.PRESET_COLORS.forEach { colorArgb ->
-                            val isSelected = newGroupColor == colorArgb
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(colorArgb))
-                                    .clickable { newGroupColor = colorArgb },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newGroupTitle.isNotBlank()) {
-                            onCreateGroup(newGroupTitle.trim(), newGroupColor)
-                            showCreateGroupDialog = false
-                            tabToAssignGroup = null
-                        }
-                    }
-                ) {
-                    Text("Criar Grupo", color = accentColor, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showCreateGroupDialog = false
-                    tabToAssignGroup = null
-                }) {
-                    Text("Cancelar")
-                }
-            }
-        )
     }
 
     // DIÁLOGO: CRIAR NOVO ESPAÇO
@@ -928,7 +455,7 @@ fun TabsModal(
                         value = newSpaceName,
                         onValueChange = { newSpaceName = it },
                         label = { Text("Nome do Espaço") },
-                        placeholder = { Text("Ex: Pessoal, Trabalho, Projetos") },
+                        placeholder = { Text("Ex: Trabalho, Estudos, Pessoal") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -948,9 +475,9 @@ fun TabsModal(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSel) accentColor.copy(alpha = 0.20f) else Color.Transparent)
                                     .border(
-                                        width = if (isSel) 1.dp else 0.dp,
-                                        color = if (isSel) accentColor else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                        1.dp,
+                                        if (isSel) accentColor else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
                                     )
                                     .clickable { newSpaceEmoji = iconKey },
                                 contentAlignment = Alignment.Center
@@ -984,465 +511,227 @@ fun TabsModal(
             }
         )
     }
-
-    // DIÁLOGO: MOVER GUIA PARA OUTRO ESPAÇO
-    tabToMoveSpace?.let { targetTab ->
-        MoveTabToSpaceDialog(
-            tabTitle = targetTab.title,
-            spaces = spaces,
-            currentSpaceId = activeSpaceId,
-            onSelectSpace = { newSpaceId ->
-                onMoveTabToSpace(targetTab.id, newSpaceId)
-                tabToMoveSpace = null
-            },
-            onDismiss = { tabToMoveSpace = null }
-        )
-    }
 }
 
 /**
- * Card de aba individual para a grade 2 colunas.
- * Despoluído, moderno, sem elementos estáticos falsos, com preview realista.
+ * Cartão de Aba Imersivo estilo Arc Search com preview real da página e gesto de swipe up.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TabGridCard(
+private fun ArcTabCard(
     tab: BrowserTab,
     isActive: Boolean,
-    tabGroup: TabGroup? = null,
-    allGroups: List<TabGroup> = emptyList(),
-    allSpaces: List<BrowserSpace> = emptyList(),
+    thumbnail: Bitmap?,
     isDarkMode: Boolean,
     accentColor: Color,
+    scale: Float,
+    alpha: Float,
+    rotationZ: Float,
     onClick: () -> Unit,
-    onClose: () -> Unit,
-    onTogglePin: () -> Unit,
-    onAssignGroup: (String) -> Unit = {},
-    onRemoveFromGroup: () -> Unit = {},
-    onMoveToSpaceClick: () -> Unit = {},
-    onCreateNewGroup: () -> Unit = {}
+    onClose: () -> Unit
 ) {
-    val cardShape = AppleShapes.SquircleMedium
+    val haptic = LocalHapticFeedback.current
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    val animatedOffsetY by animateFloatAsState(
+        targetValue = offsetY,
+        animationSpec = tween(durationMillis = 150),
+        label = "tab_card_offset"
+    )
+
+    val draggableState = rememberDraggableState { delta ->
+        offsetY = (offsetY + delta).coerceAtMost(0f)
+    }
+
+    val cardShape = RoundedCornerShape(22.dp)
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
+    val cardBorder = if (isActive) accentColor else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
     val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-    var showContextMenu by remember { mutableStateOf(false) }
 
     val hostDomain = remember(tab.url, tab.isHomePage) {
         if (tab.isHomePage) {
             "tessera://inicio"
         } else {
-            tab.url.removePrefix("https://").removePrefix("http://").takeWhile { it != '/' && it != '?' }
-                .ifBlank { "web" }
+            try {
+                val uri = android.net.Uri.parse(
+                    if (!tab.url.startsWith("http://") && !tab.url.startsWith("https://")) {
+                        "https://${tab.url}"
+                    } else tab.url
+                )
+                uri.host?.removePrefix("www.") ?: tab.url.removePrefix("https://").substringBefore('/')
+            } catch (e: Exception) {
+                tab.url
+            }
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(185.dp)
+            .fillMaxHeight(0.85f)
+            .graphicsLayer {
+                this.scaleX = scale
+                this.scaleY = scale
+                this.alpha = alpha
+                this.rotationZ = rotationZ
+            }
+            .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
+            .draggable(
+                state = draggableState,
+                orientation = Orientation.Vertical,
+                onDragStopped = { velocity ->
+                    if (offsetY < -140f || velocity < -400f) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClose()
+                    } else {
+                        offsetY = 0f
+                    }
+                }
+            )
             .shadow(
-                elevation = if (isActive) 12.dp else 4.dp,
+                elevation = if (isActive) 14.dp else 4.dp,
                 shape = cardShape,
-                ambientColor = if (isActive) accentColor.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f),
-                spotColor = if (isActive) accentColor.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.16f)
+                ambientColor = Color.Black.copy(alpha = 0.15f),
+                spotColor = Color.Black.copy(alpha = 0.20f)
             )
             .clip(cardShape)
             .background(cardBg)
             .border(
-                width = if (isActive) 2.dp else 0.8.dp,
-                color = if (isActive) accentColor else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline,
+                width = if (isActive) 1.8.dp else 1.dp,
+                color = cardBorder,
                 shape = cardShape
             )
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { showContextMenu = true }
-            )
-            .padding(10.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .clickable(onClick = onClick)
     ) {
-        // TOP HEADER: Favicon/Monogram + Title & Domain + Close Button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 1. HEADER DO CARTÃO
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Favicon representation
-                val isGoogle = hostDomain.contains("google")
-                val isX = hostDomain.contains("twitter") || hostDomain.contains("x.com")
-                val isGithub = hostDomain.contains("github")
-
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                tab.isHomePage -> accentColor.copy(alpha = 0.2f)
-                                isGoogle -> Color(0xFFE8F0FE)
-                                isX -> Color.Black
-                                isGithub -> Color(0xFF24292E)
-                                else -> accentColor.copy(alpha = 0.15f)
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    when {
-                        tab.isHomePage -> Icon(
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
                             imageVector = Icons.Rounded.Public,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        isGoogle -> Text("G", color = Color(0xFF4285F4), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        isX -> Text("𝕏", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        isGithub -> Text("gh", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        else -> Text(
-                            text = hostDomain.firstOrNull()?.uppercase() ?: "W",
-                            color = accentColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            modifier = Modifier.size(14.dp)
                         )
                     }
-                }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (tab.isHomePage) "Página Inicial" else tab.title.ifBlank { hostDomain },
-                        color = contentColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = hostDomain,
-                        color = mutedColor,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Close '✕' Button
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
-                    .clickable { onClose() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Fechar guia",
-                    tint = mutedColor,
-                    modifier = Modifier.size(13.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // MINIATURE REALISTIC PREVIEW CONTAINER
-        val previewShape = AppleShapes.SquircleSmall
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .clip(previewShape)
-                .background(if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated)
-                .border(
-                    width = 0.8.dp,
-                    color = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline,
-                    shape = previewShape
-                )
-        ) {
-            if (tab.isHomePage) {
-                // Realistic Start Page Preview with wallpaper
-                Image(
-                    painter = painterResource(R.drawable.wallpaper_summer_villa),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color(0x33000000), Color(0x99000000))
-                            )
-                        )
-                        .padding(8.dp),
-                    contentAlignment = Alignment.BottomStart
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(accentColor)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (tab.isHomePage) "Página Inicial" else tab.title.ifBlank { hostDomain },
+                            color = contentColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Tessera Start",
-                            color = Color.White,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            } else {
-                // Sleek, minimal webpage miniature preview
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Mini browser address pill
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.04f))
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            text = "https://$hostDomain",
+                            text = hostDomain,
                             color = mutedColor,
-                            fontSize = 8.5.sp,
+                            fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-
-                    // Page title watermark / excerpt preview
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = tab.title.ifBlank { hostDomain },
-                            color = contentColor.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 14.sp
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(mutedColor.copy(alpha = 0.2f))
-                        )
-                    }
-
-                    // Bottom mini status
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Guia ativa",
-                            color = if (isActive) accentColor else mutedColor.copy(alpha = 0.7f),
-                            fontSize = 9.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                        )
-                        if (isActive) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(accentColor)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // FOOTER / BADGES: Pin indicator + Group pill + 3-dots Context Trigger
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (tab.isPinned) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(accentColor.copy(alpha = 0.18f))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PushPin,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Text(
-                                text = "Fixada",
-                                color = accentColor,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
                 }
 
-                if (tabGroup != null) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(tabGroup.colorArgb).copy(alpha = 0.18f))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(5.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(tabGroup.colorArgb))
-                            )
-                            Text(
-                                text = tabGroup.title,
-                                color = Color(tabGroup.colorArgb),
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                // Botão Fechar no Cartão
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkMode) Color(0x33FFFFFF) else Color(0x14000000))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onClose()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Fechar guia",
+                        tint = contentColor,
+                        modifier = Modifier.size(15.dp)
+                    )
                 }
             }
 
-            // Discrete 3-dots Context Menu
+            // 2. PREVIEW REAL DA PÁGINA (WEBVIEW THUMBNAIL)
             Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .clickable { showContextMenu = true },
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Ações da guia",
-                    tint = mutedColor,
-                    modifier = Modifier.size(14.dp)
-                )
-
-                DropdownMenu(
-                    expanded = showContextMenu,
-                    onDismissRequest = { showContextMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(if (tab.isPinned) "Desafixar guia" else "Fixar guia") },
-                        leadingIcon = {
-                            Icon(Icons.Rounded.PushPin, contentDescription = null, modifier = Modifier.size(16.dp))
-                        },
-                        onClick = {
-                            showContextMenu = false
-                            onTogglePin()
-                        }
+                if (thumbnail != null) {
+                    Image(
+                        bitmap = thumbnail.asImageBitmap(),
+                        contentDescription = tab.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-
-                    if (allGroups.isNotEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("Atribuir a grupo:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = mutedColor) },
-                            onClick = {},
-                            enabled = false
+                } else if (tab.isHomePage) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "TESSERA",
+                            color = contentColor,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 4.sp
                         )
-                        allGroups.forEach { g ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(g.colorArgb))
-                                        )
-                                        Text(g.title)
-                                    }
-                                },
-                                onClick = {
-                                    showContextMenu = false
-                                    onAssignGroup(g.id)
-                                }
+                        Text(
+                            text = "Página Inicial",
+                            color = mutedColor,
+                            fontSize = 12.sp
+                        )
+                    }
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(cardBg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Public,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
-                    }
-
-                    if (tabGroup != null) {
-                        DropdownMenuItem(
-                            text = { Text("Remover do grupo") },
-                            onClick = {
-                                showContextMenu = false
-                                onRemoveFromGroup()
-                            }
+                        Text(
+                            text = hostDomain,
+                            color = contentColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
-
-                    if (allSpaces.size > 1) {
-                        DropdownMenuItem(
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Rounded.SwapHoriz, null, modifier = Modifier.size(16.dp))
-                                    Text("Mover para Espaço...")
-                                }
-                            },
-                            onClick = {
-                                showContextMenu = false
-                                onMoveToSpaceClick()
-                            }
-                        )
-                    }
-
-                    DropdownMenuItem(
-                        text = { Text(if (allGroups.isEmpty()) "Adicionar a novo grupo..." else "+ Criar outro grupo...") },
-                        leadingIcon = {
-                            Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
-                        },
-                        onClick = {
-                            showContextMenu = false
-                            onCreateNewGroup()
-                        }
-                    )
                 }
             }
         }

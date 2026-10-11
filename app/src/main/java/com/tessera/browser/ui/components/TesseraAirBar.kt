@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -214,61 +215,45 @@ fun TesseraAirBar(
         else -> ApplePalette.Blue
     }
 
-    // Apple Liquid Glass Styling
-    val capsuleBg = when {
-        isIncognito -> Color(0xF2161224)
-        isDarkMode -> {
-            if (animatedTintColor != Color.Transparent) {
-                lerp(Color(0xE01C1C1E), animatedTintColor.copy(alpha = 0.90f), 0.16f)
-            } else {
-                Color(0xEB1C1C1E)
-            }
-        }
-        else -> {
-            if (animatedTintColor != Color.Transparent) {
-                lerp(Color(0xF5FFFFFF), animatedTintColor.copy(alpha = 0.94f), 0.12f)
-            } else {
-                Color(0xF2FFFFFF)
-            }
-        }
+    // Cores e Superfícies 100% Sólidas (Fim do vidro translúcido)
+    val solidBarBg = when {
+        isIncognito -> Color(0xFF161224)
+        isDarkMode -> ApplePalette.DarkSurface
+        else -> ApplePalette.LightSurface
     }
 
-    val capsuleBorder = when {
-        isIncognito -> Brush.verticalGradient(
-            listOf(
-                Color(0x80BF5AF2),
-                Color(0x33BF5AF2)
-            )
-        )
-        isDarkMode -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.22f),
-                Color.White.copy(alpha = 0.06f)
-            )
-        )
-        else -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.90f),
-                Color.Black.copy(alpha = 0.09f)
-            )
-        )
+    val solidPillBg = when {
+        isIncognito -> Color(0xFF221A38)
+        isDarkMode -> ApplePalette.DarkElevated
+        else -> ApplePalette.LightElevated
     }
 
-    val contentColor = if (isIncognito || isDarkMode) Color.White.copy(alpha = 0.94f) else Color(0xFF1C1C1E)
-    val mutedColor = if (isIncognito) Color(0xFFD8B4FE).copy(alpha = 0.70f) else if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color(0xFF8E8E93)
+    val solidBorder = when {
+        isIncognito -> Color(0x66BF5AF2)
+        isDarkMode -> ApplePalette.DarkHairline
+        else -> ApplePalette.LightHairline
+    }
 
+    val contentColor = if (isIncognito || isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isIncognito) Color(0xFFD8B4FE).copy(alpha = 0.70f) else if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+
+    // BARRA INFERIOR ANCORADA SÓLIDA
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = if (isHomePage) 8.dp else 6.dp),
+            .background(solidBarBg)
+            .border(width = 0.8.dp, color = solidBorder)
+            .navigationBarsPadding(),
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Sugestões Flutuantes de Busca Estilo iOS
+            // Sugestões Flutuantes de Busca
             if (isEditing && queryText.isNotBlank()) {
                 SearchSuggestionsFloatingCard(
                     queryText = queryText,
@@ -286,12 +271,12 @@ fun TesseraAirBar(
                 )
             }
 
-            // Indicador de Progresso de Carregamento Ultra-Fino Safari (Hairline)
+            // Indicador de Progresso de Carregamento Ultra-Fino
             if (progress > 0f && progress < 1f && !isHomePage) {
                 LinearProgressIndicator(
                     progress = { animatedProgress },
                     modifier = Modifier
-                        .fillMaxWidth(0.92f)
+                        .fillMaxWidth()
                         .height(2.dp)
                         .clip(RoundedCornerShape(1.dp)),
                     color = effectiveAccent,
@@ -299,46 +284,11 @@ fun TesseraAirBar(
                 )
             }
 
-            // Opcional: Faixa Horizontal Compacta de Abas
-            AnimatedVisibility(
-                visible = !isEditing && showTabStrip && tabs.isNotEmpty() && !isHomePage,
-                enter = fadeIn(tween(180)) + expandVertically(tween(180)),
-                exit = fadeOut(tween(140)) + shrinkVertically(tween(140))
-            ) {
-                HorizontalTabsStrip(
-                    tabs = tabs,
-                    activeTabId = activeTabId,
-                    accentColor = effectiveAccent,
-                    isDarkMode = isDarkMode,
-                    isIncognito = isIncognito,
-                    onSelectTab = onSelectTab,
-                    onCloseTab = onCloseTab,
-                    onNewTab = onNewTab,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                )
-            }
-
-            // =========================================================================
-            // CÁPSULA UNIFICADA SAFARI IOS 18 (Altura 54dp, Squircle Contínuo de 27dp)
-            // =========================================================================
-            val capsuleShape = AppleShapes.Capsule
-            Box(
+            // Linha Principal de Controles Cirúrgicos (Altura 48dp)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
-                    .shadow(
-                        elevation = 10.dp,
-                        shape = capsuleShape,
-                        ambientColor = Color.Black.copy(alpha = 0.18f),
-                        spotColor = Color.Black.copy(alpha = 0.12f)
-                    )
-                    .clip(capsuleShape)
-                    .background(capsuleBg)
-                    .border(
-                        width = 0.8.dp,
-                        brush = capsuleBorder,
-                        shape = capsuleShape
-                    )
+                    .height(48.dp)
                     .draggable(
                         state = draggableState,
                         orientation = Orientation.Horizontal,
@@ -354,470 +304,293 @@ fun TesseraAirBar(
                             }
                             dragAccumulator = 0f
                         }
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isEditing) {
+                    // ==========================================
+                    // MODO DE EDIÇÃO / DIGITAÇÃO DE BUSCA
+                    // ==========================================
+                    // 1. Botão Cancelar / Fechar à esquerda
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .clickable { isEditing = false },
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (!isEditing) {
-                            isEditing = true
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Cancelar busca",
+                            tint = contentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // 2. Campo de Entrada com Ícone de Lupa
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(solidPillBg)
+                            .border(0.8.dp, solidBorder, RoundedCornerShape(22.dp))
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = mutedColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (queryText.isEmpty()) {
+                                Text(
+                                    text = if (isIncognito) "Buscar em modo anônimo" else "Pesquisar ou digitar endereço",
+                                    color = mutedColor,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            BasicTextField(
+                                value = queryText,
+                                onValueChange = {
+                                    queryText = it
+                                    onQueryChange(it)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester),
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = contentColor,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                cursorBrush = SolidColor(effectiveAccent),
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Go,
+                                    autoCorrectEnabled = !isIncognito,
+                                    platformImeOptions = if (isIncognito) PlatformImeOptions(
+                                        privateImeOptions = "com.tessera.browser.INCOGNITO"
+                                    ) else null
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onGo = {
+                                        if (queryText.isNotBlank()) {
+                                            isEditing = false
+                                            onSearch(queryText.trim())
+                                        }
+                                    }
+                                )
+                            )
+                        }
+
+                        if (queryText.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        queryText = ""
+                                        onQueryChange("")
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Limpar",
+                                    tint = mutedColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    if (isEditing) {
-                        // MODO DE EDIÇÃO / BUSCA
-                        // Botão Cancelar / Voltar à esquerda
+
+                    // 3. Botão Ir (se houver texto)
+                    if (queryText.isNotBlank()) {
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .clickable { isEditing = false },
+                                .background(effectiveAccent)
+                                .clickable {
+                                    isEditing = false
+                                    onSearch(queryText.trim())
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Cancelar busca",
-                                tint = contentColor,
-                                modifier = Modifier.size(20.dp)
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Ir",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
+                    }
+                } else {
+                    // ==========================================
+                    // MODO NORMAL: OS 4 CONTROLES ESSENCIAIS
+                    // ==========================================
 
-                        // Campo de Entrada com Ícone de Lupa
-                        Row(
+                    // 1. [VOLTAR] Contextual (se houver histórico e não for home)
+                    if (canGoBack && !isHomePage) {
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onBack()
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                                contentDescription = "Voltar",
+                                tint = contentColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    // 2. [CAMPO DE URL/BUSCA CENTRAL E LIMPO]
+                    val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
+                    val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
+                    val hostText = if (displayUrl.isNotBlank() && !isHomePage) {
+                        try {
+                            val uri = android.net.Uri.parse(
+                                if (!displayUrl.startsWith("http://") && !displayUrl.startsWith("https://")) {
+                                    "https://$displayUrl"
+                                } else displayUrl
+                            )
+                            val host = uri.host
+                            if (!host.isNullOrBlank()) {
+                                host.removePrefix("www.")
+                            } else {
+                                displayUrl.removePrefix("https://").removePrefix("http://").removePrefix("www.").substringBefore('/')
+                            }
+                        } catch (e: Exception) {
+                            displayUrl
+                        }
+                    } else {
+                        "Pesquisar ou digitar endereço"
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(solidPillBg)
+                            .border(0.8.dp, solidBorder, RoundedCornerShape(22.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { isEditing = true }
+                            )
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        if (isWeb && !isHomePage) {
+                            Icon(
+                                imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                contentDescription = "Segurança",
+                                tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        } else if (isHomePage) {
                             Icon(
                                 imageVector = Icons.Rounded.Search,
                                 contentDescription = null,
                                 tint = mutedColor,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
-
-                            Box(modifier = Modifier.weight(1f)) {
-                                if (queryText.isEmpty()) {
-                                    Text(
-                                        text = if (isIncognito) "Buscar em modo anônimo" else "Pesquisar ou digitar endereço",
-                                        color = mutedColor,
-                                        fontSize = 14.5.sp,
-                                        maxLines = 1
-                                    )
-                                }
-                                BasicTextField(
-                                    value = queryText,
-                                    onValueChange = {
-                                        queryText = it
-                                        onQueryChange(it)
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(focusRequester),
-                                    singleLine = true,
-                                    textStyle = TextStyle(
-                                        color = contentColor,
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    cursorBrush = SolidColor(effectiveAccent),
-                                    keyboardOptions = KeyboardOptions(
-                                        imeAction = ImeAction.Go,
-                                        autoCorrectEnabled = !isIncognito,
-                                        platformImeOptions = if (isIncognito) PlatformImeOptions(
-                                            privateImeOptions = "com.tessera.browser.INCOGNITO"
-                                        ) else null
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onGo = {
-                                            if (queryText.isNotBlank()) {
-                                                isEditing = false
-                                                onSearch(queryText.trim())
-                                            }
-                                        }
-                                    )
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
 
-                        // Ações à Direita: Limpar ("X") ou Ir
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            if (queryText.isNotBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(30.dp)
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            queryText = ""
-                                            onQueryChange("")
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Limpar",
-                                        tint = mutedColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                        Text(
+                            text = hostText,
+                            color = if (isHomePage) mutedColor else contentColor,
+                            fontSize = 13.5.sp,
+                            fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(effectiveAccent)
-                                        .clickable {
-                                            isEditing = false
-                                            onSearch(queryText.trim())
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                        contentDescription = "Ir",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                    // 3. [CONTADOR DE ABAS SÓLIDO]
+                    val tabBadgeShape = RoundedCornerShape(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenTabs()
+                                },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenSpaces()
                                 }
-                            }
-                        }
-                    } else {
-                        // MODO NORMAL NAVEGAÇÃO SAFARI UNIFICADA
-                        // 1. Lado Esquerdo: Voltar (se puder) OU Botão Menu Safari "aA" / Privacidade
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            if (canGoBack && !isHomePage) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                onBack()
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                                        contentDescription = "Voltar",
-                                        tint = contentColor,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-
-                            // Botão Safari "aA" / Modo Leitura / Permissões do Site
-                            if (!isHomePage) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(AppleShapes.SquircleSmall)
-                                        .background(
-                                            if (isReaderModeActive) effectiveAccent.copy(alpha = 0.20f)
-                                            else Color.Transparent
-                                        )
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = {
-                                                if (isReaderModeAvailable) {
-                                                    onToggleReaderMode()
-                                                } else {
-                                                    onOpenSiteSettings()
-                                                }
-                                            }
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 5.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isReaderModeActive || isReaderModeAvailable) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                            contentDescription = "Modo Leitura",
-                                            tint = if (isReaderModeActive) effectiveAccent else contentColor,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    } else {
-                                        // Pílula com glifo tipográfico Apple Safari "aA"
-                                        Text(
-                                            text = "aA",
-                                            color = contentColor,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2. Centro: Host do Site Centralizado com Cadeado SSL ou Indicador Anônimo
-                        Row(
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                                .size(23.dp)
+                                .clip(tabBadgeShape)
+                                .border(
+                                    width = 1.3.dp,
+                                    color = contentColor.copy(alpha = 0.90f),
+                                    shape = tabBadgeShape
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            if (isIncognito) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(ApplePalette.Purple.copy(alpha = 0.20f))
-                                        .border(0.6.dp, ApplePalette.Purple.copy(alpha = 0.50f), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_incognito),
-                                            contentDescription = "Privado",
-                                            tint = ApplePalette.Purple,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Text(
-                                            text = "PRIVADO",
-                                            color = ApplePalette.Purple,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
-
-                            val isSecure = displayUrl.startsWith("https://", ignoreCase = true)
-                            val isWeb = displayUrl.startsWith("http://") || displayUrl.startsWith("https://")
-
-                            if (isWeb && !isHomePage) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = onOpenSiteSettings
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                        contentDescription = "Segurança do site",
-                                        tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(3.dp))
-
-                                if (privacyBlockedCount > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(ApplePalette.Mint.copy(alpha = 0.16f))
-                                            .border(0.5.dp, ApplePalette.Mint.copy(alpha = 0.40f), RoundedCornerShape(6.dp))
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null,
-                                                onClick = onOpenPrivacyDashboard
-                                            )
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Shield,
-                                                contentDescription = "Rastreadores bloqueados",
-                                                tint = ApplePalette.Mint,
-                                                modifier = Modifier.size(9.dp)
-                                            )
-                                            Text(
-                                                text = "$privacyBlockedCount",
-                                                color = ApplePalette.Mint,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-                            }
-
-                            val hostText = if (displayUrl.isNotBlank()) {
-                                try {
-                                    val uri = android.net.Uri.parse(
-                                        if (!displayUrl.startsWith("http://") && !displayUrl.startsWith("https://")) {
-                                            "https://$displayUrl"
-                                        } else displayUrl
-                                    )
-                                    val host = uri.host
-                                    if (!host.isNullOrBlank()) {
-                                        host.removePrefix("www.")
-                                    } else {
-                                        displayUrl.removePrefix("https://").removePrefix("http://").removePrefix("www.").substringBefore('/')
-                                    }
-                                } catch (e: Exception) {
-                                    displayUrl
-                                }
-                            } else {
-                                "Pesquisar ou digitar endereço"
-                            }
-
                             Text(
-                                text = if (isHomePage) "Pesquisar ou digitar endereço" else hostText,
-                                color = if (isHomePage) mutedColor else contentColor,
-                                fontSize = 13.5.sp,
-                                fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                text = tabCount.toString(),
+                                color = contentColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
                             )
                         }
+                    }
 
-                        // 3. Lado Direito: Recarregar / IA Sparkle / Abas (Squircle Badge) / Menu (...)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            // Botão Recarregar (ou Ação Rápida)
-                            if (!isHomePage) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                onReload()
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Refresh,
-                                        contentDescription = "Recarregar",
-                                        tint = contentColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                    // 4. [MENU (•••)]
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onOpenSettings()
                                 }
-                            }
-
-                            // Botão Apple Intelligence / IA Sparkle
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(
-                                                ApplePalette.BlueDark.copy(alpha = 0.20f),
-                                                ApplePalette.Purple.copy(alpha = 0.25f)
-                                            )
-                                        )
-                                    )
-                                    .border(0.8.dp, ApplePalette.Purple.copy(alpha = 0.40f), CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onOpenAiAction()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AutoAwesome,
-                                    contentDescription = "Tessera Intelligence",
-                                    tint = if (isDarkMode) Color.White else ApplePalette.Blue,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-
-                            // Botão de Abas Safari (Squircle com Borda e Contador)
-                            val tabBadgeShape = RoundedCornerShape(7.dp)
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onOpenTabs()
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onOpenSpaces()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(tabBadgeShape)
-                                        .border(
-                                            width = 1.4.dp,
-                                            color = contentColor.copy(alpha = 0.90f),
-                                            shape = tabBadgeShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = tabCount.toString(),
-                                        color = contentColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-
-                            // Botão Mais Opções (...)
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onOpenSettings()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.MoreHoriz,
-                                    contentDescription = "Mais opções",
-                                    tint = contentColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreHoriz,
+                            contentDescription = "Menu de opções",
+                            tint = contentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }

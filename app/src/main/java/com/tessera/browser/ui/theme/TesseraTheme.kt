@@ -25,60 +25,56 @@ object ApplePalette {
     val Teal = Color(0xFF30B0C7)
     val Cyan = Color(0xFF32ADE6)
 
-    // Dark Mode Neutrals (Pure OLED & Elevation)
+    // Dark Mode Neutrals (Pure OLED & Solid Elevation)
     val DarkBackground = Color(0xFF000000)        // Pure Deep OLED Black
-    val DarkSurface = Color(0xFF1C1C1E)           // Secondary System Background
-    val DarkElevated = Color(0xFF2C2C2E)          // Tertiary System Background
-    val DarkCard = Color(0xFF242426)              // Inset Grouped Card
+    val DarkSurface = Color(0xFF141416)           // Solid Opaque Surface
+    val DarkElevated = Color(0xFF1E1E22)          // Solid Opaque Elevated
+    val DarkCard = Color(0xFF18181C)              // Solid Inset Card
     val DarkLabelPrimary = Color(0xFFFFFFFF)
-    val DarkLabelSecondary = Color(0x99EBEBF5)    // 60% white
-    val DarkLabelTertiary = Color(0x4DEBEBF5)     // 30% white
-    val DarkHairline = Color(0x26FFFFFF)          // 15% specular white border
+    val DarkLabelSecondary = Color(0xCCEBEBF5)    // 80% white (alta legibilidade)
+    val DarkLabelTertiary = Color(0x80EBEBF5)     // 50% white
+    val DarkHairline = Color(0xFF2C2C32)          // Borda sólida nítida 100% opaca
+    val OledSurface = DarkSurface                 // Superfície sólida OLED preta pura
 
-    // Light Mode Neutrals (Porcelain & System Gray)
-    val LightBackground = Color(0xFFF2F2F7)       // System Grouped Background
-    val LightSurface = Color(0xFFFFFFFF)          // Secondary System Background
-    val LightElevated = Color(0xFFE5E5EA)         // Tertiary System Background
-    val LightCard = Color(0xFFFFFFFF)
-    val LightLabelPrimary = Color(0xFF000000)
-    val LightLabelSecondary = Color(0x993C3C43)   // 60% black
-    val LightLabelTertiary = Color(0x4D3C3C43)    // 30% black
-    val LightHairline = Color(0x1A000000)         // 10% black hairline border
+    // Light Mode Neutrals (Branco Matte & Superfícies Sólidas)
+    val LightBackground = Color(0xFFF7F7F9)       // Branco Matte / Porcelana Fosca
+    val LightSurface = Color(0xFFFFFFFF)          // Superfície Sólida
+    val LightElevated = Color(0xFFEBEBF0)         // Elevação Matte Suave
+    val LightCard = Color(0xFFFFFFFF)             // Cartão Sólido
+    val LightLabelPrimary = Color(0xFF141416)     // Preto Tinta Nítido
+    val LightLabelSecondary = Color(0xCC3C3C43)   // 80% preto
+    val LightLabelTertiary = Color(0x803C3C43)    // 50% preto
+    val LightHairline = Color(0xFFE2E2E8)         // Borda sólida nítida e fina
+    val MatteSurface = LightSurface               // Superfície sólida Matte branca pura
 
-    // Frosted Glass Gradients
+    // Editorial / Modo Leitura — Efeito Jornal
+    val NewspaperPaper = Color(0xFFF7F4EB)        // Tom de papel jornal impresso quente
+    val NewspaperInk = Color(0xFF18181A)          // Tinta escura editorial
+    val NewspaperPaperDark = Color(0xFF121214)    // Papel jornal modo noturno OLED
+    val NewspaperInkDark = Color(0xFFECEAE2)      // Tinta clara suave
+
+    // Solid Brushes (Fim do vidro translúcido artificial)
     fun liquidGlassBrush(isDarkMode: Boolean): Brush {
         return if (isDarkMode) {
             Brush.verticalGradient(
-                listOf(
-                    Color(0xD91C1C1E),
-                    Color(0xEA161618)
-                )
+                listOf(DarkSurface, DarkSurface)
             )
         } else {
             Brush.verticalGradient(
-                listOf(
-                    Color(0xF0FFFFFF),
-                    Color(0xE6F8F8FA)
-                )
+                listOf(LightSurface, LightSurface)
             )
         }
     }
 
-    // Hairline Border Gradients (Apple Specular Highlights)
+    // Hairline Border Sólido
     fun hairlineBorderBrush(isDarkMode: Boolean): Brush {
         return if (isDarkMode) {
             Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.22f),
-                    Color.White.copy(alpha = 0.06f)
-                )
+                listOf(DarkHairline, DarkHairline)
             )
         } else {
             Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.80f),
-                    Color.Black.copy(alpha = 0.08f)
-                )
+                listOf(LightHairline, LightHairline)
             )
         }
     }
