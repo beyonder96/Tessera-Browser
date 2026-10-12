@@ -237,21 +237,20 @@ fun TesseraAirBar(
     val contentColor = if (isIncognito || isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val mutedColor = if (isIncognito) Color(0xFFD8B4FE).copy(alpha = 0.70f) else if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
-    // BARRA INFERIOR ANCORADA SÓLIDA
+    // BARRA INFERIOR FLUTUANTE ELEGANTE
+    val floatingBarShape = RoundedCornerShape(26.dp)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(solidBarBg)
-            .border(width = 0.8.dp, color = solidBorder)
-            .navigationBarsPadding(),
+            .padding(horizontal = 14.dp)
+            .padding(bottom = 8.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Sugestões Flutuantes de Busca
             if (isEditing && queryText.isNotBlank()) {
@@ -271,21 +270,42 @@ fun TesseraAirBar(
                 )
             }
 
-            // Indicador de Progresso de Carregamento Ultra-Fino
-            if (progress > 0f && progress < 1f && !isHomePage) {
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
+            // Cápsula Flutuante Principal
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = floatingBarShape,
+                        ambientColor = Color.Black.copy(alpha = if (isDarkMode) 0.35f else 0.14f),
+                        spotColor = Color.Black.copy(alpha = if (isDarkMode) 0.25f else 0.10f)
+                    )
+                    .clip(floatingBarShape)
+                    .background(solidBarBg)
+                    .border(width = 1.dp, color = solidBorder, shape = floatingBarShape)
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(2.dp)
-                        .clip(RoundedCornerShape(1.dp)),
-                    color = effectiveAccent,
-                    trackColor = Color.Transparent
-                )
-            }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // Indicador de Progresso de Carregamento Ultra-Fino
+                    if (progress > 0f && progress < 1f && !isHomePage) {
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .clip(RoundedCornerShape(1.dp)),
+                            color = effectiveAccent,
+                            trackColor = Color.Transparent
+                        )
+                    }
 
-            // Linha Principal de Controles Cirúrgicos (Altura 48dp)
-            Row(
+                    // Linha Principal de Controles Cirúrgicos (Altura 48dp)
+                    Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
@@ -596,6 +616,8 @@ fun TesseraAirBar(
             }
         }
     }
+}
+}
 }
 
 /**

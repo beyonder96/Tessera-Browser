@@ -446,245 +446,6 @@ fun TesseraSettingsScreen(
                                 isDarkMode = isDarkMode
                             )
                         }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Papel de Parede da Nova Guia
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Papel de parede da tela inicial",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Exibe imagens ou gradientes de alta qualidade na tela de início",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
-                                checked = showWallpaper,
-                                onCheckedChange = onShowWallpaperChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        if (showWallpaper) {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            WallpaperCarousel(
-                                wallpapers = AvailableWallpapers,
-                                selectedId = selectedWallpaperId,
-                                customWallpaperUri = customWallpaperUri,
-                                onUpload = onUploadWallpaper,
-                                onSelect = onSelectWallpaper,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Barra de Favoritos na Tela Inicial
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                                Text(
-                                    text = "Barra de favoritos no rodapé",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Exibe atalhos rápidos flutuantes na tela inicial para acesso com uma mão",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
-                                checked = showFavoritesBar,
-                                onCheckedChange = onShowFavoritesBarChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Barra de Abas em Pílulas (Estilo Opera Air)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                                Text(
-                                    text = "Abas em Pílulas (Opera Air)",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Exibe carrossel de abas horizontais flutuantes acima da barra de pesquisa",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
-                                checked = showPillTabsBar,
-                                onCheckedChange = onShowPillTabsBarChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Widgets da Tela Inicial: Clima
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.WbSunny,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFFA726),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Widget de previsão do tempo",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Temperatura e clima local na tela inicial",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = showWeatherWidget,
-                                onCheckedChange = onShowWeatherWidgetChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Widgets da Tela Inicial: Cotações
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4CAF50),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Widget de cotações financeiras",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Valores atualizados de Dólar, Euro e Bitcoin",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = showQuotesWidget,
-                                onCheckedChange = onShowQuotesWidgetChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Barra Lateral
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Barra lateral flutuante",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Acesso rápido a abas e ferramentas na lateral da tela",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = showSidebar,
-                                onCheckedChange = onShowSidebarChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        if (showSidebar) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 30.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Ocultar automaticamente a barra lateral",
-                                    color = textSecondary,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                TesseraSwitch(
-                                    checked = autoHideSidebar,
-                                    onCheckedChange = onAutoHideSidebarChanged,
-                                    isDarkMode = isDarkMode
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -979,42 +740,14 @@ fun TesseraSettingsScreen(
             }
 
             // ==========================================
-            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL & MINIMALISMO DIGITAL
+            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL
             // ==========================================
             SettingsSection(
-                title = "Inteligência Artificial & Minimalismo",
+                title = "Inteligência Artificial",
                 headerColor = sectionHeaderColor
             ) {
                 SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        // Modo Minimalismo Digital
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text(
-                                    text = "Modo Minimalismo Digital",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Oculta cotações e distrações para uma navegação focada e calma",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
-                                checked = digitalMinimalismMode,
-                                onCheckedChange = onDigitalMinimalismModeChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
                         // Seleção de Provedor de IA
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
@@ -1207,62 +940,6 @@ fun TesseraSettingsScreen(
                                 onCheckedChange = onTesseraAiChanged,
                                 isDarkMode = isDarkMode
                             )
-                        }
-
-                        if (tesseraAiEnabled) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = dividerColor)
-
-                            // Botão de IA na barra de ferramentas
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(
-                                        text = "Botão de IA na barra inferior",
-                                        fontSize = 13.5.sp,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Exibe o ícone circular iridescente na AirBar",
-                                        fontSize = 11.5.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                                TesseraSwitch(
-                                    checked = aiToolbarButton,
-                                    onCheckedChange = onAiToolbarButtonChanged,
-                                    isDarkMode = isDarkMode
-                                )
-                            }
-
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = dividerColor)
-
-                            // Pop-up de IA ao selecionar texto
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(
-                                        text = "Avisos de IA no destaque de texto",
-                                        fontSize = 13.5.sp,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Oferece traduzir, resumir ou explicar trechos selecionados",
-                                        fontSize = 11.5.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                                TesseraSwitch(
-                                    checked = aiTextHighlightPrompts,
-                                    onCheckedChange = onAiTextHighlightPromptsChanged,
-                                    isDarkMode = isDarkMode
-                                )
-                            }
                         }
                     }
                 }
@@ -1481,7 +1158,7 @@ fun TesseraSettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Versão 1.6.0",
+                            text = "Versão 3.2.0",
                             fontSize = 13.sp,
                             color = textSecondary
                         )

@@ -120,77 +120,7 @@ fun TesseraStartPage(
                 )
         )
 
-        // 2. CABEÇALHO SUPERIOR SÓLIDO: SELETOR DE ESPAÇO & MENU DE CONFIGURAÇÕES
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .displayCutoutPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Cápsula de Espaço Sólida
-            val spacePillShape = AppleShapes.Capsule
-            Row(
-                modifier = Modifier
-                    .clip(spacePillShape)
-                    .background(surfaceColor)
-                    .border(1.dp, borderColor, spacePillShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onOpenSpaces
-                    )
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                SpaceVectorIcon(
-                    identifier = currentSpaceEmoji,
-                    tint = currentSpaceColor,
-                    modifier = Modifier.size(15.dp)
-                )
-                Text(
-                    text = currentSpaceName,
-                    color = contentColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = mutedColor,
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-
-            // Botão de Opções / Menu no Canto Direito (Squircle Sólido)
-            val menuBtnShape = AppleShapes.SquircleSmall
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(menuBtnShape)
-                    .background(surfaceColor)
-                    .border(1.dp, borderColor, menuBtnShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onOpenSettings
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Configurações e Menu",
-                    tint = contentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        // 3. CENTRO ZEN: WORDMARK LIMPO E RESPIRAÇÃO VISUAL
+        // 2. CENTRO ZEN: WORDMARK LIMPO E MINIMALISTA
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -201,7 +131,7 @@ fun TesseraStartPage(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -216,14 +146,6 @@ fun TesseraStartPage(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 6.sp
-                )
-
-                Text(
-                    text = "Navegação silenciosa & rápida",
-                    color = mutedColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.5.sp
                 )
             }
         }
