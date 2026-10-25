@@ -90,11 +90,11 @@ object AppleShapes {
 }
 
 private val TesseraDarkColorScheme = darkColorScheme(
-    primary = ApplePalette.BlueDark,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF0F325E),
-    secondary = ApplePalette.Teal,
-    onSecondary = Color.White,
+    primary = ApplePalette.DarkLabelPrimary,
+    onPrimary = Color.Black,
+    primaryContainer = ApplePalette.DarkElevated,
+    secondary = ApplePalette.DarkLabelSecondary,
+    onSecondary = Color.Black,
     background = ApplePalette.DarkBackground,
     onBackground = ApplePalette.DarkLabelPrimary,
     surface = ApplePalette.DarkSurface,
@@ -106,10 +106,10 @@ private val TesseraDarkColorScheme = darkColorScheme(
 )
 
 private val TesseraLightColorScheme = lightColorScheme(
-    primary = ApplePalette.Blue,
+    primary = ApplePalette.LightLabelPrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD0E6FF),
-    secondary = ApplePalette.Teal,
+    primaryContainer = ApplePalette.LightElevated,
+    secondary = ApplePalette.LightLabelSecondary,
     onSecondary = Color.White,
     background = ApplePalette.LightBackground,
     onBackground = ApplePalette.LightLabelPrimary,

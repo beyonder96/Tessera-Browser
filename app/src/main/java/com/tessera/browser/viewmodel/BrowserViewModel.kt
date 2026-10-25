@@ -407,7 +407,7 @@ data class BrowserUiState(
                     id = "custom",
                     name = "Minha Foto",
                     gradientColors = listOf(androidx.compose.ui.graphics.Color(0xFF1E1E24), androidx.compose.ui.graphics.Color(0xFF121214)),
-                    accentColor = androidx.compose.ui.graphics.Color(0xFF00E5FF)
+                    accentColor = androidx.compose.ui.graphics.Color(0xFFE0E0E0)
                 )
             }
             return AvailableWallpapers.find { it.id == selectedWallpaperId }

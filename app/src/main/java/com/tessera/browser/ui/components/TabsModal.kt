@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -117,7 +118,7 @@ fun TabsModal(
     onUpdateSpace: (spaceId: String, name: String, emoji: String, colorArgb: Long) -> Unit = { _, _, _, _ -> },
     onDeleteSpace: (spaceId: String) -> Unit = {},
     onMoveTabToSpace: (tabId: String, targetSpaceId: String) -> Unit = { _, _ -> },
-    accentColor: Color = ApplePalette.BlueDark,
+    accentColor: Color? = null,
     isDarkMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -131,6 +132,9 @@ fun TabsModal(
     val visibleTabs = currentSpaceTabs.filterNot {
         it.isHomePage || it.url == "tessera://inicio" || it.url.startsWith("about:blank")
     }
+
+    val monoAccent = accentColor ?: if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val onMonoAccent = if (monoAccent.luminance() > 0.5f) ApplePalette.DarkBackground else Color.White
 
     val sheetBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
@@ -163,7 +167,7 @@ fun TabsModal(
                 ) {
                     Text(
                         text = "Concluído",
-                        color = accentColor,
+                        color = monoAccent,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -208,7 +212,7 @@ fun TabsModal(
                             isActive = tab.id == activeTabId,
                             thumbnail = tabThumbnails[tab.id],
                             isDarkMode = isDarkMode,
-                            accentColor = accentColor,
+                            accentColor = monoAccent,
                             scale = scale,
                             alpha = alpha,
                             rotationZ = rotZ,
@@ -255,7 +259,7 @@ fun TabsModal(
                     modifier = Modifier
                         .height(44.dp)
                         .clip(newTabShape)
-                        .background(accentColor)
+                        .background(monoAccent)
                         .clickable(onClick = {
                             onNewTab()
                             onDismiss()
@@ -270,12 +274,12 @@ fun TabsModal(
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = "Nova Guia",
-                            tint = Color.White,
+                            tint = onMonoAccent,
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
                             text = "Nova Guia",
-                            color = Color.White,
+                            color = onMonoAccent,
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -327,18 +331,18 @@ fun TabsModal(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) accentColor.copy(alpha = 0.20f) else Color.Transparent)
+                                    .background(if (isSel) monoAccent.copy(alpha = 0.15f) else Color.Transparent)
                                     .border(
                                         1.dp,
-                                        if (isSel) accentColor else Color.Transparent,
+                                        if (isSel) monoAccent else Color.Transparent,
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable { newSpaceEmoji = iconKey },
-                                  contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center
                             ) {
                                 SpaceVectorIcon(
                                     identifier = iconKey,
-                                    tint = if (isSel) accentColor else mutedColor,
+                                    tint = if (isSel) monoAccent else mutedColor,
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -355,7 +359,7 @@ fun TabsModal(
                         }
                     }
                 ) {
-                    Text("Criar Espaço", color = accentColor, fontWeight = FontWeight.Bold)
+                    Text("Criar Espaço", color = monoAccent, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -433,6 +437,7 @@ private fun ArcTabCard(
     val currentY = animOffsetY.value
     val isClosing = currentY < -120f
     val isPinning = currentY > 90f
+    val onAccentColor = if (accentColor.luminance() > 0.5f) ApplePalette.DarkBackground else Color.White
 
     val cardShape = RoundedCornerShape(24.dp)
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
@@ -570,12 +575,12 @@ private fun ArcTabCard(
                             Icon(
                                 imageVector = Icons.Rounded.PushPin,
                                 contentDescription = null,
-                                tint = if (isPinning) Color.White else accentColor,
+                                tint = if (isPinning) onAccentColor else accentColor,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = pinLabel,
-                                color = if (isPinning) Color.White else contentColor,
+                                color = if (isPinning) onAccentColor else contentColor,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

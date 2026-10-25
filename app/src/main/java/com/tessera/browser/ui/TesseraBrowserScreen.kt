@@ -778,9 +778,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
     val effectiveAccentColor = when {
         state.isIncognitoMode -> ApplePalette.Purple
-        state.showWallpaper -> state.activeWallpaper.accentColor
-        state.isDarkMode -> ApplePalette.BlueDark
-        else -> ApplePalette.Blue
+        state.isDarkMode -> ApplePalette.DarkLabelPrimary
+        else -> ApplePalette.LightLabelPrimary
     }
 
     // System Back navigation priority:
