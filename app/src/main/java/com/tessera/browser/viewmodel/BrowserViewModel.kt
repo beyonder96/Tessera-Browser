@@ -985,8 +985,7 @@ class BrowserViewModel : ViewModel() {
                     activeTabId = first.id,
                     isHomePage = first.isHomePage,
                     currentUrl = first.url,
-                    displayUrl = if (first.isHomePage) "" else first.url,
-                    showTabsModal = false
+                    displayUrl = if (first.isHomePage) "" else first.url
                 )
             }
         } else {
@@ -998,8 +997,7 @@ class BrowserViewModel : ViewModel() {
                     activeTabId = newId,
                     isHomePage = true,
                     currentUrl = "https://duckduckgo.com",
-                    displayUrl = "",
-                    showTabsModal = false
+                    displayUrl = ""
                 )
             }
         }

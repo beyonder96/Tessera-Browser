@@ -2,10 +2,13 @@ package com.tessera.browser.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,18 +45,22 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +83,7 @@ import com.tessera.browser.data.TabGroup
 import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.ui.theme.AppleShapes
 import com.tessera.browser.viewmodel.BrowserTab
+import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -120,6 +128,9 @@ fun TabsModal(
 
     val currentSpace = spaces.find { it.id == activeSpaceId } ?: spaces.firstOrNull() ?: BrowserSpace.DEFAULT_SPACES.first()
     val currentSpaceTabs = tabs.filter { it.spaceId == activeSpaceId }
+    val visibleTabs = currentSpaceTabs.filterNot {
+        it.isHomePage || it.url == "tessera://inicio" || it.url.startsWith("about:blank")
+    }
 
     val sheetBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
@@ -166,56 +177,27 @@ fun TabsModal(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                if (currentSpaceTabs.isEmpty()) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(cardBg)
-                                .border(1.dp, cardBorder, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Layers,
-                                contentDescription = null,
-                                tint = mutedColor,
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
-                        Text(
-                            text = "Nenhuma guia aberta",
-                            color = contentColor,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Toque em Nova Guia para começar a navegar",
-                            color = mutedColor,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                if (visibleTabs.isEmpty()) {
+                    // Quando não houver abas ativas, exibe um espaço limpo (sem o card da home)
+                    Spacer(modifier = Modifier.fillMaxSize())
                 } else {
-                    val initialIndex = remember(currentSpaceTabs, activeTabId) {
-                        currentSpaceTabs.indexOfFirst { it.id == activeTabId }.coerceAtLeast(0)
+                    val initialIndex = remember(visibleTabs, activeTabId) {
+                        val idx = visibleTabs.indexOfFirst { it.id == activeTabId }
+                        if (idx >= 0) idx else (visibleTabs.size - 1).coerceAtLeast(0)
                     }
                     val pagerState = rememberPagerState(
-                        initialPage = initialIndex,
-                        pageCount = { currentSpaceTabs.size }
+                        initialPage = initialIndex.coerceIn(0, (visibleTabs.size - 1).coerceAtLeast(0)),
+                        pageCount = { visibleTabs.size }
                     )
 
                     HorizontalPager(
                         state = pagerState,
+                        key = { page -> visibleTabs.getOrNull(page)?.id ?: page },
                         contentPadding = PaddingValues(horizontal = 42.dp),
                         pageSpacing = 16.dp,
                         modifier = Modifier.fillMaxSize()
                     ) { page ->
-                        val tab = currentSpaceTabs[page]
+                        val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
                         val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
                         val scale = 1f - (pageOffset * 0.12f).coerceIn(0f, 0.22f)
                         val alpha = 1f - (pageOffset * 0.40f).coerceIn(0f, 0.50f)
@@ -234,13 +216,15 @@ fun TabsModal(
                                 onSelectTab(tab.id)
                                 onDismiss()
                             },
-                            onClose = { onCloseTab(tab.id) }
+                            onClose = { onCloseTab(tab.id) },
+                            onTogglePin = { onTogglePin(tab.id) }
                         )
                     }
                 }
             }
 
             // 3. BARRA INFERIOR SÓLIDA DE AÇÕES
+            val hasTabs = visibleTabs.isNotEmpty()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -253,12 +237,13 @@ fun TabsModal(
             ) {
                 // Fechar Todas
                 TextButton(
-                    onClick = onCloseAllTabs,
+                    onClick = { if (hasTabs) onCloseAllTabs() },
+                    enabled = hasTabs,
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
                     Text(
                         text = "Fechar Todas",
-                        color = Color(0xFFFF453A),
+                        color = if (hasTabs) Color(0xFFFF453A) else mutedColor.copy(alpha = 0.35f),
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -349,7 +334,7 @@ fun TabsModal(
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable { newSpaceEmoji = iconKey },
-                                contentAlignment = Alignment.Center
+                                  contentAlignment = Alignment.Center
                             ) {
                                 SpaceVectorIcon(
                                     identifier = iconKey,
@@ -383,7 +368,39 @@ fun TabsModal(
 }
 
 /**
- * Cartão de Aba Imersivo estilo Arc Search com preview real da página e gesto de swipe up.
+ * Retorna o nome da página de forma otimizada e limpa para o layout da pill.
+ * Nunca exibe a URL completa com caminhos longos ou parâmetros.
+ */
+private fun getOptimizedTabName(tab: BrowserTab): String {
+    if (tab.isHomePage) return "Início"
+    val rawTitle = tab.title.trim()
+    val isTitleAUrl = rawTitle.startsWith("http://", ignoreCase = true) ||
+            rawTitle.startsWith("https://", ignoreCase = true) ||
+            rawTitle.startsWith("www.", ignoreCase = true) ||
+            rawTitle.contains("/")
+
+    if (rawTitle.isNotBlank() && !isTitleAUrl && rawTitle != "Nova Guia") {
+        return rawTitle
+    }
+
+    // Fallback: extrai somente o domínio enxuto (ex: "tudocelular.com" ou "google.com")
+    return try {
+        val candidate = if (!tab.url.startsWith("http://") && !tab.url.startsWith("https://")) {
+            "https://${tab.url}"
+        } else tab.url
+        val uri = android.net.Uri.parse(candidate)
+        val host = uri.host?.removePrefix("www.") ?: tab.url.removePrefix("https://").substringBefore('/')
+        if (host.isNotBlank()) host else "Página Web"
+    } catch (e: Exception) {
+        "Página Web"
+    }
+}
+
+/**
+ * Cartão de Aba Imersivo estilo Arc Search.
+ * Layout com pill otimizada acima e card com live preview abaixo (sem header interno e sem 'X').
+ * Gesto para CIMA: Exclui a guia.
+ * Gesto para BAIXO: Fixa/desafixa o card.
  */
 @Composable
 private fun ArcTabCard(
@@ -396,41 +413,43 @@ private fun ArcTabCard(
     alpha: Float,
     rotationZ: Float,
     onClick: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onTogglePin: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    val animatedOffsetY by animateFloatAsState(
-        targetValue = offsetY,
-        animationSpec = tween(durationMillis = 150),
-        label = "tab_card_offset"
-    )
+    val coroutineScope = rememberCoroutineScope()
+    val animOffsetY = remember { Animatable(0f) }
 
-    val draggableState = rememberDraggableState { delta ->
-        offsetY = (offsetY + delta).coerceAtMost(0f)
+    LaunchedEffect(tab.id) {
+        animOffsetY.snapTo(0f)
     }
 
-    val cardShape = RoundedCornerShape(22.dp)
+    val draggableState = rememberDraggableState { delta ->
+        coroutineScope.launch {
+            animOffsetY.snapTo((animOffsetY.value + delta).coerceIn(-500f, 250f))
+        }
+    }
+
+    val currentY = animOffsetY.value
+    val isClosing = currentY < -120f
+    val isPinning = currentY > 90f
+
+    val cardShape = RoundedCornerShape(24.dp)
     val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
-    val cardBorder = if (isActive) accentColor else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBorder = if (isActive) {
+        accentColor
+    } else if (tab.isPinned) {
+        accentColor.copy(alpha = 0.55f)
+    } else if (isDarkMode) {
+        ApplePalette.DarkHairline
+    } else {
+        ApplePalette.LightHairline
+    }
+
     val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-
-    val hostDomain = remember(tab.url, tab.isHomePage) {
-        if (tab.isHomePage) {
-            "tessera://inicio"
-        } else {
-            try {
-                val uri = android.net.Uri.parse(
-                    if (!tab.url.startsWith("http://") && !tab.url.startsWith("https://")) {
-                        "https://${tab.url}"
-                    } else tab.url
-                )
-                uri.host?.removePrefix("www.") ?: tab.url.removePrefix("https://").substringBefore('/')
-            } catch (e: Exception) {
-                tab.url
-            }
-        }
+    val optimizedName = remember(tab.title, tab.url, tab.isHomePage) {
+        getOptimizedTabName(tab)
     }
 
     Box(
@@ -440,113 +459,193 @@ private fun ArcTabCard(
             .graphicsLayer {
                 this.scaleX = scale
                 this.scaleY = scale
-                this.alpha = alpha
+                this.alpha = alpha * (1f - (-currentY.coerceAtMost(0f) / 600f)).coerceIn(0.25f, 1f)
                 this.rotationZ = rotationZ
             }
-            .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
+            .offset { IntOffset(0, currentY.roundToInt()) }
             .draggable(
                 state = draggableState,
                 orientation = Orientation.Vertical,
                 onDragStopped = { velocity ->
-                    if (offsetY < -140f || velocity < -400f) {
+                    if (animOffsetY.value < -120f || velocity < -400f) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onClose()
+                        coroutineScope.launch {
+                            animOffsetY.animateTo(-1000f, tween(180))
+                            onClose()
+                        }
+                    } else if (animOffsetY.value > 90f || velocity > 350f) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onTogglePin()
+                        coroutineScope.launch {
+                            animOffsetY.animateTo(
+                                0f,
+                                spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                        }
                     } else {
-                        offsetY = 0f
+                        coroutineScope.launch {
+                            animOffsetY.animateTo(
+                                0f,
+                                spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                        }
                     }
                 }
             )
-            .shadow(
-                elevation = if (isActive) 14.dp else 4.dp,
-                shape = cardShape,
-                ambientColor = Color.Black.copy(alpha = 0.15f),
-                spotColor = Color.Black.copy(alpha = 0.20f)
-            )
-            .clip(cardShape)
-            .background(cardBg)
-            .border(
-                width = if (isActive) 1.8.dp else 1.dp,
-                color = cardBorder,
-                shape = cardShape
-            )
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                if (animOffsetY.value.absoluteValue < 12f) {
+                    onClick()
+                }
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // 1. HEADER DO CARTÃO
-            Row(
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // FEEDBACK VISUAL FLUTUANTE DE GESTO
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .height(28.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                // Ao puxar pra cima (excluir)
+                if (currentY < -25f) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isClosing) Color(0xFFFF453A) else if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated,
+                        border = BorderStroke(1.dp, if (isClosing) Color(0xFFFF453A) else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline),
+                        shadowElevation = 3.dp
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Public,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (tab.isHomePage) "Página Inicial" else tab.title.ifBlank { hostDomain },
-                            color = contentColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = hostDomain,
-                            color = mutedColor,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = null,
+                                tint = if (isClosing) Color.White else Color(0xFFFF453A),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = if (isClosing) "Solte para fechar" else "Deslize para fechar",
+                                color = if (isClosing) Color.White else contentColor,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 
-                // Botão Fechar no Cartão
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(if (isDarkMode) Color(0x33FFFFFF) else Color(0x14000000))
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onClose()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Fechar guia",
-                        tint = contentColor,
-                        modifier = Modifier.size(15.dp)
-                    )
+                // Ao puxar pra baixo (fixar / desafixar)
+                if (currentY > 25f) {
+                    val pinLabel = if (tab.isPinned) {
+                        if (isPinning) "Solte para desafixar" else "Puxe para desafixar"
+                    } else {
+                        if (isPinning) "Solte para fixar" else "Puxe para fixar"
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isPinning) accentColor else if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated,
+                        border = BorderStroke(1.dp, if (isPinning) accentColor else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline),
+                        shadowElevation = 3.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PushPin,
+                                contentDescription = null,
+                                tint = if (isPinning) Color.White else accentColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = pinLabel,
+                                color = if (isPinning) Color.White else contentColor,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
 
-            // 2. PREVIEW REAL DA PÁGINA (WEBVIEW THUMBNAIL)
+            // 1. A PILL COM O NOME DA PÁGINA (OTIMIZADO, NUNCA A URL COMPLETA)
+            val pillBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+            val pillBorder = if (tab.isPinned) accentColor.copy(alpha = 0.55f) else if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+
+            Surface(
+                shape = CircleShape,
+                color = pillBg,
+                border = BorderStroke(1.dp, pillBorder),
+                shadowElevation = 3.dp,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Public,
+                        contentDescription = null,
+                        tint = if (tab.isPinned) accentColor else mutedColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+
+                    Text(
+                        text = optimizedName,
+                        color = contentColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    if (tab.isPinned) {
+                        Icon(
+                            imageVector = Icons.Rounded.PushPin,
+                            contentDescription = "Guia Fixada",
+                            tint = accentColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+            }
+
+            // 2. CARD COM LIVE PREVIEW ABAIXO DA PILL (SEM X, SEM HEADER INTERNO)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated),
+                    .shadow(
+                        elevation = if (isActive) 12.dp else 4.dp,
+                        shape = cardShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.18f)
+                    )
+                    .clip(cardShape)
+                    .background(cardBg)
+                    .border(
+                        width = if (isActive) 2.dp else 1.dp,
+                        color = cardBorder,
+                        shape = cardShape
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (thumbnail != null) {
@@ -556,49 +655,34 @@ private fun ArcTabCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (tab.isHomePage) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "TESSERA",
-                            color = contentColor,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 4.sp
-                        )
-                        Text(
-                            text = "Página Inicial",
-                            color = mutedColor,
-                            fontSize = 12.sp
-                        )
-                    }
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(52.dp)
                                 .clip(CircleShape)
-                                .background(cardBg),
+                                .background(if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Public,
                                 contentDescription = null,
                                 tint = accentColor,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
                         Text(
-                            text = hostDomain,
+                            text = optimizedName,
                             color = contentColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
