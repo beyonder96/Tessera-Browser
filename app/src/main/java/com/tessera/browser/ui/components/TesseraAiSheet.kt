@@ -1,5 +1,6 @@
 package com.tessera.browser.ui.components
 
+import com.tessera.browser.ui.theme.ApplePalette
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -177,13 +178,13 @@ fun TesseraAiSheet(
     }
     val hasActiveKey = activeKey.isNotBlank()
 
-    // Paleta de Cores e Gradientes de Alta Fidelidade
+    // Paleta de Cores e Gradientes de Alta Fidelidade (ApplePalette Modo Journal & AMOLED)
     val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    val sheetBg = if (isDarkMode) Color(0xFF151210) else Color(0xFFFBFBFD)
-    val surfaceCardBg = if (isDarkMode) Color(0xFF221D1A) else Color.White
-    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-    val textColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1A1A1E)
-    val mutedColor = if (isDarkMode) Color(0xFF9E9EA4) else Color(0xFF71717A)
+    val sheetBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val surfaceCardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     val aiAuraBrush = remember {
         Brush.sweepGradient(
@@ -1411,10 +1412,10 @@ private fun AiKeyOnboardingCard(
     var isKeyVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val accentColor = if (provider == AiProvider.GEMINI) Color(0xFF4285F4) else Color(0xFFFF9800)
-    val cardBg = if (isDarkMode) Color(0xFF221D1A) else Color.White
-    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-    val textColor = if (isDarkMode) Color(0xFFF3F3F5) else Color(0xFF1A1A1E)
-    val mutedColor = if (isDarkMode) Color(0xFF9E9EA4) else Color(0xFF71717A)
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Box(
         modifier = Modifier

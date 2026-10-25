@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun PeekPreviewModal(
@@ -80,14 +81,10 @@ fun PeekPreviewModal(
     }
 
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    val panelBg = if (isDarkMode) {
-        Brush.verticalGradient(listOf(Color(0xF0201B17), Color(0xF516120F)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xF5FFFFFF), Color(0xF8F4F5F7)))
-    }
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
-    val textColor = if (isDarkMode) Color(0xFFEEEEEE) else Color(0xFF1E1E1E)
-    val subColor = if (isDarkMode) Color(0xFFAAAAAA) else Color(0xFF757575)
+    val panelBg = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Surface(
         modifier = modifier

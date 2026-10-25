@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tessera.browser.ui.theme.ApplePalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,13 +47,11 @@ fun PipPermissionDialog(
     onDismiss: () -> Unit
 ) {
     val dialogShape = RoundedCornerShape(28.dp)
-    val bgColor = if (isDarkMode) {
-        Brush.verticalGradient(listOf(Color(0xFF221C1A), Color(0xFF14100F)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFF8F9FA)))
-    }
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1A1A1A)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF6C757D)
+    val bgColor = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     BasicAlertDialog(
         onDismissRequest = onDismiss
@@ -64,7 +63,7 @@ fun PipPermissionDialog(
                 .background(bgColor)
                 .border(
                     width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                    color = hairlineColor,
                     shape = dialogShape
                 )
                 .padding(24.dp),
@@ -153,10 +152,10 @@ fun PipPermissionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color(0xFFF1F3F5))
+                    .background(cardBg)
                     .border(
                         1.dp,
-                        if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                        hairlineColor,
                         RoundedCornerShape(16.dp)
                     )
                     .padding(14.dp),

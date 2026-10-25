@@ -35,33 +35,35 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun AddShortcutDialog(
     onDismiss: () -> Unit,
-    onConfirm: (title: String, url: String) -> Unit
+    onConfirm: (title: String, url: String) -> Unit,
+    isDarkMode: Boolean = false,
+    accentColor: Color = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
 ) {
     var title by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     val shape = RoundedCornerShape(24.dp)
 
+    val dialogBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textPrimary = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val textSecondary = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val textTertiary = if (isDarkMode) ApplePalette.DarkLabelTertiary else ApplePalette.LightLabelTertiary
+    val inputBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = shape,
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            colors = CardDefaults.cardColors(containerColor = dialogBg),
             modifier = Modifier
                 .fillMaxWidth()
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f))
-                    ),
-                    shape = shape
-                )
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xF0201A17), Color(0xF015110F))
-                    ),
+                    color = hairlineColor,
                     shape = shape
                 )
                 .padding(24.dp)
@@ -69,7 +71,7 @@ fun AddShortcutDialog(
             Column(horizontalAlignment = Alignment.Start) {
                 Text(
                     text = "Adicionar à Discagem Rápida",
-                    color = Color.White,
+                    color = textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -78,21 +80,26 @@ fun AddShortcutDialog(
 
                 Text(
                     text = "Nome",
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = textSecondary,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 DialogInputField(
                     value = title,
                     onValueChange = { title = it },
-                    placeholder = "Ex: Google, Notícias..."
+                    placeholder = "Ex: Google, Notícias...",
+                    inputBg = inputBg,
+                    hairlineColor = hairlineColor,
+                    textPrimary = textPrimary,
+                    textTertiary = textTertiary,
+                    accentColor = accentColor
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = "Endereço Web",
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = textSecondary,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -101,6 +108,11 @@ fun AddShortcutDialog(
                     onValueChange = { url = it },
                     placeholder = "Ex: google.com",
                     imeAction = ImeAction.Done,
+                    inputBg = inputBg,
+                    hairlineColor = hairlineColor,
+                    textPrimary = textPrimary,
+                    textTertiary = textTertiary,
+                    accentColor = accentColor,
                     onImeAction = {
                         if (title.isNotBlank() && url.isNotBlank()) {
                             onConfirm(title.trim(), url.trim())
@@ -116,7 +128,7 @@ fun AddShortcutDialog(
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White.copy(alpha = 0.6f))
+                        colors = ButtonDefaults.textButtonColors(contentColor = textSecondary)
                     ) {
                         Text("Cancelar")
                     }
@@ -129,8 +141,8 @@ fun AddShortcutDialog(
                         },
                         enabled = title.isNotBlank() && url.isNotBlank(),
                         colors = ButtonDefaults.textButtonColors(
-                            contentColor = Color(0xFF64B5F6),
-                            disabledContentColor = Color.White.copy(alpha = 0.25f)
+                            contentColor = accentColor,
+                            disabledContentColor = textSecondary.copy(alpha = 0.4f)
                         )
                     ) {
                         Text("Adicionar", fontWeight = FontWeight.Bold)
@@ -146,6 +158,11 @@ private fun DialogInputField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
+    inputBg: Color,
+    hairlineColor: Color,
+    textPrimary: Color,
+    textTertiary: Color,
+    accentColor: Color,
     imeAction: ImeAction = ImeAction.Next,
     onImeAction: () -> Unit = {}
 ) {
@@ -155,15 +172,15 @@ private fun DialogInputField(
             .fillMaxWidth()
             .height(44.dp)
             .clip(fieldShape)
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), fieldShape)
+            .background(inputBg)
+            .border(1.dp, hairlineColor, fieldShape)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
-                color = Color.White.copy(alpha = 0.35f),
+                color = textTertiary,
                 fontSize = 14.sp
             )
         }
@@ -172,8 +189,8 @@ private fun DialogInputField(
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-            cursorBrush = SolidColor(Color(0xFF64B5F6)),
+            textStyle = TextStyle(color = textPrimary, fontSize = 14.sp),
+            cursorBrush = SolidColor(accentColor),
             keyboardOptions = KeyboardOptions(imeAction = imeAction),
             keyboardActions = KeyboardActions(onDone = { onImeAction() })
         )

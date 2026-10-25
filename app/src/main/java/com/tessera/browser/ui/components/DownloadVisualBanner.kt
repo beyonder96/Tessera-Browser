@@ -1,4 +1,4 @@
-﻿package com.tessera.browser.ui.components
+package com.tessera.browser.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.DownloadNotice
 import com.tessera.browser.data.DownloadStatus
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun DownloadVisualBanner(
@@ -63,9 +64,9 @@ fun DownloadVisualBanner(
         if (notice == null) return@AnimatedVisibility
 
         val shape = RoundedCornerShape(22.dp)
-        val bannerBg = if (isDarkMode) Color(0xF21C1A18) else Color(0xF8FFFFFF)
-        val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
-        val subTextColor = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF636366)
+        val bannerBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+        val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+        val subTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
         val borderBrush = when (notice.status) {
             DownloadStatus.SUCCESSFUL -> Brush.linearGradient(

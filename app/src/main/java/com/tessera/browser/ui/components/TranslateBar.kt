@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.TranslationState
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun TranslateBar(
@@ -54,19 +55,10 @@ fun TranslateBar(
         modifier = modifier
     ) {
         val barShape = RoundedCornerShape(26.dp)
-        val bgBrush = if (isDarkMode) {
-            Brush.verticalGradient(
-                listOf(Color(0xE62A2420), Color(0xF21F1B18))
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(Color(0xF5FFFFFF), Color(0xFAF4F6F8))
-            )
-        }
-
-        val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E4E8)
-        val textColor = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
-        val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF757575)
+        val bgBrush = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+        val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+        val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+        val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
         Box(
             modifier = Modifier

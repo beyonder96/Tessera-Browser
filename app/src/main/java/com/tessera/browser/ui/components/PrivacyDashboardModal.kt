@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.BlockedTrackerItem
 import com.tessera.browser.data.PrivacyDashboardState
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun PrivacyDashboardModal(
@@ -77,18 +78,11 @@ fun PrivacyDashboardModal(
     val haptic = LocalHapticFeedback.current
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-    val bgColor = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xF81C1614), Color(0xFC120E0D), Color(0xFF090706))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF9FAFB), Color(0xFFF3F4F6))
-        )
-    }
-
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E24)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280)
+    val bgColor = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
     val shieldGreen = Color(0xFF00E676)
 
     AnimatedVisibility(
@@ -103,9 +97,7 @@ fun PrivacyDashboardModal(
                 .background(bgColor)
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))
-                    ),
+                    color = hairlineColor,
                     shape = panelShape
                 )
                 .navigationBarsPadding()
@@ -344,10 +336,10 @@ fun PrivacyDashboardModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f))
+                    .background(cardBg)
                     .border(
                         1.dp,
-                        if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                        hairlineColor,
                         RoundedCornerShape(18.dp)
                     )
                     .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -508,8 +500,8 @@ private fun BlockedTrackerItemCard(
     item: BlockedTrackerItem,
     isDarkMode: Boolean
 ) {
-    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f)
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
 
     Row(
         modifier = Modifier

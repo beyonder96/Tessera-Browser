@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.PodcastAudioState
 import com.tessera.browser.data.PodcastVoice
+import com.tessera.browser.ui.theme.ApplePalette
 import java.util.Locale
 
 @Composable
@@ -83,18 +84,11 @@ fun PodcastFullPlayerModal(
     val haptic = LocalHapticFeedback.current
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-    val bgColor = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xF81E1715), Color(0xFC120E0D), Color(0xFF090706))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF9FAFB), Color(0xFFF3F4F6))
-        )
-    }
-
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E24)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280)
+    val bgColor = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     AnimatedVisibility(
         visible = state.isFullPlayerOpen,
@@ -108,9 +102,7 @@ fun PodcastFullPlayerModal(
                 .background(bgColor)
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))
-                    ),
+                    color = hairlineColor,
                     shape = panelShape
                 )
                 .navigationBarsPadding()

@@ -64,6 +64,7 @@ import com.tessera.browser.data.DownloadItem
 import com.tessera.browser.data.DownloadStatus
 import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SpeedDialItem
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.viewmodel.HistoryEntry
 import androidx.compose.material.icons.rounded.OfflinePin
 import java.text.SimpleDateFormat
@@ -90,12 +91,20 @@ fun HistoryBookmarksModal(
     onExportBookmarksHtml: () -> Unit = {},
     onImportBookmarksHtml: () -> Unit = {},
     onDismiss: () -> Unit,
-    accentColor: Color = Color(0xFF64B5F6),
+    isDarkMode: Boolean = false,
+    accentColor: Color = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
     var searchQuery by remember { mutableStateOf("") }
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+    val sheetBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textPrimary = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val textSecondary = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val textTertiary = if (isDarkMode) ApplePalette.DarkLabelTertiary else ApplePalette.LightLabelTertiary
 
     val filteredBookmarks = remember(bookmarks, searchQuery) {
         if (searchQuery.isBlank()) bookmarks
@@ -130,22 +139,27 @@ fun HistoryBookmarksModal(
             .fillMaxWidth()
             .fillMaxHeight(0.75f)
             .clip(panelShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xF8201A17), Color(0xFC14100E))
-                )
-            )
+            .background(sheetBg)
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                ),
+                color = hairlineColor,
                 shape = panelShape
             )
             .navigationBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Pull / drag handle
+        Box(
+            modifier = Modifier
+                .size(width = 38.dp, height = 4.dp)
+                .clip(CircleShape)
+                .background(hairlineColor)
+                .align(Alignment.CenterHorizontally)
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Header & Tab switch
         Row(
@@ -164,10 +178,10 @@ fun HistoryBookmarksModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selectedTab == 0) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .background(if (selectedTab == 0) accentColor.copy(alpha = if (isDarkMode) 0.2f else 0.14f) else Color.Transparent)
                         .border(
                             1.dp,
-                            if (selectedTab == 0) accentColor else Color.White.copy(alpha = 0.1f),
+                            if (selectedTab == 0) accentColor else hairlineColor,
                             RoundedCornerShape(16.dp)
                         )
                         .clickable {
@@ -178,7 +192,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "Favoritos",
-                        color = if (selectedTab == 0) accentColor else Color.White.copy(alpha = 0.7f),
+                        color = if (selectedTab == 0) accentColor else textSecondary,
                         fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                     )
@@ -188,10 +202,10 @@ fun HistoryBookmarksModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selectedTab == 1) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .background(if (selectedTab == 1) accentColor.copy(alpha = if (isDarkMode) 0.2f else 0.14f) else Color.Transparent)
                         .border(
                             1.dp,
-                            if (selectedTab == 1) accentColor else Color.White.copy(alpha = 0.1f),
+                            if (selectedTab == 1) accentColor else hairlineColor,
                             RoundedCornerShape(16.dp)
                         )
                         .clickable {
@@ -202,7 +216,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "Histórico",
-                        color = if (selectedTab == 1) accentColor else Color.White.copy(alpha = 0.7f),
+                        color = if (selectedTab == 1) accentColor else textSecondary,
                         fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                     )
@@ -212,10 +226,10 @@ fun HistoryBookmarksModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selectedTab == 2) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .background(if (selectedTab == 2) accentColor.copy(alpha = if (isDarkMode) 0.2f else 0.14f) else Color.Transparent)
                         .border(
                             1.dp,
-                            if (selectedTab == 2) accentColor else Color.White.copy(alpha = 0.1f),
+                            if (selectedTab == 2) accentColor else hairlineColor,
                             RoundedCornerShape(16.dp)
                         )
                         .clickable {
@@ -226,7 +240,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "Downloads",
-                        color = if (selectedTab == 2) accentColor else Color.White.copy(alpha = 0.7f),
+                        color = if (selectedTab == 2) accentColor else textSecondary,
                         fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal
                     )
@@ -236,10 +250,10 @@ fun HistoryBookmarksModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selectedTab == 3) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                        .background(if (selectedTab == 3) accentColor.copy(alpha = if (isDarkMode) 0.2f else 0.14f) else Color.Transparent)
                         .border(
                             1.dp,
-                            if (selectedTab == 3) accentColor else Color.White.copy(alpha = 0.1f),
+                            if (selectedTab == 3) accentColor else hairlineColor,
                             RoundedCornerShape(16.dp)
                         )
                         .clickable {
@@ -250,7 +264,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "Salvos",
-                        color = if (selectedTab == 3) accentColor else Color.White.copy(alpha = 0.7f),
+                        color = if (selectedTab == 3) accentColor else textSecondary,
                         fontSize = 12.5.sp,
                         fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal
                     )
@@ -261,7 +275,7 @@ fun HistoryBookmarksModal(
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Fechar",
-                    tint = Color.White.copy(alpha = 0.7f),
+                    tint = textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -274,15 +288,15 @@ fun HistoryBookmarksModal(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color.White.copy(alpha = 0.06f))
-                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+                .background(cardBg)
+                .border(1.dp, hairlineColor, RoundedCornerShape(14.dp))
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Rounded.Search,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = textSecondary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -291,7 +305,7 @@ fun HistoryBookmarksModal(
                 onValueChange = { searchQuery = it },
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = Color.White,
+                    color = textPrimary,
                     fontSize = 13.5.sp
                 ),
                 cursorBrush = SolidColor(accentColor),
@@ -306,7 +320,7 @@ fun HistoryBookmarksModal(
                         }
                         Text(
                             text = placeholder,
-                            color = Color.White.copy(alpha = 0.4f),
+                            color = textTertiary,
                             fontSize = 13.sp
                         )
                     }
@@ -321,7 +335,7 @@ fun HistoryBookmarksModal(
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = "Limpar busca",
-                        tint = Color.White.copy(alpha = 0.6f),
+                        tint = textSecondary,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -344,8 +358,8 @@ fun HistoryBookmarksModal(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.07f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                        .background(cardBg)
+                        .border(1.dp, hairlineColor, RoundedCornerShape(12.dp))
                         .clickable(onClick = onImportBookmarksHtml)
                         .padding(vertical = 8.dp, horizontal = 10.dp),
                     contentAlignment = Alignment.Center
@@ -362,7 +376,7 @@ fun HistoryBookmarksModal(
                         )
                         Text(
                             text = "Importar HTML",
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = textPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -374,8 +388,8 @@ fun HistoryBookmarksModal(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.07f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                        .background(cardBg)
+                        .border(1.dp, hairlineColor, RoundedCornerShape(12.dp))
                         .clickable(onClick = onExportBookmarksHtml)
                         .padding(vertical = 8.dp, horizontal = 10.dp),
                     contentAlignment = Alignment.Center
@@ -392,7 +406,7 @@ fun HistoryBookmarksModal(
                         )
                         Text(
                             text = "Exportar HTML",
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = textPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -409,7 +423,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = if (searchQuery.isNotBlank()) "Nenhum favorito encontrado para \"$searchQuery\"." else "Nenhum favorito salvo ainda.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = textSecondary,
                         fontSize = 14.sp
                     )
                 }
@@ -424,7 +438,8 @@ fun HistoryBookmarksModal(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(cardShape)
-                                .background(Color.White.copy(alpha = 0.06f))
+                                .background(cardBg)
+                                .border(1.dp, hairlineColor, cardShape)
                                 .clickable { onSelectUrl(item.url) }
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -439,7 +454,7 @@ fun HistoryBookmarksModal(
                                 Column {
                                     Text(
                                         text = item.title,
-                                        color = Color.White.copy(alpha = 0.95f),
+                                        color = textPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1,
@@ -447,7 +462,7 @@ fun HistoryBookmarksModal(
                                     )
                                     Text(
                                         text = item.url,
-                                        color = Color.White.copy(alpha = 0.45f),
+                                        color = textSecondary,
                                         fontSize = 11.5.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -462,7 +477,7 @@ fun HistoryBookmarksModal(
                                 Icon(
                                     imageVector = Icons.Rounded.DeleteOutline,
                                     contentDescription = "Remover",
-                                    tint = Color.White.copy(alpha = 0.5f),
+                                    tint = textSecondary,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -481,7 +496,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = if (searchQuery.isNotBlank()) "Nenhum histórico encontrado para \"$searchQuery\"." else "Histórico de navegação limpo.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = textSecondary,
                         fontSize = 14.sp
                     )
                 }
@@ -494,7 +509,7 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "Limpar Histórico",
-                        color = Color(0xFFFF6B6B),
+                        color = ApplePalette.Red,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
@@ -513,7 +528,8 @@ fun HistoryBookmarksModal(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(cardShape)
-                                .background(Color.White.copy(alpha = 0.05f))
+                                .background(cardBg)
+                                .border(1.dp, hairlineColor, cardShape)
                                 .clickable { onSelectUrl(item.url) }
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -522,13 +538,13 @@ fun HistoryBookmarksModal(
                             Icon(
                                 imageVector = Icons.Rounded.History,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.5f),
+                                tint = textSecondary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = item.title.ifBlank { item.url },
-                                    color = Color.White.copy(alpha = 0.92f),
+                                    color = textPrimary,
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
@@ -536,7 +552,7 @@ fun HistoryBookmarksModal(
                                 )
                                 Text(
                                     text = item.url,
-                                    color = Color.White.copy(alpha = 0.45f),
+                                    color = textSecondary,
                                     fontSize = 11.5.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -558,7 +574,7 @@ fun HistoryBookmarksModal(
                     if (searchQuery.isNotBlank()) {
                         Text(
                             text = "Nenhum download encontrado para \"$searchQuery\".",
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = textSecondary,
                             fontSize = 14.sp
                         )
                     } else {
@@ -569,18 +585,18 @@ fun HistoryBookmarksModal(
                             Icon(
                                 imageVector = Icons.Rounded.Download,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.25f),
+                                tint = textTertiary,
                                 modifier = Modifier.size(52.dp)
                             )
                             Text(
                                 text = "Nenhum download recente",
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "Arquivos baixados da web aparecerão aqui.",
-                                color = Color.White.copy(alpha = 0.45f),
+                                color = textSecondary,
                                 fontSize = 13.sp
                             )
                         }
@@ -596,13 +612,13 @@ fun HistoryBookmarksModal(
                 ) {
                     Text(
                         text = "${filteredDownloads.size} ${if (filteredDownloads.size == 1) "item" else "itens"}",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = textSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Limpar Downloads",
-                        color = Color(0xFFFF6B6B),
+                        color = ApplePalette.Red,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
@@ -625,14 +641,15 @@ fun HistoryBookmarksModal(
                             DownloadFileType.AUDIO -> Pair(Icons.Rounded.AudioFile, Color(0xFFFFA726))
                             DownloadFileType.ARCHIVE -> Pair(Icons.Rounded.FolderZip, Color(0xFFFFCA28))
                             DownloadFileType.DOCUMENT -> Pair(Icons.Rounded.Description, Color(0xFF26A69A))
-                            DownloadFileType.GENERIC -> Pair(Icons.AutoMirrored.Rounded.InsertDriveFile, Color.White.copy(alpha = 0.7f))
+                            DownloadFileType.GENERIC -> Pair(Icons.AutoMirrored.Rounded.InsertDriveFile, textSecondary)
                         }
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(cardShape)
-                                .background(Color.White.copy(alpha = 0.05f))
+                                .background(cardBg)
+                                .border(1.dp, hairlineColor, cardShape)
                                 .clickable { onOpenDownload(item) }
                                 .padding(horizontal = 14.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -640,9 +657,9 @@ fun HistoryBookmarksModal(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(iconInfo.second.copy(alpha = 0.15f)),
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(iconInfo.second.copy(alpha = if (isDarkMode) 0.18f else 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -656,7 +673,7 @@ fun HistoryBookmarksModal(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = item.fileName,
-                                    color = Color.White.copy(alpha = 0.92f),
+                                    color = textPrimary,
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
@@ -669,17 +686,17 @@ fun HistoryBookmarksModal(
                                 ) {
                                     Text(
                                         text = item.formattedSize,
-                                        color = Color.White.copy(alpha = 0.5f),
+                                        color = textSecondary,
                                         fontSize = 11.5.sp
                                     )
                                     Text(
                                         text = "•",
-                                        color = Color.White.copy(alpha = 0.3f),
+                                        color = hairlineColor,
                                         fontSize = 10.sp
                                     )
                                     Text(
                                         text = item.formattedDate,
-                                        color = Color.White.copy(alpha = 0.45f),
+                                        color = textSecondary,
                                         fontSize = 11.sp
                                     )
                                     if (item.status == DownloadStatus.RUNNING || item.status == DownloadStatus.PENDING) {
@@ -692,7 +709,7 @@ fun HistoryBookmarksModal(
                                     } else if (item.status == DownloadStatus.FAILED) {
                                         Text(
                                             text = "Falha",
-                                            color = Color(0xFFFF6B6B),
+                                            color = ApplePalette.Red,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -708,7 +725,7 @@ fun HistoryBookmarksModal(
                                 Icon(
                                     imageVector = Icons.Rounded.Share,
                                     contentDescription = "Compartilhar",
-                                    tint = Color.White.copy(alpha = 0.65f),
+                                    tint = textSecondary,
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -721,7 +738,7 @@ fun HistoryBookmarksModal(
                                 Icon(
                                     imageVector = Icons.Rounded.DeleteOutline,
                                     contentDescription = "Remover",
-                                    tint = Color.White.copy(alpha = 0.5f),
+                                    tint = textSecondary,
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -741,7 +758,7 @@ fun HistoryBookmarksModal(
                     if (searchQuery.isNotBlank()) {
                         Text(
                             text = "Nenhuma página salva offline encontrada para \"$searchQuery\".",
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = textSecondary,
                             fontSize = 14.sp
                         )
                     } else {
@@ -753,18 +770,18 @@ fun HistoryBookmarksModal(
                             Icon(
                                 imageVector = Icons.Rounded.OfflinePin,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.3f),
+                                tint = textTertiary,
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
                                 text = "Nenhuma página salva offline",
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "No menu de Configurações, toque em \"Salvar para ler offline\" para acessar artigos mesmo sem sinal de internet.",
-                                color = Color.White.copy(alpha = 0.45f),
+                                color = textSecondary,
                                 fontSize = 12.5.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
@@ -795,8 +812,8 @@ fun HistoryBookmarksModal(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(cardShape)
-                                .background(Color.White.copy(alpha = 0.05f))
-                                .border(1.dp, Color.White.copy(alpha = 0.08f), cardShape)
+                                .background(cardBg)
+                                .border(1.dp, hairlineColor, cardShape)
                                 .clickable {
                                     onOpenSavedPage(item)
                                     onDismiss()
@@ -814,7 +831,7 @@ fun HistoryBookmarksModal(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(accentColor.copy(alpha = 0.15f)),
+                                        .background(accentColor.copy(alpha = if (isDarkMode) 0.18f else 0.12f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -828,7 +845,7 @@ fun HistoryBookmarksModal(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = item.title.ifBlank { "Página Salva" },
-                                        color = Color.White,
+                                        color = textPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1,
@@ -841,18 +858,18 @@ fun HistoryBookmarksModal(
                                     ) {
                                         Text(
                                             text = formattedSize,
-                                            color = accentColor.copy(alpha = 0.85f),
+                                            color = accentColor,
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
                                             text = "•",
-                                            color = Color.White.copy(alpha = 0.3f),
+                                            color = hairlineColor,
                                             fontSize = 10.sp
                                         )
                                         Text(
                                             text = formattedDate,
-                                            color = Color.White.copy(alpha = 0.45f),
+                                            color = textSecondary,
                                             fontSize = 11.sp
                                         )
                                     }
@@ -867,7 +884,7 @@ fun HistoryBookmarksModal(
                                 Icon(
                                     imageVector = Icons.Rounded.DeleteOutline,
                                     contentDescription = "Excluir página offline",
-                                    tint = Color.White.copy(alpha = 0.5f),
+                                    tint = textSecondary,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }

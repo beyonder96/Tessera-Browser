@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.BrowserSpace
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.viewmodel.BrowserTab
 
 /**
@@ -542,14 +543,11 @@ fun SpaceQuickSwitcherModal(
     var showCreateDialog by remember { mutableStateOf(false) }
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-    val bgColor = if (isDarkMode) {
-        Brush.verticalGradient(listOf(Color(0xF81E1917), Color(0xFC120F0E)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFF8F9FA)))
-    }
-
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF212529)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.55f) else Color(0xFF6C757D)
+    val bgColor = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Column(
         modifier = modifier
@@ -558,7 +556,7 @@ fun SpaceQuickSwitcherModal(
             .background(bgColor)
             .border(
                 1.dp,
-                if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                hairlineColor,
                 panelShape
             )
             .navigationBarsPadding()
@@ -569,7 +567,7 @@ fun SpaceQuickSwitcherModal(
             modifier = Modifier
                 .size(width = 38.dp, height = 4.dp)
                 .clip(CircleShape)
-                .background(if (isDarkMode) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f))
+                .background(hairlineColor)
                 .align(Alignment.CenterHorizontally)
         )
 
@@ -618,17 +616,12 @@ fun SpaceQuickSwitcherModal(
                                     listOf(spaceColor.copy(alpha = 0.28f), spaceColor.copy(alpha = 0.10f))
                                 )
                             } else {
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F3F5),
-                                        if (isDarkMode) Color.White.copy(alpha = 0.03f) else Color(0xFFE9ECEF)
-                                    )
-                                )
+                                androidx.compose.ui.graphics.SolidColor(cardBg)
                             }
                         )
                         .border(
-                            width = if (isActive) 1.5.dp else 0.5.dp,
-                            color = if (isActive) spaceColor else if (isDarkMode) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f),
+                            width = if (isActive) 1.5.dp else 1.dp,
+                            color = if (isActive) spaceColor else hairlineColor,
                             shape = cardShape
                         )
                         .clickable {

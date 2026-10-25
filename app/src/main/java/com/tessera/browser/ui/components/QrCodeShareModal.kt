@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.util.QrCodeGenerator
 import java.io.File
 import java.io.FileOutputStream
@@ -64,18 +65,11 @@ fun QrCodeShareModal(
         QrCodeGenerator.generateQrBitmap(url, size = 600)
     }
 
-    val dialogBg = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xF01E1A17), Color(0xF815110E))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF7F7F8))
-        )
-    }
-
-    val textColor = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
-    val subTextColor = if (isDarkMode) Color.White.copy(alpha = 0.6f) else Color(0xFF6E6E73)
+    val dialogBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val buttonBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -89,7 +83,7 @@ fun QrCodeShareModal(
                 .background(dialogBg)
                 .border(
                     width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f),
+                    color = hairlineColor,
                     shape = RoundedCornerShape(28.dp)
                 )
                 .padding(22.dp),
@@ -208,9 +202,7 @@ fun QrCodeShareModal(
                             .weight(1f)
                             .height(46.dp)
                             .clip(RoundedCornerShape(23.dp))
-                            .background(
-                                if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-                            )
+                            .background(buttonBg)
                             .clickable {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("URL", url)

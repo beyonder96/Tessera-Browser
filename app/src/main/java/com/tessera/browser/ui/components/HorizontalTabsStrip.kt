@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.viewmodel.BrowserTab
 
 /**
@@ -82,8 +83,16 @@ fun HorizontalTabsStrip(
         }
     }
 
-    val contentColor = if (isIncognito || isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
-    val mutedColor = if (isIncognito) Color(0xFFC4B5FD).copy(alpha = 0.70f) else if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color(0xFF6B7280)
+    val contentColor = when {
+        isIncognito -> Color.White.copy(alpha = 0.95f)
+        isDarkMode -> ApplePalette.DarkLabelPrimary
+        else -> ApplePalette.LightLabelPrimary
+    }
+    val mutedColor = when {
+        isIncognito -> Color(0xFFC4B5FD).copy(alpha = 0.70f)
+        isDarkMode -> ApplePalette.DarkLabelSecondary
+        else -> ApplePalette.LightLabelSecondary
+    }
 
     LazyRow(
         state = listState,
@@ -103,19 +112,19 @@ fun HorizontalTabsStrip(
 
             val pillBg = when {
                 isActive && isIncognito -> Color(0xF524183E)
-                isActive && isDarkMode -> Color(0xF82C2622)
-                isActive -> Color(0xFFFFFFFF)
+                isActive && isDarkMode -> ApplePalette.DarkSurface
+                isActive -> ApplePalette.LightSurface
                 isIncognito -> Color(0xF0181126)
-                isDarkMode -> Color(0xF2201C19)
-                else -> Color(0xF2F0EBE6)
+                isDarkMode -> ApplePalette.DarkElevated
+                else -> ApplePalette.LightElevated
             }
 
             val pillBorder = when {
                 isActive && isIncognito -> accentColor.copy(alpha = 0.85f)
                 isActive -> accentColor.copy(alpha = 0.80f)
                 isIncognito -> Color.White.copy(alpha = 0.16f)
-                isDarkMode -> Color.White.copy(alpha = 0.14f)
-                else -> Color.Black.copy(alpha = 0.10f)
+                isDarkMode -> ApplePalette.DarkHairline
+                else -> ApplePalette.LightHairline
             }
 
             val hostDomain = remember(tab.url, tab.isHomePage) {

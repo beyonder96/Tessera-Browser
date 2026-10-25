@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.tessera.browser.data.SiteSettings
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun SiteSettingsModal(
@@ -69,20 +70,11 @@ fun SiteSettingsModal(
     val isSecure = currentUrl.startsWith("https://", ignoreCase = true)
     val sheetShape = RoundedCornerShape(28.dp)
 
-    val bgBrush = if (isDarkMode) {
-        Brush.verticalGradient(
-            listOf(Color(0xF5241E1B), Color(0xF8191512))
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(Color(0xFFFFFFFF), Color(0xFFF7F8FA))
-        )
-    }
-
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E4E8)
-    val textColor = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
-    val mutedColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF757575)
-    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color(0xFFF1F3F5)
+    val bgBrush = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
 
     Dialog(
         onDismissRequest = onDismiss,

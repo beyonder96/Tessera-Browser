@@ -49,6 +49,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.viewmodel.QuoteItem
 import com.tessera.browser.viewmodel.QuotesData
 import com.tessera.browser.viewmodel.WeatherData
@@ -114,13 +115,13 @@ fun WeatherMinimalWidget(
     modifier: Modifier = Modifier
 ) {
     val weatherIcon = getWeatherIcon(data.weatherCode, data.isDay)
-    val textShadow = Shadow(
+    val textShadow = if (isDarkMode) Shadow(
         color = Color.Black.copy(alpha = 0.6f),
         offset = Offset(0f, 2f),
         blurRadius = 8f
-    )
-    val textColor = Color.White
-    val subTextColor = Color.White.copy(alpha = 0.88f)
+    ) else null
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Row(
         modifier = modifier
@@ -254,12 +255,12 @@ private fun QuoteItemChip(
     isDarkMode: Boolean,
     onClick: () -> Unit
 ) {
-    val textShadow = Shadow(
+    val textShadow = if (isDarkMode) Shadow(
         color = Color.Black.copy(alpha = 0.55f),
         offset = Offset(0f, 2f),
         blurRadius = 6f
-    )
-    val textColor = Color.White
+    ) else null
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val variationColor = if (quote.isPositive) Color(0xFF69F0AE) else Color(0xFFFF5252)
 
     Row(

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun FindInPageBar(
@@ -62,10 +63,10 @@ fun FindInPageBar(
         focusRequester.requestFocus()
     }
 
-    val containerBg = if (isDarkMode) Color(0xF01E1A17) else Color(0xF2FFFFFF)
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f)
-    val textColor = if (isDarkMode) Color(0xFFEEEEEE) else Color(0xFF1E1E1E)
-    val subColor = if (isDarkMode) Color(0xFFAAAAAA) else Color(0xFF757575)
+    val containerBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Box(
         modifier = modifier

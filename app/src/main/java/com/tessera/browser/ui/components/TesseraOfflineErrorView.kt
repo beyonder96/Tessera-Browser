@@ -1,4 +1,4 @@
-﻿package com.tessera.browser.ui.components
+package com.tessera.browser.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.PageErrorInfo
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun TesseraOfflineErrorView(
@@ -45,10 +46,11 @@ fun TesseraOfflineErrorView(
     onGoHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isDarkMode) Color(0xF5141110) else Color(0xF8FBF9F5)
-    val cardBg = if (isDarkMode) Color(0xFF1E1B19) else Color(0xFFFFFFFF)
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E1E)
-    val subTextColor = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF636366)
+    val bgColor = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
+    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val hairlineColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     val host = try {
         val uri = java.net.URI(errorInfo.url)
@@ -74,9 +76,7 @@ fun TesseraOfflineErrorView(
                 .background(cardBg)
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.04f))
-                    ),
+                    color = hairlineColor,
                     shape = shape
                 )
                 .padding(28.dp),

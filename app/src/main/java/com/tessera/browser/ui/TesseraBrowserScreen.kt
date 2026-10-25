@@ -776,6 +776,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var isAirBarExpanded by remember { mutableStateOf(false) }
     var isSearchEditing by remember { mutableStateOf(false) }
 
+    val effectiveAccentColor = when {
+        state.isIncognitoMode -> ApplePalette.Purple
+        state.showWallpaper -> state.activeWallpaper.accentColor
+        state.isDarkMode -> ApplePalette.BlueDark
+        else -> ApplePalette.Blue
+    }
+
     // System Back navigation priority:
     // 0. Dismiss search editing (keyboard)
     // 1. Dismiss Find in Page
@@ -1740,7 +1747,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         TranslateBar(
                             state = state.translationState,
                             isDarkMode = state.isDarkMode,
-                            accentColor = state.activeWallpaper.accentColor,
+                            accentColor = effectiveAccentColor,
                             onTranslate = {
                                 viewModel.setTranslationProgress(isTranslating = true, isTranslated = false)
                                 webViewInstance?.evaluateJavascript(
@@ -1835,7 +1842,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         PodcastMiniPlayerCapsule(
                             state = state.podcastAudioState,
                             isDarkMode = state.isDarkMode,
-                            accentColor = state.activeWallpaper.accentColor,
+                            accentColor = effectiveAccentColor,
                             onTogglePlayPause = { viewModel.togglePodcastPlayPause(context) },
                             onOpenFullPlayer = { viewModel.openPodcastFullPlayer() },
                             onCycleSpeed = { viewModel.cyclePodcastSpeed() },
@@ -1943,7 +1950,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onOpenFavorite = { url -> viewModel.openUrl(url) },
                         onNextTab = { viewModel.selectNextTab() },
                         onPreviousTab = { viewModel.selectPreviousTab() },
-                        accentColor = state.activeWallpaper.accentColor,
+                        accentColor = effectiveAccentColor,
                         siteThemeColor = state.siteThemeColor,
                         currentSpaceEmoji = state.currentSpace.iconEmoji,
                         currentSpaceName = state.currentSpace.name,
@@ -2009,7 +2016,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.dismissTabsModal()
                     viewModel.toggleHistoryModal()
                 },
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 isDarkMode = state.isDarkMode
             )
         }
@@ -2060,7 +2067,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onExportBookmarksHtml = { viewModel.exportBookmarksToHtml(context) },
                 onImportBookmarksHtml = { importBookmarksLauncher.launch("text/html") },
                 onDismiss = { viewModel.dismissHistoryModal() },
-                accentColor = state.activeWallpaper.accentColor
+                isDarkMode = state.isDarkMode,
+                accentColor = effectiveAccentColor
             )
         }
 
@@ -2381,7 +2389,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 currentUrl = state.displayUrl,
                 settings = currentSiteSettings,
                 isDarkMode = state.isDarkMode,
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 onUpdatePermission = { update ->
                     viewModel.updateSitePermission(siteOrigin, update)
                 },
@@ -2421,7 +2429,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.closeFindInPage()
                 },
                 isDarkMode = state.isDarkMode,
-                accentColor = state.activeWallpaper.accentColor
+                accentColor = effectiveAccentColor
             )
         }
 
@@ -2451,7 +2459,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     url = peekUrl,
                     title = state.peekTitle,
                     isDarkMode = state.isDarkMode,
-                    accentColor = state.activeWallpaper.accentColor,
+                    accentColor = effectiveAccentColor,
                     onOpenInCurrentTab = {
                         viewModel.dismissPeekModal()
                         viewModel.openUrl(peekUrl)
@@ -2490,7 +2498,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 ContextMenuModal(
                     target = target,
                     isDarkMode = state.isDarkMode,
-                    accentColor = state.activeWallpaper.accentColor,
+                    accentColor = effectiveAccentColor,
                     onOpenInNewTab = { url ->
                         viewModel.addNewTab(url = url, isHome = false, selectNow = true)
                     },
@@ -2673,7 +2681,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 url = state.currentUrl,
                 title = webViewInstance?.title ?: state.tabs.find { it.id == state.activeTabId }?.title ?: "",
                 onDismiss = { viewModel.dismissQrCodeModal() },
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 isDarkMode = state.isDarkMode
             )
         }
@@ -2707,7 +2715,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             PodcastFullPlayerModal(
                 state = state.podcastAudioState,
                 isDarkMode = state.isDarkMode,
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 onTogglePlayPause = { viewModel.togglePodcastPlayPause(context) },
                 onSeekBy = { delta -> viewModel.seekPodcastBy(context, delta) },
                 onSeekToFraction = { fraction -> viewModel.seekPodcastToFraction(fraction) },
@@ -2742,7 +2750,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             adBlockEnabled = state.adBlockEnabled,
             cookieBlockerEnabled = state.cookieBlockerEnabled,
             isDarkMode = state.isDarkMode,
-            accentColor = state.activeWallpaper.accentColor,
+            accentColor = effectiveAccentColor,
             onToggleAdBlock = { viewModel.setAdBlockEnabled(it) },
             onToggleCookieBlocker = { viewModel.setCookieBlockerEnabled(it) },
             onDismiss = { viewModel.dismissPrivacyDashboard() },
@@ -2793,7 +2801,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         if (state.showPipPermissionDialog) {
             PipPermissionDialog(
                 isDarkMode = state.isDarkMode,
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 onOpenSettings = {
                     PipManager.openPipOrOverlaySettings(context)
                 },
@@ -2809,7 +2817,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 isLocked = state.isIncognitoLocked,
                 onUnlockRequest = promptBiometricUnlock,
                 onExitIncognito = { viewModel.exitIncognito() },
-                accentColor = state.activeWallpaper.accentColor,
+                accentColor = effectiveAccentColor,
                 modifier = Modifier.fillMaxSize()
             )
         }

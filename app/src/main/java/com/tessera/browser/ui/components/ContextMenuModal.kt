@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.tessera.browser.data.ContextMenuTarget
+import com.tessera.browser.ui.theme.ApplePalette
 
 /**
  * Menu de Contexto Completo ao toque longo (Long-Press Context Menu).
@@ -64,7 +65,7 @@ import com.tessera.browser.data.ContextMenuTarget
 fun ContextMenuModal(
     target: ContextMenuTarget,
     isDarkMode: Boolean = false,
-    accentColor: Color = Color(0xFF0288D1),
+    accentColor: Color = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue,
     onOpenInNewTab: (String) -> Unit,
     onOpenInBackground: (String) -> Unit,
     onOpenInIncognito: (String) -> Unit,
@@ -84,16 +85,12 @@ fun ContextMenuModal(
     modifier: Modifier = Modifier
 ) {
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    val panelBg = if (isDarkMode) {
-        Brush.verticalGradient(listOf(Color(0xF0201B17), Color(0xF514100E)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xF8FFFFFF), Color(0xF8F0F2F5)))
-    }
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
-    val cardBg = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f)
-    val textColor = if (isDarkMode) Color(0xFFEEEEEE) else Color(0xFF1E1E1E)
-    val subColor = if (isDarkMode) Color(0xFFAAAAAA) else Color(0xFF757575)
-    val sectionHeaderColor = if (isDarkMode) accentColor else Color(0xFF0277BD)
+    val panelBg = androidx.compose.ui.graphics.SolidColor(if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface)
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val sectionHeaderColor = accentColor
 
     Surface(
         modifier = modifier
@@ -207,7 +204,7 @@ fun ContextMenuModal(
                         .height(130.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                        .background(if (isDarkMode) Color(0xFF161616) else Color(0xFFE8E8E8)),
+                        .background(cardBg),
                     contentAlignment = Alignment.Center
                 ) {
                     SubcomposeAsyncImage(

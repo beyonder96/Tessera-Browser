@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.data.PodcastAudioState
+import com.tessera.browser.ui.theme.ApplePalette
 
 @Composable
 fun PodcastMiniPlayerCapsule(
@@ -68,10 +69,10 @@ fun PodcastMiniPlayerCapsule(
     val haptic = LocalHapticFeedback.current
     val capsuleShape = RoundedCornerShape(22.dp)
 
-    val bgColor = if (isDarkMode) Color(0xF21C1614) else Color(0xF6FFFFFF)
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
-    val titleColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1E1E24)
-    val subColor = if (isDarkMode) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280)
+    val bgColor = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val borderColor = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val subColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     AnimatedVisibility(
         visible = state.isMiniPlayerVisible,
