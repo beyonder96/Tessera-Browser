@@ -55,6 +55,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +64,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -226,6 +228,59 @@ fun QuickSettingsPanel(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // CARD DE NAVEGADOR PADRÃO (SE AINDA NÃO FOR O PADRÃO DO ANDROID)
+        val context = LocalContext.current
+        val isDefaultBrowser = remember(context) { com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context) }
+        if (!isDefaultBrowser) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(cardBg)
+                    .border(1.dp, panelBorder, RoundedCornerShape(14.dp))
+                    .clickable {
+                        onDismiss()
+                        com.tessera.browser.util.DefaultBrowserHelper.requestDefaultBrowser(context)
+                    }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Shield,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Definir como Navegador Padrão",
+                            color = primaryTextColor,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Abra links externos diretamente no Tessera",
+                            color = secondaryTextColor,
+                            fontSize = 11.5.sp
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    tint = secondaryTextColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // 1. LINHA DE AÇÕES RÁPIDAS (ESTILO SHARE SHEET)
         Text(

@@ -36,7 +36,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -44,9 +47,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.tessera.browser.R
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -101,6 +107,10 @@ fun TesseraStartPage(
     onOpenSpaces: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    var isDefaultDismissed by rememberSaveable { mutableStateOf(false) }
+    val isDefaultBrowser = remember(context) { com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context) }
+
     Box(modifier = modifier.fillMaxSize()) {
         // 1. FUNDO SÓLIDO (OLED PURO NO ESCURO / BRANCO MATTE NO CLARO)
         val backgroundColor = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
@@ -119,6 +129,71 @@ fun TesseraStartPage(
                     onClick = onSearchClick
                 )
         )
+
+        // BANNER DE NAVEGADOR PADRÃO (DISMISSIBLE PILL)
+        if (!isDefaultBrowser && !isDefaultDismissed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .displayCutoutPadding()
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Row(
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.12f),
+                            spotColor = Color.Black.copy(alpha = 0.08f)
+                        )
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(surfaceColor)
+                        .border(1.dp, borderColor, RoundedCornerShape(20.dp))
+                        .clickable {
+                            com.tessera.browser.util.DefaultBrowserHelper.requestDefaultBrowser(context)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Shield,
+                        contentDescription = null,
+                        tint = ApplePalette.Blue,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Definir Tessera como navegador padrão",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = contentColor
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = mutedColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .clickable { isDefaultDismissed = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✕",
+                            fontSize = 11.sp,
+                            color = mutedColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
 
         // 2. CENTRO ZEN: WORDMARK LIMPO E MINIMALISTA
         Box(
@@ -140,12 +215,11 @@ fun TesseraStartPage(
                     )
                     .padding(horizontal = 24.dp)
             ) {
-                Text(
-                    text = "TESSERA",
-                    color = contentColor,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 6.sp
+                Image(
+                    painter = painterResource(id = R.drawable.ic_tessera_header_logo),
+                    contentDescription = "Tessera",
+                    colorFilter = ColorFilter.tint(contentColor),
+                    modifier = Modifier.height(48.dp)
                 )
             }
         }
@@ -208,9 +282,9 @@ fun SafariFavoriteTile(
     )
 
     val squircleShape = AppleShapes.SquircleMedium
-    val tileBg = if (isDarkMode) Color(0x33FFFFFF) else Color(0xE6FFFFFF)
-    val tileBorder = if (isDarkMode) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else Color(0xFF1C1C1E)
+    val tileBg = if (isDarkMode) Color(0x33FFFFFF) else ApplePalette.LightCard
+    val tileBorder = if (isDarkMode) Color.White.copy(alpha = 0.16f) else ApplePalette.LightHairline
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.92f) else ApplePalette.LightLabelPrimary
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,

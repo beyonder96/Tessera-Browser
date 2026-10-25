@@ -1,5 +1,11 @@
 package com.tessera.browser.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,7 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import com.tessera.browser.ui.screens.DeveloperScreen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -34,6 +42,7 @@ import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -58,6 +67,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -73,6 +83,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -80,10 +91,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.tessera.browser.R
 import com.tessera.browser.ai.AiProvider
 import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.ui.theme.ApplePalette
+import com.tessera.browser.ui.theme.AppleShapes
 
 /**
  * Tela Completa de Configurações do Tessera Browser.
@@ -156,6 +170,19 @@ fun TesseraSettingsScreen(
 ) {
     val scrollState = rememberScrollState()
 
+    var showDeveloperScreen by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategoryIndex by remember { mutableStateOf(0) }
+    val categories = listOf("Todos", "Navegação", "Aparência", "Privacidade", "IA", "Dados", "Sobre")
+
+    if (showDeveloperScreen) {
+        DeveloperScreen(
+            isDarkMode = isDarkMode,
+            onBack = { showDeveloperScreen = false }
+        )
+        return
+    }
+
     var showClearDataDialog by remember { mutableStateOf(false) }
     var clearHistoryChecked by remember { mutableStateOf(true) }
     var clearCacheChecked by remember { mutableStateOf(true) }
@@ -167,57 +194,207 @@ fun TesseraSettingsScreen(
     var showGroqKeyDialog by remember { mutableStateOf(false) }
     var tempGroqKey by remember(groqApiKey) { mutableStateOf(groqApiKey.orEmpty()) }
 
-    val screenBg = if (isDarkMode) Color(0xFF14100E) else Color(0xFFF7F8FA)
-    val topBarBg = if (isDarkMode) Color(0xFF1A1513) else Color.White
-    val titleColor = if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF19191C)
-    val textPrimary = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1C1C1E)
-    val textSecondary = if (isDarkMode) Color.White.copy(alpha = 0.65f) else Color(0xFF636366)
-    val sectionHeaderColor = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4)
-    val cardBg = if (isDarkMode) Color(0xFF201B18) else Color.White
-    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-    val dividerColor = if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.05f)
+    // PALETA MODO JOURNAL NO CLARO / PRETO AMOLED NO ESCURO
+    val screenBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
+    val topBarBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
+    val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val textPrimary = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val textSecondary = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val accentColor = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
+    val sectionHeaderColor = accentColor
+    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightSurface
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val dividerColor = if (isDarkMode) Color.White.copy(alpha = 0.07f) else ApplePalette.LightHairline
+    val pillBg = if (isDarkMode) Color(0xFF1E1E24) else ApplePalette.LightElevated
+
+    val isScrolled = scrollState.value > 24
+
+    fun matchesQuery(vararg keywords: String): Boolean {
+        if (searchQuery.isBlank()) return true
+        val q = searchQuery.trim().lowercase()
+        return keywords.any { it.lowercase().contains(q) }
+    }
+
+    val showNavigation = (selectedCategoryIndex == 0 || selectedCategoryIndex == 1) &&
+            matchesQuery("navegador", "padrão", "busca", "google", "buscador", "mecanismo", "pesquisa")
+
+    val showAppearance = (selectedCategoryIndex == 0 || selectedCategoryIndex == 2) &&
+            matchesQuery("aparência", "tema", "escuro", "dark", "journal", "papel de parede", "wallpaper", "favoritos", "weather", "clima", "citação", "barra lateral", "sidebar", "pills", "abas")
+
+    val showPrivacy = (selectedCategoryIndex == 0 || selectedCategoryIndex == 3) &&
+            matchesQuery("privacidade", "adblock", "cookies", "lgpd", "biometria", "incognito", "anônimo", "limpar dados", "segurança", "safe browsing")
+
+    val showAi = (selectedCategoryIndex == 0 || selectedCategoryIndex == 4) &&
+            matchesQuery("ia", "inteligência", "groq", "gemini", "llama", "resumo", "minimalismo digital", "assistente")
+
+    val showDownloads = (selectedCategoryIndex == 0 || selectedCategoryIndex == 5) &&
+            matchesQuery("downloads", "armazenamento", "offline", "backup", "restaurar", "exportar", "páginas")
+
+    val showAbout = (selectedCategoryIndex == 0 || selectedCategoryIndex == 6) &&
+            matchesQuery("sobre", "versão", "desenvolvedor", "tessera", "core")
+
+    val hasAnyResult = showNavigation || showAppearance || showPrivacy || showAi || showDownloads || showAbout
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // TOP APP BAR
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(topBarBg)
-                .statusBarsPadding()
-                .border(
-                    width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f)
-                )
-                .padding(horizontal = 8.dp, vertical = 8.dp)
+        // TOP APP BAR COM CABEÇALHO COLAPSÁVEL & MODO PESQUISA & CATEGORY PILLS
+        Surface(
+            color = topBarBg,
+            shadowElevation = if (isScrolled) 4.dp else 0.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .border(
+                        width = 1.dp,
+                        color = if (isDarkMode) Color.White.copy(alpha = 0.06f) else cardBorder
+                    )
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Voltar",
-                        tint = textPrimary
-                    )
+                // Linha Superior de Navegação
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Voltar",
+                                tint = textPrimary
+                            )
+                        }
+                        Text(
+                            text = if (isScrolled) "Configurações" else "Tessera Browser",
+                            color = if (isScrolled) titleColor else textSecondary,
+                            fontSize = if (isScrolled) 17.sp else 13.sp,
+                            fontWeight = if (isScrolled) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+
+                    if (searchQuery.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { searchQuery = "" }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Limpar",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accentColor
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = "Configurações",
-                        color = titleColor,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
+
+                // Título Grande (quando no topo da tela)
+                if (!isScrolled) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Text(
+                            text = "Configurações",
+                            color = titleColor,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Campo de Pesquisa em Cápsula / Pill
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(21.dp))
+                        .background(pillBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(21.dp))
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = textSecondary,
+                        modifier = Modifier.size(17.dp)
                     )
-                    Text(
-                        text = "Tessera Browser",
-                        color = textSecondary,
-                        fontSize = 12.sp
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "Pesquisar nas configurações...",
+                                color = textSecondary,
+                                fontSize = 13.5.sp
+                            )
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = textPrimary,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(accentColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Limpar texto",
+                            tint = textSecondary,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { searchQuery = "" }
+                        )
+                    }
+                }
+
+                // Linha de Chips / Pills de Categoria (rolagem horizontal)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    categories.forEachIndexed { index, categoryName ->
+                        val isSelected = selectedCategoryIndex == index
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isSelected) accentColor else pillBg)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) accentColor else cardBorder,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .clickable { selectedCategoryIndex = index }
+                                .padding(horizontal = 13.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = categoryName,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else textPrimary
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -235,7 +412,8 @@ fun TesseraSettingsScreen(
             // ==========================================
             // SEÇÃO 1: NAVEGADOR PADRÃO & BUSCA
             // ==========================================
-            SettingsSection(
+            if (showNavigation) {
+                SettingsSection(
                 title = "Navegador padrão & Busca",
                 headerColor = sectionHeaderColor
             ) {
@@ -384,11 +562,13 @@ fun TesseraSettingsScreen(
                     }
                 }
             }
+            }
 
             // ==========================================
             // SEÇÃO 2: APARÊNCIA & PERSONALIZAÇÃO
             // ==========================================
-            SettingsSection(
+            if (showAppearance) {
+                SettingsSection(
                 title = "Aparência e Personalização",
                 headerColor = sectionHeaderColor
             ) {
@@ -449,11 +629,13 @@ fun TesseraSettingsScreen(
                     }
                 }
             }
+            }
 
             // ==========================================
             // SEÇÃO 3: PRIVACIDADE & SEGURANÇA
             // ==========================================
-            SettingsSection(
+            if (showPrivacy) {
+                SettingsSection(
                 title = "Privacidade e Segurança",
                 headerColor = sectionHeaderColor
             ) {
@@ -738,11 +920,13 @@ fun TesseraSettingsScreen(
                     }
                 }
             }
+            }
 
             // ==========================================
             // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL
             // ==========================================
-            SettingsSection(
+            if (showAi) {
+                SettingsSection(
                 title = "Inteligência Artificial",
                 headerColor = sectionHeaderColor
             ) {
@@ -944,11 +1128,13 @@ fun TesseraSettingsScreen(
                     }
                 }
             }
+            }
 
             // ==========================================
             // SEÇÃO 5: DOWNLOADS & HISTÓRICO
             // ==========================================
-            SettingsSection(
+            if (showDownloads) {
+                SettingsSection(
                 title = "Downloads e Dados Salvos",
                 headerColor = sectionHeaderColor
             ) {
@@ -1134,41 +1320,169 @@ fun TesseraSettingsScreen(
                     }
                 }
             }
+            }
 
             // ==========================================
             // SEÇÃO 6: SOBRE O TESSERA BROWSER
             // ==========================================
-            SettingsSection(
-                title = "Sobre",
-                headerColor = sectionHeaderColor
-            ) {
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+            if (showAbout) {
+                SettingsSection(
+                    title = "Sobre",
+                    headerColor = sectionHeaderColor
+                ) {
+                    // Card Especial: Sobre o Desenvolvedor
+                    SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { showDeveloperScreen = true }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_developer_avatar),
+                                    contentDescription = "Desenvolvedor",
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .border(1.5.dp, accentColor, CircleShape)
+                                )
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Sobre o Desenvolvedor",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = "✦",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = accentColor
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Filosofia de criação, arquitetura e ecossistema Tessera",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Card da Identidade e Versão do Browser
+                    SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_tessera_browser_logo),
+                                contentDescription = "Tessera Browser Logo",
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .clip(AppleShapes.SquircleMedium)
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_tessera_header_logo),
+                                contentDescription = "Tessera",
+                                colorFilter = ColorFilter.tint(textPrimary),
+                                modifier = Modifier.height(38.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "BROWSER",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 4.sp,
+                                color = ApplePalette.Teal
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Versão 3.2.0 • Tema Journal Ativado",
+                                fontSize = 12.5.sp,
+                                color = textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Navegador ultrarrápido, seguro e focado em produtividade desenvolvido com Jetpack Compose, Kotlin e Material You no Android 15.",
+                                fontSize = 12.5.sp,
+                                color = textSecondary,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Estado Vazio quando a busca não encontrar itens
+            if (!hasAnyResult) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "TESSERA BROWSER",
-                            fontSize = 17.sp,
+                            text = "🔍",
+                            fontSize = 32.sp
+                        )
+                        Text(
+                            text = "Nenhuma configuração encontrada",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp,
                             color = textPrimary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Versão 3.2.0",
+                            text = "Tente pesquisar por outros termos como tema, adblock ou busca",
                             fontSize = 13.sp,
                             color = textSecondary
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Navegador ultrarrápido, seguro e focado em produtividade desenvolvido com Jetpack Compose, Kotlin e Material You no Android 15.",
-                            fontSize = 12.5.sp,
-                            color = textSecondary,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(cardBg)
+                                .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+                                .clickable {
+                                    searchQuery = ""
+                                    selectedCategoryIndex = 0
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Limpar busca",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accentColor
+                            )
+                        }
                     }
                 }
             }

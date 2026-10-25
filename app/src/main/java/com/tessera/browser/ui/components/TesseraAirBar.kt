@@ -4,7 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -24,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -73,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -270,27 +275,66 @@ fun TesseraAirBar(
                 )
             }
 
-            // Cápsula Flutuante Principal
+            val configuration = LocalConfiguration.current
+            val screenWidth = configuration.screenWidthDp.dp
+            val isHomeCollapsed = isHomePage && !isEditing
+            val targetWidth = if (isHomeCollapsed) 56.dp else (screenWidth - 28.dp)
+            val animatedBarWidth by animateDpAsState(
+                targetValue = targetWidth,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "dock_morph_width"
+            )
+            val cornerRadius by animateDpAsState(
+                targetValue = if (isHomeCollapsed) 28.dp else 26.dp,
+                label = "dock_corner_radius"
+            )
+            val currentDockShape = RoundedCornerShape(cornerRadius)
+
+            // Cápsula Flutuante Principal Morphing (Recolhe para 56dp só com a Lupa na Home)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(animatedBarWidth)
+                    .height(if (isHomeCollapsed) 54.dp else 58.dp)
                     .shadow(
                         elevation = 8.dp,
-                        shape = floatingBarShape,
+                        shape = currentDockShape,
                         ambientColor = Color.Black.copy(alpha = if (isDarkMode) 0.35f else 0.14f),
                         spotColor = Color.Black.copy(alpha = if (isDarkMode) 0.25f else 0.10f)
                     )
-                    .clip(floatingBarShape)
+                    .clip(currentDockShape)
                     .background(solidBarBg)
-                    .border(width = 1.dp, color = solidBorder, shape = floatingBarShape)
+                    .border(width = 1.dp, color = solidBorder, shape = currentDockShape)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
+                if (isHomeCollapsed) {
+                    // ESTADO RECOLHIDO: APENAS A LUPA CENTRALIZADA (ESTILO TESSERA LAUNCHER)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { isEditing = true }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Pesquisar",
+                            tint = contentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                     // Indicador de Progresso de Carregamento Ultra-Fino
                     if (progress > 0f && progress < 1f && !isHomePage) {
                         LinearProgressIndicator(
@@ -615,6 +659,7 @@ fun TesseraAirBar(
                 }
             }
         }
+    }
     }
 }
 }

@@ -1,19 +1,65 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Subtle Drop Shadow / Ambient Glow behind the squircle -->
     <path
-        android:fillColor="#00000000"
-        android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z"
-        android:strokeWidth="7"
-        android:strokeColor="#26A69A" />
+        android:pathData="M30,30 h48 a18,18 0 0 1 18,18 v48 a18,18 0 0 1 -18,18 h-48 a18,18 0 0 1 -18,-18 v-48 a18,18 0 0 1 18,-18 z"
+        android:fillColor="#22000000" />
+
+    <!-- Main Apple Squircle Surface with Liquid Blue/Cyan Mesh Gradient -->
     <path
-        android:fillColor="#00000000"
-        android:pathData="M54,34 A20,20 0 1,1 53.99,34 Z"
-        android:strokeWidth="5"
-        android:strokeColor="#64B5F6" />
+        android:pathData="M32,26 h44 c14,0 20,6 20,20 v44 c0,14 -6,20 -20,20 h-44 c-14,0 -20,-6 -20,-20 v-44 c0,-14 6,-20 20,-20 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="12"
+                android:startY="26"
+                android:endX="96"
+                android:endY="110"
+                android:type="linear">
+                <item android:color="#FF007AFF" android:offset="0.0" />
+                <item android:color="#FF00C7BE" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glass Specular Reflection Highlight (top edge) -->
     <path
-        android:fillColor="#26A69A"
-        android:pathData="M54,46 A8,8 0 1,1 53.99,46 Z" />
+        android:pathData="M32,26 h44 c13,0 19,5.5 19.8,18 c-16,3 -40,3 -59.6,0 c0.8,-12.5 6.8,-18 19.8,-18 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="26"
+                android:endX="54"
+                android:endY="46"
+                android:type="linear">
+                <item android:color="#55FFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 4 Tessera Tiles (Geometric Mosaic / Minimalist Grid) -->
+    <!-- Top Left Tile -->
+    <path
+        android:pathData="M38,40 h12 c3,0 4.5,1.5 4.5,4.5 v12 c0,3 -1.5,4.5 -4.5,4.5 h-12 c-3,0 -4.5,-1.5 -4.5,-4.5 v-12 c0,-3 1.5,-4.5 4.5,-4.5 z"
+        android:fillColor="#E6FFFFFF" />
+
+    <!-- Top Right Tile -->
+    <path
+        android:pathData="M59.5,40 h12 c3,0 4.5,1.5 4.5,4.5 v12 c0,3 -1.5,4.5 -4.5,4.5 h-12 c-3,0 -4.5,-1.5 -4.5,-4.5 v-12 c0,-3 1.5,-4.5 4.5,-4.5 z"
+        android:fillColor="#B3FFFFFF" />
+
+    <!-- Bottom Left Tile -->
+    <path
+        android:pathData="M38,61.5 h12 c3,0 4.5,1.5 4.5,4.5 v12 c0,3 -1.5,4.5 -4.5,4.5 h-12 c-3,0 -4.5,-1.5 -4.5,-4.5 v-12 c0,-3 1.5,-4.5 4.5,-4.5 z"
+        android:fillColor="#B3FFFFFF" />
+
+    <!-- Bottom Right Tile -->
+    <path
+        android:pathData="M59.5,61.5 h12 c3,0 4.5,1.5 4.5,4.5 v12 c0,3 -1.5,4.5 -4.5,4.5 h-12 c-3,0 -4.5,-1.5 -4.5,-4.5 v-12 c0,-3 1.5,-4.5 4.5,-4.5 z"
+        android:fillColor="#80FFFFFF" />
 </vector>

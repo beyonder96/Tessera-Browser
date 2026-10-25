@@ -36,16 +36,16 @@ object ApplePalette {
     val DarkHairline = Color(0xFF2C2C32)          // Borda sólida nítida 100% opaca
     val OledSurface = DarkSurface                 // Superfície sólida OLED preta pura
 
-    // Light Mode Neutrals (Branco Matte & Superfícies Sólidas)
-    val LightBackground = Color(0xFFF7F7F9)       // Branco Matte / Porcelana Fosca
-    val LightSurface = Color(0xFFFFFFFF)          // Superfície Sólida
-    val LightElevated = Color(0xFFEBEBF0)         // Elevação Matte Suave
-    val LightCard = Color(0xFFFFFFFF)             // Cartão Sólido
-    val LightLabelPrimary = Color(0xFF141416)     // Preto Tinta Nítido
-    val LightLabelSecondary = Color(0xCC3C3C43)   // 80% preto
-    val LightLabelTertiary = Color(0x803C3C43)    // 50% preto
-    val LightHairline = Color(0xFFE2E2E8)         // Borda sólida nítida e fina
-    val MatteSurface = LightSurface               // Superfície sólida Matte branca pura
+    // Light Mode Neutrals — Tema Modo Journal (Papel de Jornal Editorial Quente)
+    val LightBackground = Color(0xFFF7F4EB)       // Papel jornal impresso quente (#F7F4EB)
+    val LightSurface = Color(0xFFEFECE2)          // Superfície Sólida Journal (#EFECE2)
+    val LightElevated = Color(0xFFE8E4D8)         // Elevação Journal (#E8E4D8)
+    val LightCard = Color(0xFFEFECE2)             // Cartão Journal (#EFECE2)
+    val LightLabelPrimary = Color(0xFF1C1917)     // Preto Tinta Nítido Editorial (#1C1917)
+    val LightLabelSecondary = Color(0xFF57534E)   // Tinta Secundária (#57534E)
+    val LightLabelTertiary = Color(0xFF78716C)    // Tinta Terciária (#78716C)
+    val LightHairline = Color(0xFFDDD8CB)         // Borda fina Journal (#DDD8CB)
+    val MatteSurface = LightSurface               // Superfície sólida Journal
 
     // Editorial / Modo Leitura — Efeito Jornal
     val NewspaperPaper = Color(0xFFF7F4EB)        // Tom de papel jornal impresso quente

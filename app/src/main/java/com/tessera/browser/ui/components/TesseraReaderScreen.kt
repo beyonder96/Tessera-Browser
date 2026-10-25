@@ -8,13 +8,17 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -44,6 +48,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BorderColor
 import androidx.compose.material.icons.rounded.Check
@@ -75,12 +80,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -242,9 +251,22 @@ fun TesseraReaderScreen(
         }
     }
 
+    var isActionMenuOpen by remember { mutableStateOf(false) }
+    val isScrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24
+        }
+    }
+
     // Intercept back button to return to browser
     BackHandler(enabled = true) {
-        onClose()
+        if (isActionMenuOpen) {
+            isActionMenuOpen = false
+        } else if (isSettingsOpen) {
+            onToggleSettings()
+        } else {
+            onClose()
+        }
     }
 
     Box(
@@ -253,50 +275,12 @@ fun TesseraReaderScreen(
             .background(colors.canvasBackground)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // TOP PDF TOOLBAR
+            // TOP MINIMALIST & CENTERED TOOLBAR
             ReaderTopBar(
                 domain = article.domain,
-                readTimeMinutes = article.readingTimeMinutes,
-                theme = theme,
                 colors = colors,
-                isTtsPlaying = isTtsPlaying,
-                isAudioBarVisible = isAudioBarVisible,
-                isHighlighterActive = isHighlighterActive,
-                highlightCount = readerHighlights.size,
-                isSettingsOpen = isSettingsOpen,
-                onClose = onClose,
-                onToggleTheme = {
-                    val nextTheme = when (theme) {
-                        ReaderTheme.SEPIA -> ReaderTheme.DARK
-                        ReaderTheme.DARK -> ReaderTheme.AMOLED
-                        ReaderTheme.AMOLED -> ReaderTheme.LIGHT
-                        ReaderTheme.LIGHT -> ReaderTheme.SEPIA
-                    }
-                    onSelectTheme(nextTheme)
-                },
-                onToggleHighlighter = onToggleHighlighterActive,
-                onToggleAudioBar = {
-                    onToggleAudioBar()
-                    if (!isTtsPlaying && !isAudioBarVisible) {
-                        onToggleTts()
-                    }
-                },
-                onOpenArcSummary = onOpenArcSummary,
-                onCopyText = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    if (clipboard != null && (article.plainText.isNotBlank() || article.blocks.isNotEmpty())) {
-                        val text = if (article.plainText.isNotBlank()) {
-                            "${article.title}\n\n${article.plainText}"
-                        } else {
-                            "${article.title}\n\n" + article.blocks.joinToString("\n\n") { it.text }
-                        }
-                        val clip = ClipData.newPlainText(article.title, text)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "Texto do artigo copiado!", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onPrintPdf = onPrintPdf,
-                onToggleSettings = onToggleSettings
+                isScrolled = isScrolled,
+                onClose = onClose
             )
 
             // READING PROGRESS BAR (THIN LINE)
@@ -405,7 +389,7 @@ fun TesseraReaderScreen(
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Text(
-                                                text = if (article.domain.isNotBlank()) "LEITURA • ${article.domain.uppercase()}" else "MODO LEITURA",
+                                                text = "MODO LEITURA",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 letterSpacing = 0.8.sp,
@@ -441,65 +425,86 @@ fun TesseraReaderScreen(
 
                                     Spacer(modifier = Modifier.height(14.dp))
 
-                                    // Metadata Bar (Author, Date, Reading Time, Highlights count)
+                                    // Check if author is redundant (equals or contains domain)
+                                    val domainClean = article.domain.lowercase().removePrefix("www.").substringBefore(".")
+                                    val authorClean = article.author?.trim().orEmpty()
+                                    val isAuthorRedundant = authorClean.isBlank() ||
+                                            authorClean.lowercase().contains(domainClean) ||
+                                            authorClean.equals(article.domain.trim(), ignoreCase = true)
+
+                                    // Metadata Bar (Author, Date, Reading Time Badge, Highlights)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (!article.author.isNullOrBlank()) {
-                                            Text(
-                                                text = "Por ${article.author}",
-                                                fontSize = 12.5.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textSecondary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        if (!article.publishDate.isNullOrBlank()) {
-                                            val formattedDate = formatReaderDate(article.publishDate)
-                                            if (formattedDate.isNotBlank()) {
+                                        // Left: Author & Date (flexible with ellipsis to never push reading time)
+                                        Row(
+                                            modifier = Modifier.weight(1f, fill = false),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            if (!isAuthorRedundant) {
                                                 Text(
-                                                    text = "•",
-                                                    fontSize = 12.sp,
-                                                    color = colors.textSecondary
-                                                )
-                                                Text(
-                                                    text = formattedDate,
-                                                    fontSize = 12.sp,
+                                                    text = "Por $authorClean",
+                                                    fontSize = 12.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
                                                     color = colors.textSecondary,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                             }
+
+                                            if (!article.publishDate.isNullOrBlank()) {
+                                                val formattedDate = formatReaderDate(article.publishDate)
+                                                if (formattedDate.isNotBlank()) {
+                                                    if (!isAuthorRedundant) {
+                                                        Text(
+                                                            text = "•",
+                                                            fontSize = 12.sp,
+                                                            color = colors.textSecondary
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = formattedDate,
+                                                        fontSize = 12.sp,
+                                                        color = colors.textSecondary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
                                         }
 
-                                        Text(
-                                            text = "•",
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary
-                                        )
+                                        // Right: Dedicated Reading Time Badge (fixed width, zero line wrapping)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = colors.surface,
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, colors.border)
+                                            ) {
+                                                Text(
+                                                    text = "⏱️ ${article.readingTimeMinutes} min",
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.textSecondary,
+                                                    softWrap = false,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                                )
+                                            }
 
-                                        Text(
-                                            text = "⏱️ ${article.readingTimeMinutes} min",
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary
-                                        )
-
-                                        if (readerHighlights.isNotEmpty()) {
-                                            Text(
-                                                text = "•",
-                                                fontSize = 12.sp,
-                                                color = colors.textSecondary
-                                            )
-                                            Text(
-                                                text = "${readerHighlights.size} destaques",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = colors.accent
-                                            )
+                                            if (readerHighlights.isNotEmpty()) {
+                                                Text(
+                                                    text = "${readerHighlights.size} destaques",
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colors.accent,
+                                                    softWrap = false
+                                                )
+                                            }
                                         }
                                     }
 
@@ -536,9 +541,11 @@ fun TesseraReaderScreen(
                                     }
 
                                     val renderedBlocks = remember(article.blocks, article.title) {
+                                        val titleClean = article.title.trim().lowercase()
                                         article.blocks.filterIndexed { index, block ->
+                                            val blockClean = block.text.trim().lowercase()
                                             !(index == 0 && (block.type == ReaderBlockType.H1 || block.type == ReaderBlockType.H2) &&
-                                                    block.text.trim().equals(article.title.trim(), ignoreCase = true))
+                                                    (blockClean == titleClean || blockClean.startsWith(titleClean) || titleClean.startsWith(blockClean)))
                                         }
                                     }
 
@@ -626,6 +633,125 @@ fun TesseraReaderScreen(
                 onSeek = onSeekAudio,
                 onCycleSpeed = onCycleSpeed,
                 onClose = onToggleAudioBar
+            )
+        }
+
+        // BACKDROP SCRIM WHEN ACTION MENU IS OPEN
+        if (isActionMenuOpen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { isActionMenuOpen = false }
+                    )
+            )
+        }
+
+        // FLOATING APPLE ACTION MENU
+        AnimatedVisibility(
+            visible = isActionMenuOpen,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.9f, 0.95f)
+            ) + fadeIn() + slideInVertically { it / 4 },
+            exit = scaleOut(
+                targetScale = 0.85f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.9f, 0.95f)
+            ) + fadeOut() + slideOutVertically { it / 4 },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 88.dp, end = 20.dp)
+        ) {
+            ReaderActionMenu(
+                theme = theme,
+                colors = colors,
+                isTtsPlaying = isTtsPlaying,
+                isAudioBarVisible = isAudioBarVisible,
+                isHighlighterActive = isHighlighterActive,
+                onToggleSettings = {
+                    isActionMenuOpen = false
+                    onToggleSettings()
+                },
+                onToggleTheme = {
+                    val nextTheme = when (theme) {
+                        ReaderTheme.SEPIA -> ReaderTheme.DARK
+                        ReaderTheme.DARK -> ReaderTheme.AMOLED
+                        ReaderTheme.AMOLED -> ReaderTheme.LIGHT
+                        ReaderTheme.LIGHT -> ReaderTheme.SEPIA
+                    }
+                    onSelectTheme(nextTheme)
+                },
+                onToggleAudio = {
+                    isActionMenuOpen = false
+                    onToggleAudioBar()
+                    if (!isTtsPlaying && !isAudioBarVisible) {
+                        onToggleTts()
+                    }
+                },
+                onToggleHighlighter = {
+                    isActionMenuOpen = false
+                    onToggleHighlighterActive()
+                },
+                onOpenSummary = {
+                    isActionMenuOpen = false
+                    onOpenArcSummary()
+                },
+                onPrintPdf = {
+                    isActionMenuOpen = false
+                    onPrintPdf()
+                },
+                onCopyText = {
+                    isActionMenuOpen = false
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    if (clipboard != null && (article.plainText.isNotBlank() || article.blocks.isNotEmpty())) {
+                        val text = if (article.plainText.isNotBlank()) {
+                            "${article.title}\n\n${article.plainText}"
+                        } else {
+                            "${article.title}\n\n" + article.blocks.joinToString("\n\n") { it.text }
+                        }
+                        val clip = ClipData.newPlainText(article.title, text)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Texto do artigo copiado!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        // APPLE FLOATING ACTION BUTTON (+)
+        val fabRotation by animateFloatAsState(
+            targetValue = if (isActionMenuOpen) 45f else 0f,
+            animationSpec = tween(durationMillis = 240),
+            label = "fab_rotation"
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 24.dp, end = 20.dp)
+                .size(54.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.25f),
+                    spotColor = Color.Black.copy(alpha = 0.2f)
+                )
+                .clip(CircleShape)
+                .background(colors.surface)
+                .border(1.2.dp, colors.border, CircleShape)
+                .clickable {
+                    isActionMenuOpen = !isActionMenuOpen
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = if (isActionMenuOpen) "Fechar menu" else "Ações do leitor",
+                tint = colors.text,
+                modifier = Modifier
+                    .size(24.dp)
+                    .rotate(fabRotation)
             )
         }
     }
@@ -808,154 +934,195 @@ private fun ReaderBlockItem(
 @Composable
 private fun ReaderTopBar(
     domain: String,
-    readTimeMinutes: Int,
-    theme: ReaderTheme,
     colors: ReaderColors,
-    isTtsPlaying: Boolean,
-    isAudioBarVisible: Boolean,
-    isHighlighterActive: Boolean,
-    highlightCount: Int,
-    isSettingsOpen: Boolean,
-    onClose: () -> Unit,
-    onToggleTheme: () -> Unit,
-    onToggleHighlighter: () -> Unit,
-    onToggleAudioBar: () -> Unit,
-    onOpenArcSummary: () -> Unit,
-    onCopyText: () -> Unit,
-    onPrintPdf: () -> Unit = {},
-    onToggleSettings: () -> Unit
+    isScrolled: Boolean,
+    onClose: () -> Unit
 ) {
+    val barHeight by animateDpAsState(
+        targetValue = if (isScrolled) 46.dp else 56.dp,
+        animationSpec = tween(220),
+        label = "top_bar_height"
+    )
+    val titleFontSize by animateFloatAsState(
+        targetValue = if (isScrolled) 13.5f else 17f,
+        animationSpec = tween(220),
+        label = "top_bar_font_size"
+    )
+
     Surface(
         color = colors.surface,
-        shadowElevation = 4.dp,
+        shadowElevation = if (isScrolled) 4.dp else 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .height(barHeight)
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Close / Back button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // Close / Back button (Left)
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(44.dp)
             ) {
-                IconButton(onClick = onClose) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Sair do modo de leitura",
-                        tint = colors.text
-                    )
-                }
-
-                // Domain & Read Time
-                Column {
-                    Text(
-                        text = domain.ifBlank { "Modo Leitura" },
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.text,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "⏱️ $readTimeMinutes min",
-                        fontSize = 11.sp,
-                        color = colors.textSecondary
-                    )
-                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Sair do modo de leitura",
+                    tint = colors.text,
+                    modifier = Modifier.size(22.dp)
+                )
             }
 
-            // Quick Toolbar Actions: Theme, Highlighter, Audio, Copy, Aa Settings, AI Summary
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                // Quick Theme Switcher (Conforto Ocular / Escuro / AMOLED / Claro)
-                IconButton(onClick = onToggleTheme) {
-                    val themeIcon = when (theme) {
-                        ReaderTheme.SEPIA -> Icons.Rounded.Visibility
-                        ReaderTheme.DARK -> Icons.Rounded.DarkMode
-                        ReaderTheme.AMOLED -> Icons.Rounded.DarkMode
-                        ReaderTheme.LIGHT -> Icons.Rounded.LightMode
-                    }
-                    Icon(
-                        imageVector = themeIcon,
-                        contentDescription = "Alternar Modo Conforto Ocular / Escuro",
-                        tint = if (theme == ReaderTheme.SEPIA) colors.accent else colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+            // Centered & Enlarged Domain / Site Name (Center)
+            Text(
+                text = domain.ifBlank { "Modo Leitura" },
+                fontSize = titleFontSize.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+            )
 
-                // Highlighter Tool Toggle
-                IconButton(onClick = onToggleHighlighter) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(if (isHighlighterActive) colors.accent.copy(alpha = 0.2f) else Color.Transparent),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.BorderColor,
-                            contentDescription = "Marca-texto",
-                            tint = if (isHighlighterActive) colors.accent else colors.textSecondary,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                }
-
-                // Audio / TTS Player Toggle
-                IconButton(onClick = onToggleAudioBar) {
-                    Icon(
-                        imageVector = if (isTtsPlaying || isAudioBarVisible) Icons.Rounded.Headphones else Icons.AutoMirrored.Rounded.VolumeUp,
-                        contentDescription = "Ouvir artigo em áudio",
-                        tint = if (isTtsPlaying) colors.accent else colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Arc AI Summary
-                IconButton(onClick = onOpenArcSummary) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = "Resumir artigo",
-                        tint = colors.accent,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Export / Print to PDF
-                IconButton(onClick = onPrintPdf) {
-                    Icon(
-                        imageVector = Icons.Rounded.PictureAsPdf,
-                        contentDescription = "Exportar ou Imprimir Artigo em PDF",
-                        tint = colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Typography & Appearance Settings (Aa)
-                IconButton(onClick = onToggleSettings) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(if (isSettingsOpen) colors.border else Color.Transparent),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.FormatSize,
-                            contentDescription = "Configurações de leitura",
-                            tint = if (isSettingsOpen) colors.accent else colors.text
-                        )
-                    }
-                }
-            }
+            // Balance box matching the back button (Right)
+            Spacer(modifier = Modifier.size(44.dp))
         }
+    }
+}
+
+@Composable
+private fun ReaderActionMenu(
+    theme: ReaderTheme,
+    colors: ReaderColors,
+    isTtsPlaying: Boolean,
+    isAudioBarVisible: Boolean,
+    isHighlighterActive: Boolean,
+    onToggleSettings: () -> Unit,
+    onToggleTheme: () -> Unit,
+    onToggleAudio: () -> Unit,
+    onToggleHighlighter: () -> Unit,
+    onOpenSummary: () -> Unit,
+    onPrintPdf: () -> Unit,
+    onCopyText: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = colors.surface,
+        shadowElevation = 12.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
+        modifier = Modifier.width(235.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            ReaderActionMenuItem(
+                icon = Icons.Rounded.FormatSize,
+                label = "Aparência & Tipografia",
+                colors = colors,
+                onClick = onToggleSettings
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = when (theme) {
+                    ReaderTheme.SEPIA -> Icons.Rounded.Visibility
+                    ReaderTheme.DARK, ReaderTheme.AMOLED -> Icons.Rounded.DarkMode
+                    ReaderTheme.LIGHT -> Icons.Rounded.LightMode
+                },
+                label = when (theme) {
+                    ReaderTheme.SEPIA -> "Tema: Conforto Ocular"
+                    ReaderTheme.DARK -> "Tema: Modo Escuro"
+                    ReaderTheme.AMOLED -> "Tema: Preto Puro"
+                    ReaderTheme.LIGHT -> "Tema: Modo Claro"
+                },
+                colors = colors,
+                onClick = onToggleTheme
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = if (isTtsPlaying || isAudioBarVisible) Icons.Rounded.Headphones else Icons.AutoMirrored.Rounded.VolumeUp,
+                label = if (isTtsPlaying) "Pausar Áudio (TTS)" else "Ouvir Artigo em Áudio",
+                colors = colors,
+                tint = if (isTtsPlaying) colors.accent else null,
+                onClick = onToggleAudio
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = Icons.Rounded.BorderColor,
+                label = if (isHighlighterActive) "Desativar Marca-texto" else "Marca-texto",
+                colors = colors,
+                tint = if (isHighlighterActive) colors.accent else null,
+                onClick = onToggleHighlighter
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = Icons.Rounded.AutoAwesome,
+                label = "Resumo com IA",
+                colors = colors,
+                tint = colors.accent,
+                onClick = onOpenSummary
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = Icons.Rounded.PictureAsPdf,
+                label = "Exportar para PDF",
+                colors = colors,
+                onClick = onPrintPdf
+            )
+            HorizontalDivider(color = colors.border.copy(alpha = 0.5f), thickness = 0.8.dp)
+
+            ReaderActionMenuItem(
+                icon = Icons.Rounded.ContentCopy,
+                label = "Copiar Texto do Artigo",
+                colors = colors,
+                onClick = onCopyText
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReaderActionMenuItem(
+    icon: ImageVector,
+    label: String,
+    colors: ReaderColors,
+    tint: Color? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint ?: colors.text,
+            modifier = Modifier.size(19.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
