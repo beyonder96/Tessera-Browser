@@ -350,6 +350,17 @@ fun QuickSettingsPanel(
             )
             add(
                 QuickActionItem(
+                    icon = Icons.Rounded.OfflinePin,
+                    label = "Salvar Offline",
+                    tint = primaryTextColor,
+                    onClick = {
+                        onDismiss()
+                        onSavePageOffline()
+                    }
+                )
+            )
+            add(
+                QuickActionItem(
                     icon = Icons.Rounded.Print,
                     label = "Salvar PDF",
                     tint = Color(0xFFFF8A65),

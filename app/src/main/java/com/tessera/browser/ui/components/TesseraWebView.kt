@@ -3,15 +3,14 @@ package com.tessera.browser.ui.components
 import android.content.Context
 import android.os.Bundle
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.webkit.WebView
+import kotlin.math.abs
 
 /**
- * WebView especializado para o Tessera Browser com integração de privacidade para teclados (IMEs).
- * Quando o Modo Anônimo está ativo, intercepta o onCreateInputConnection de qualquer campo de texto
- * da web (Google, redes sociais, formulários) e injeta a flag oficial IME_FLAG_NO_PERSONALIZED_LEARNING
- * e metadados dedicados para comunicação nativa com o Tessera-Keyboard e o Google Gboard.
+ * WebView especializado para o Tessera Browser com suporte a Pull-to-Refresh e integração de privacidade para teclados.
  */
 class TesseraWebView @JvmOverloads constructor(
     context: Context,
@@ -20,6 +19,52 @@ class TesseraWebView @JvmOverloads constructor(
 ) : WebView(context, attrs, defStyleAttr) {
 
     var isIncognitoMode: Boolean = false
+    var onPullToRefresh: (() -> Unit)? = null
+    var onPullDistanceChange: ((Float) -> Unit)? = null
+
+    private var startY = 0f
+    private var startX = 0f
+    private var isAtTopAtStart = false
+    private var isPulling = false
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (onPullToRefresh != null) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = event.rawY
+                    startX = event.rawX
+                    isAtTopAtStart = (scrollY == 0 || !canScrollVertically(-1))
+                    isPulling = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaY = event.rawY - startY
+                    val deltaX = event.rawX - startX
+
+                    if (isAtTopAtStart && (scrollY == 0 || !canScrollVertically(-1)) && deltaY > 0 && deltaY > abs(deltaX) * 1.2f) {
+                        val distance = (deltaY - 12f).coerceAtLeast(0f) * 0.45f
+                        if (distance > 0f) {
+                            isPulling = true
+                            onPullDistanceChange?.invoke(distance)
+                        }
+                    } else if (isPulling) {
+                        val distance = (event.rawY - startY).coerceAtLeast(0f) * 0.45f
+                        onPullDistanceChange?.invoke(distance)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isPulling) {
+                        val distance = (event.rawY - startY).coerceAtLeast(0f) * 0.45f
+                        if (distance > 130f) {
+                            onPullToRefresh?.invoke()
+                        }
+                        isPulling = false
+                        onPullDistanceChange?.invoke(0f)
+                    }
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         val inputConnection = super.onCreateInputConnection(outAttrs)

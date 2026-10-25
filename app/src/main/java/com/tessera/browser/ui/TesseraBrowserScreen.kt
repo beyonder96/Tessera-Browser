@@ -47,14 +47,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -63,12 +76,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,11 +95,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.print.PrintAttributes
@@ -908,6 +932,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     }
 
     val rootBg = if (state.isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
+    val haptic = LocalHapticFeedback.current
+    var pullOffsetY by remember { mutableFloatStateOf(0f) }
+    val animatedPullOffsetY by animateFloatAsState(
+        targetValue = pullOffsetY,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "pull_offset"
+    )
 
     Box(
         modifier = Modifier
@@ -951,7 +985,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     .nestedScroll(nestedScrollConnection)
             ) {
                 AndroidView(
-                    modifier = if (state.isInPipMode) {
+                    modifier = (if (state.isInPipMode) {
                         Modifier.fillMaxSize()
                     } else {
                         Modifier
@@ -959,11 +993,19 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             .statusBarsPadding()
                             .displayCutoutPadding()
                             .padding(top = 6.dp)
-                    },
+                    }).offset { IntOffset(0, animatedPullOffsetY.roundToInt()) },
                     factory = { ctx ->
                         TesseraWebView(ctx).apply {
                             isIncognitoMode = state.isIncognitoMode
                             isNestedScrollingEnabled = true
+
+                            onPullDistanceChange = { distance ->
+                                pullOffsetY = distance.coerceIn(0f, 220f)
+                            }
+                            onPullToRefresh = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                reload()
+                            }
 
                             val cookieManager = CookieManager.getInstance()
                             cookieManager.setAcceptCookie(true)
@@ -1635,7 +1677,16 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         }
                     },
                     update = { view ->
-                        (view as? TesseraWebView)?.isIncognitoMode = state.isIncognitoMode
+                        (view as? TesseraWebView)?.apply {
+                            isIncognitoMode = state.isIncognitoMode
+                            onPullDistanceChange = { distance ->
+                                pullOffsetY = distance.coerceIn(0f, 220f)
+                            }
+                            onPullToRefresh = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                reload()
+                            }
+                        }
                         applyForceDark(view.settings, state.forceDarkPages)
                         val targetUa = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(view.context)
                         if (view.settings.userAgentString != targetUa) {
@@ -1645,6 +1696,63 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         }
                     }
                 )
+
+                // Pull-To-Refresh Visual Capsule Indicator
+                val isPageLoading = state.progress > 0f && state.progress < 1f
+                AnimatedVisibility(
+                    visible = animatedPullOffsetY > 12f || (isPageLoading && pullOffsetY > 0f),
+                    enter = fadeIn(tween(150)),
+                    exit = fadeOut(tween(200)),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 10.dp)
+                        .offset {
+                            val visualOffset = (animatedPullOffsetY * 0.65f - 40f).coerceIn(-40f, 75f)
+                            IntOffset(0, visualOffset.roundToInt())
+                        }
+                ) {
+                    val isTriggerReady = pullOffsetY >= 120f
+                    val indicatorBg = if (state.isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+                    val indicatorBorder = if (state.isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+                    val indicatorContentColor = if (state.isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+
+                    Surface(
+                        shape = CircleShape,
+                        color = indicatorBg,
+                        border = BorderStroke(0.8.dp, indicatorBorder),
+                        shadowElevation = 6.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "Atualizar página",
+                                tint = indicatorContentColor,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .graphicsLayer {
+                                        rotationZ = (animatedPullOffsetY * 2.8f) % 360f
+                                    }
+                            )
+                            Text(
+                                text = if (isPageLoading && pullOffsetY <= 0f) {
+                                    "Atualizando..."
+                                } else if (isTriggerReady) {
+                                    "Solte para atualizar"
+                                } else {
+                                    "Puxe para atualizar"
+                                },
+                                color = indicatorContentColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
 
                 // Scrim when AirBar is expanded over web content to collapse easily
                 if (isAirBarExpanded) {

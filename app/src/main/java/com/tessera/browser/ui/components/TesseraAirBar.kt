@@ -9,9 +9,11 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -561,36 +563,97 @@ fun TesseraAirBar(
                                 indication = null,
                                 onClick = { isEditing = true }
                             )
-                            .padding(horizontal = 14.dp),
+                            .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        if (isWeb && !isHomePage) {
-                            Icon(
-                                imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                contentDescription = "Segurança",
-                                tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
-                                modifier = Modifier.size(13.dp)
+                        Row(
+                            modifier = Modifier.weight(1f, fill = false),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isWeb && !isHomePage) {
+                                Icon(
+                                    imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                    contentDescription = "Segurança",
+                                    tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            } else if (isHomePage) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = null,
+                                    tint = mutedColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+
+                            Text(
+                                text = hostText,
+                                color = if (isHomePage) mutedColor else contentColor,
+                                fontSize = 13.5.sp,
+                                fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        } else if (isHomePage) {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null,
-                                tint = mutedColor,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
                         }
 
-                        Text(
-                            text = hostText,
-                            color = if (isHomePage) mutedColor else contentColor,
-                            fontSize = 13.5.sp,
-                            fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        // SMARTDOCK: Sugestão Contextual de Modo Leitor
+                        AnimatedVisibility(
+                            visible = (isReaderModeAvailable || isReaderModeActive) && !isHomePage,
+                            enter = fadeIn(tween(180)) + expandHorizontally(),
+                            exit = fadeOut(tween(180)) + shrinkHorizontally()
+                        ) {
+                            val readerBg = if (isReaderModeActive) {
+                                if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+                            } else {
+                                if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+                            }
+                            val readerContentColor = if (isReaderModeActive) {
+                                if (isDarkMode) Color.Black else Color.White
+                            } else {
+                                contentColor
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .clip(CircleShape)
+                                    .background(readerBg)
+                                    .border(
+                                        width = 0.8.dp,
+                                        color = if (isReaderModeActive) Color.Transparent else solidBorder,
+                                        shape = CircleShape
+                                    )
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onToggleReaderMode()
+                                    }
+                                    .padding(horizontal = 9.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                        contentDescription = "Modo Leitura",
+                                        tint = readerContentColor,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = "Leitor",
+                                        color = readerContentColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // 3. [CONTADOR DE ABAS SÓLIDO]
