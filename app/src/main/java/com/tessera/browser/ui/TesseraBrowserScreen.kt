@@ -50,7 +50,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.imePadding
+import android.net.http.SslError
+import android.os.Message
+import android.webkit.SslErrorHandler
+import android.webkit.WebSettings
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -978,6 +984,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
             )
         } else {
+            val bottomBarPadding by animateDpAsState(
+                targetValue = if (state.isBarVisible && !state.isHomePage && !state.isInPipMode) 74.dp else 0.dp,
+                animationSpec = tween(durationMillis = 220),
+                label = "webview_bottom_bar_padding"
+            )
+
             // WEBVIEW BROWSER VIEW
             Box(
                 modifier = Modifier
@@ -992,12 +1004,25 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             .fillMaxSize()
                             .statusBarsPadding()
                             .displayCutoutPadding()
-                            .padding(top = 6.dp)
+                            .padding(top = 6.dp, bottom = bottomBarPadding)
+                            .imePadding()
                     }).offset { IntOffset(0, animatedPullOffsetY.roundToInt()) },
                     factory = { ctx ->
                         TesseraWebView(ctx).apply {
                             isIncognitoMode = state.isIncognitoMode
                             isNestedScrollingEnabled = true
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+
+                            onScrollDelta = { deltaY, scrollY ->
+                                if (scrollY <= 5) {
+                                    viewModel.setBarVisibility(true)
+                                } else if (deltaY > 15) {
+                                    viewModel.setBarVisibility(false)
+                                } else if (deltaY < -15) {
+                                    viewModel.setBarVisibility(true)
+                                }
+                            }
 
                             onPullDistanceChange = { distance ->
                                 pullOffsetY = distance.coerceIn(0f, 220f)
@@ -1023,6 +1048,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 displayZoomControls = false
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                                 javaScriptCanOpenWindowsAutomatically = true
+                                setSupportMultipleWindows(true)
+                                allowFileAccess = true
+                                allowContentAccess = true
+                                cacheMode = WebSettings.LOAD_DEFAULT
 
                                 // Standard modern Chrome mobile/desktop UA
                                 userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(ctx)
@@ -1294,14 +1323,37 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 urlString.contains("/adservice/")
                                         if (isAd) {
                                             viewModel.recordBlockedTracker(host, urlString)
+                                            val mime = when {
+                                                urlString.contains(".js") -> "text/javascript"
+                                                urlString.contains(".css") -> "text/css"
+                                                urlString.contains(".json") -> "application/json"
+                                                else -> "text/plain"
+                                            }
                                             return WebResourceResponse(
-                                                "text/plain",
+                                                mime,
                                                 "UTF-8",
                                                 ByteArrayInputStream(ByteArray(0))
                                             )
                                         }
                                     }
                                     return super.shouldInterceptRequest(view, request)
+                                }
+
+                                override fun onReceivedSslError(
+                                    view: WebView?,
+                                    handler: SslErrorHandler?,
+                                    error: SslError?
+                                ) {
+                                    AlertDialog.Builder(view?.context ?: context)
+                                        .setTitle("Aviso de Segurança SSL")
+                                        .setMessage("O certificado de segurança deste site apresentou uma falha. Deseja continuar mesmo assim?")
+                                        .setPositiveButton("Continuar") { _, _ -> handler?.proceed() }
+                                        .setNegativeButton("Voltar") { _, _ ->
+                                            handler?.cancel()
+                                            if (view?.canGoBack() == true) view.goBack() else viewModel.goHome()
+                                        }
+                                        .setOnCancelListener { handler?.cancel() }
+                                        .show()
                                 }
 
                                 override fun onReceivedError(
@@ -1398,7 +1450,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                     });
                                                     if (document.body) {
                                                         document.body.style.setProperty('overflow', 'auto', 'important');
-                                                        document.body.style.setProperty('position', 'static', 'important');
                                                     }
                                                     if (document.documentElement) {
                                                         document.documentElement.style.setProperty('overflow', 'auto', 'important');
@@ -1408,6 +1459,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 null
                                             )
                                         }
+
+                                        CookieManager.getInstance().flush()
 
                                         // Detect Reader Mode availability on actual articles/content pages (Immediate + SPA delayed)
                                         val checkReaderScript = """
@@ -1492,6 +1545,34 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
 
                             webChromeClient = object : WebChromeClient() {
+                                override fun onCreateWindow(
+                                    view: WebView?,
+                                    isDialog: Boolean,
+                                    isUserGesture: Boolean,
+                                    resultMsg: Message?
+                                ): Boolean {
+                                    val href = view?.hitTestResult?.extra
+                                    if (!href.isNullOrBlank()) {
+                                        viewModel.addNewTab(url = href, isHome = false, selectNow = true)
+                                        return true
+                                    }
+                                    val transportWebView = WebView(ctx)
+                                    transportWebView.webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(v: WebView?, req: WebResourceRequest?): Boolean {
+                                            val popupUrl = req?.url?.toString()
+                                            if (!popupUrl.isNullOrBlank()) {
+                                                viewModel.addNewTab(url = popupUrl, isHome = false, selectNow = true)
+                                                return true
+                                            }
+                                            return false
+                                        }
+                                    }
+                                    val transport = resultMsg?.obj as? WebView.WebViewTransport
+                                    transport?.webView = transportWebView
+                                    resultMsg?.sendToTarget()
+                                    return true
+                                }
+
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                     viewModel.updateProgress(newProgress / 100f)
                                 }
@@ -1679,6 +1760,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     update = { view ->
                         (view as? TesseraWebView)?.apply {
                             isIncognitoMode = state.isIncognitoMode
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                            onScrollDelta = { deltaY, scrollY ->
+                                if (scrollY <= 5) {
+                                    viewModel.setBarVisibility(true)
+                                } else if (deltaY > 15) {
+                                    viewModel.setBarVisibility(false)
+                                } else if (deltaY < -15) {
+                                    viewModel.setBarVisibility(true)
+                                }
+                            }
                             onPullDistanceChange = { distance ->
                                 pullOffsetY = distance.coerceIn(0f, 220f)
                             }

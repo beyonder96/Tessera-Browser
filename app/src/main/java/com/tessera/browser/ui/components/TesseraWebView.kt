@@ -21,13 +21,30 @@ class TesseraWebView @JvmOverloads constructor(
     var isIncognitoMode: Boolean = false
     var onPullToRefresh: (() -> Unit)? = null
     var onPullDistanceChange: ((Float) -> Unit)? = null
+    var onScrollDelta: ((deltaY: Int, scrollY: Int) -> Unit)? = null
+
+    init {
+        isFocusable = true
+        isFocusableInTouchMode = true
+    }
 
     private var startY = 0f
     private var startX = 0f
     private var isAtTopAtStart = false
     private var isPulling = false
 
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        val deltaY = t - oldt
+        onScrollDelta?.invoke(deltaY, t)
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (!hasFocus()) {
+                requestFocus()
+            }
+        }
         if (onPullToRefresh != null) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {

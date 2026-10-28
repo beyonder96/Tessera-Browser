@@ -129,9 +129,7 @@ fun TabsModal(
 
     val currentSpace = spaces.find { it.id == activeSpaceId } ?: spaces.firstOrNull() ?: BrowserSpace.DEFAULT_SPACES.first()
     val currentSpaceTabs = tabs.filter { it.spaceId == activeSpaceId }
-    val visibleTabs = currentSpaceTabs.filterNot {
-        it.isHomePage || it.url == "tessera://inicio" || it.url.startsWith("about:blank")
-    }
+    val visibleTabs = if (currentSpaceTabs.isNotEmpty()) currentSpaceTabs else tabs
 
     val monoAccent = accentColor ?: if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val onMonoAccent = if (monoAccent.luminance() > 0.5f) ApplePalette.DarkBackground else Color.White
@@ -182,8 +180,30 @@ fun TabsModal(
                 contentAlignment = Alignment.Center
             ) {
                 if (visibleTabs.isEmpty()) {
-                    // Quando não houver abas ativas, exibe um espaço limpo (sem o card da home)
-                    Spacer(modifier = Modifier.fillMaxSize())
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Layers,
+                            contentDescription = null,
+                            tint = mutedColor,
+                            modifier = Modifier.size(52.dp)
+                        )
+                        Text(
+                            text = "Nenhuma aba aberta",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = contentColor
+                        )
+                        Text(
+                            text = "Toque em Nova Guia para começar a navegar",
+                            fontSize = 13.5.sp,
+                            color = mutedColor,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     val initialIndex = remember(visibleTabs, activeTabId) {
                         val idx = visibleTabs.indexOfFirst { it.id == activeTabId }

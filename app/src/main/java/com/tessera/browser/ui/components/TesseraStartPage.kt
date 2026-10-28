@@ -1,5 +1,7 @@
 package com.tessera.browser.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -109,7 +111,15 @@ fun TesseraStartPage(
 ) {
     val context = LocalContext.current
     var isDefaultDismissed by rememberSaveable { mutableStateOf(false) }
-    val isDefaultBrowser = remember(context) { com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context) }
+    var isDefaultBrowser by remember(context) {
+        mutableStateOf(com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context))
+    }
+
+    val defaultBrowserLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isDefaultBrowser = com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context)
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         // 1. FUNDO SÓLIDO (OLED PURO NO ESCURO / BRANCO MATTE NO CLARO)
@@ -152,7 +162,12 @@ fun TesseraStartPage(
                         .background(surfaceColor)
                         .border(1.dp, borderColor, RoundedCornerShape(20.dp))
                         .clickable {
-                            com.tessera.browser.util.DefaultBrowserHelper.requestDefaultBrowser(context)
+                            try {
+                                val intent = com.tessera.browser.util.DefaultBrowserHelper.createRequestDefaultBrowserIntent(context)
+                                defaultBrowserLauncher.launch(intent)
+                            } catch (e: Exception) {
+                                com.tessera.browser.util.DefaultBrowserHelper.openDefaultBrowserSettings(context)
+                            }
                         }
                         .padding(horizontal = 14.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,

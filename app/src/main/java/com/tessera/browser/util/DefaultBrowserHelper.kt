@@ -27,7 +27,7 @@ object DefaultBrowserHelper {
         }
     }
 
-    fun createRequestDefaultBrowserIntent(context: Context): Intent? {
+    fun createRequestDefaultBrowserIntent(context: Context): Intent {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(RoleManager::class.java)
@@ -44,23 +44,45 @@ object DefaultBrowserHelper {
         }
     }
 
+    fun openDefaultBrowserSettings(context: Context) {
+        try {
+            val manageAppsIntent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            if (context !is Activity) {
+                manageAppsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(manageAppsIntent)
+        } catch (e: Exception) {
+            try {
+                val appDetailsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    if (context !is Activity) {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+                context.startActivity(appDetailsIntent)
+            } catch (ex: Exception) {
+                try {
+                    val settingsIntent = Intent(Settings.ACTION_SETTINGS)
+                    if (context !is Activity) {
+                        settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(settingsIntent)
+                } catch (e3: Exception) {
+                    Toast.makeText(context, "Não foi possível abrir as configurações de aplicativos", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     fun requestDefaultBrowser(context: Context) {
         try {
-            val intent = createRequestDefaultBrowserIntent(context) ?: Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            val intent = createRequestDefaultBrowserIntent(context)
             if (context !is Activity) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            try {
-                val settingsIntent = Intent(Settings.ACTION_SETTINGS)
-                if (context !is Activity) {
-                    settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(settingsIntent)
-            } catch (ex: Exception) {
-                Toast.makeText(context, "Não foi possível abrir as configurações de aplicativos", Toast.LENGTH_SHORT).show()
-            }
+            openDefaultBrowserSettings(context)
         }
     }
 }
