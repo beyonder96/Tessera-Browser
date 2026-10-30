@@ -1,11 +1,12 @@
 package com.tessera.browser.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,114 +25,93 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import com.tessera.browser.ui.screens.DeveloperScreen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.automirrored.rounded.TrendingUp
-import androidx.compose.material.icons.automirrored.rounded.ViewSidebar
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Backup
-import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Cookie
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.OfflinePin
-import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.StarOutline
-import androidx.compose.material.icons.rounded.WbSunny
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import androidx.compose.ui.window.Dialog
 import com.tessera.browser.R
 import com.tessera.browser.ai.AiProvider
-import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.SearchEngine
-import com.tessera.browser.data.WallpaperTheme
+import com.tessera.browser.ui.screens.DeveloperScreen
 import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.ui.theme.AppleShapes
 
 /**
- * Tela Completa de Configurações do Tessera Browser.
- * Estruturada profissionalmente em seções com cards agrupados:
- * 1. Mecanismo de Busca & Inicialização
- * 2. Aparência & Personalização (Temas, Papéis de Parede, Widgets, Barra Lateral)
- * 3. Privacidade & Segurança (AdBlock, Cookies/LGPD, Limpar Dados, Permissões, Safe Browsing)
- * 4. Inteligência Artificial & Minimalismo Digital (Groq, Gemini, Botão da Barra, Minimalismo)
- * 5. Downloads & Armazenamento (Hub de Downloads, Páginas Offline)
- * 6. Sobre o Tessera Browser
+ * Tela Completa de Configurações — Editorial Showcase (iOS 18 / Journal & Pure OLED).
+ *
+ * - Contraste de camadas refinado no modo claro (#FCFBF7 sobre #F7F4EB) e escuro (#141416 sobre #000000).
+ * - Ícones monocromáticos padronizados em squircles contínuos de 32dp.
+ * - Vitrine visual clicável de temas (Journal Claro vs Pure OLED Escuro) + Escala de Texto Web.
+ * - Colapso suave de cabeçalho com histerese (zero pulo de layout).
+ * - Modais Editoriais customizados para Limpeza de Dados e Chaves de API.
  */
 @Composable
 fun TesseraSettingsScreen(
     isDarkMode: Boolean,
     forceDarkPages: Boolean,
-    showWallpaper: Boolean,
-    selectedWallpaperId: String,
-    customWallpaperUri: String? = null,
-    showFavoritesBar: Boolean,
-    showPillTabsBar: Boolean = true,
-    showWeatherWidget: Boolean,
-    showQuotesWidget: Boolean,
+    pageTextZoom: Int = 100,
     tesseraAiEnabled: Boolean,
-    aiToolbarButton: Boolean,
-    aiTextHighlightPrompts: Boolean,
-    showSidebar: Boolean,
-    autoHideSidebar: Boolean,
     adBlockEnabled: Boolean,
     cookieBlockerEnabled: Boolean,
+    isAutoPipEnabled: Boolean = true,
     selectedSearchEngine: SearchEngine,
     geminiApiKey: String?,
     groqApiKey: String? = null,
     aiProvider: AiProvider = AiProvider.GROQ,
-    digitalMinimalismMode: Boolean = true,
     isDefaultBrowser: Boolean = false,
     onRequestDefaultBrowser: () -> Unit = {},
     incognitoBiometricLock: Boolean = false,
@@ -140,25 +120,17 @@ fun TesseraSettingsScreen(
     onOpenLinksInExternalAppsChanged: (Boolean) -> Unit = {},
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
-    onShowWallpaperChanged: (Boolean) -> Unit,
-    onSelectWallpaper: (String) -> Unit,
-    onUploadWallpaper: () -> Unit,
-    onShowFavoritesBarChanged: (Boolean) -> Unit,
-    onShowPillTabsBarChanged: (Boolean) -> Unit = {},
-    onShowWeatherWidgetChanged: (Boolean) -> Unit,
-    onShowQuotesWidgetChanged: (Boolean) -> Unit,
+    onIncreaseTextZoom: () -> Unit = {},
+    onDecreaseTextZoom: () -> Unit = {},
+    onResetTextZoom: () -> Unit = {},
+    onAutoPipChanged: (Boolean) -> Unit = {},
     onTesseraAiChanged: (Boolean) -> Unit,
-    onAiToolbarButtonChanged: (Boolean) -> Unit,
-    onAiTextHighlightPromptsChanged: (Boolean) -> Unit,
-    onShowSidebarChanged: (Boolean) -> Unit,
-    onAutoHideSidebarChanged: (Boolean) -> Unit,
     onAdBlockChanged: (Boolean) -> Unit,
     onCookieBlockerChanged: (Boolean) -> Unit,
     onSearchEngineSelected: (SearchEngine) -> Unit,
     onGeminiApiKeyChanged: (String) -> Unit,
     onGroqApiKeyChanged: (String) -> Unit = {},
     onAiProviderChanged: (AiProvider) -> Unit = {},
-    onDigitalMinimalismModeChanged: (Boolean) -> Unit = {},
     onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -172,8 +144,10 @@ fun TesseraSettingsScreen(
 
     var showDeveloperScreen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategoryIndex by remember { mutableStateOf(0) }
-    val categories = listOf("Todos", "Navegação", "Aparência", "Privacidade", "IA", "Dados", "Sobre")
+    var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+    val categories = remember {
+        listOf("Todos", "Navegação", "Aparência", "Privacidade", "IA", "Dados", "Sobre")
+    }
 
     if (showDeveloperScreen) {
         DeveloperScreen(
@@ -194,20 +168,27 @@ fun TesseraSettingsScreen(
     var showGroqKeyDialog by remember { mutableStateOf(false) }
     var tempGroqKey by remember(groqApiKey) { mutableStateOf(groqApiKey.orEmpty()) }
 
-    // PALETA MODO JOURNAL NO CLARO / PRETO AMOLED NO ESCURO
+    // Histerese suave para o colapso do cabeçalho (elimina flicker/pulo na transição)
+    var isHeaderCollapsed by remember { mutableStateOf(false) }
+    LaunchedEffect(scrollState.value) {
+        if (scrollState.value > 46 && !isHeaderCollapsed) {
+            isHeaderCollapsed = true
+        } else if (scrollState.value < 12 && isHeaderCollapsed) {
+            isHeaderCollapsed = false
+        }
+    }
+
+    // PALETA EDITORIAL: JOURNAL NO CLARO (#FCFBF7 sobre #F7F4EB) & PURE OLED NO ESCURO (#141416 sobre #000000)
     val screenBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
-    val topBarBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightSurface
-    val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val topBarBg = if (isDarkMode) Color(0xFF0B0B0D) else ApplePalette.LightBackground
+    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else Color(0xFFFCFBF7)
+    val squircleBg = if (isDarkMode) ApplePalette.DarkElevated else Color(0xFFF1EDE2)
+    val pillBg = if (isDarkMode) ApplePalette.DarkSurface else Color(0xFFF2EEE3)
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val dividerColor = if (isDarkMode) Color.White.copy(alpha = 0.06f) else ApplePalette.LightHairline
     val textPrimary = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
     val textSecondary = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
     val accentColor = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
-    val sectionHeaderColor = accentColor
-    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightSurface
-    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
-    val dividerColor = if (isDarkMode) Color.White.copy(alpha = 0.07f) else ApplePalette.LightHairline
-    val pillBg = if (isDarkMode) Color(0xFF1E1E24) else ApplePalette.LightElevated
-
-    val isScrolled = scrollState.value > 24
 
     fun matchesQuery(vararg keywords: String): Boolean {
         if (searchQuery.isBlank()) return true
@@ -216,22 +197,22 @@ fun TesseraSettingsScreen(
     }
 
     val showNavigation = (selectedCategoryIndex == 0 || selectedCategoryIndex == 1) &&
-            matchesQuery("navegador", "padrão", "busca", "google", "buscador", "mecanismo", "pesquisa")
+            matchesQuery("navegador", "padrão", "busca", "google", "duckduckgo", "bing", "brave", "buscador", "mecanismo", "pesquisa", "pip", "vídeo", "apps externos")
 
     val showAppearance = (selectedCategoryIndex == 0 || selectedCategoryIndex == 2) &&
-            matchesQuery("aparência", "tema", "escuro", "dark", "journal", "papel de parede", "wallpaper", "favoritos", "weather", "clima", "citação", "barra lateral", "sidebar", "pills", "abas")
+            matchesQuery("aparência", "tema", "escuro", "claro", "oled", "journal", "zoom", "texto", "fonte", "tamanho", "páginas escuras")
 
     val showPrivacy = (selectedCategoryIndex == 0 || selectedCategoryIndex == 3) &&
-            matchesQuery("privacidade", "adblock", "cookies", "lgpd", "biometria", "incognito", "anônimo", "limpar dados", "segurança", "safe browsing")
+            matchesQuery("privacidade", "adblock", "anúncios", "cookies", "lgpd", "biometria", "anônimo", "limpar dados", "segurança", "safe browsing", "permissões", "câmera", "microfone", "localização")
 
     val showAi = (selectedCategoryIndex == 0 || selectedCategoryIndex == 4) &&
-            matchesQuery("ia", "inteligência", "groq", "gemini", "llama", "resumo", "minimalismo digital", "assistente")
+            matchesQuery("ia", "inteligência", "groq", "gemini", "llama", "resumo", "assistente", "chave", "api")
 
     val showDownloads = (selectedCategoryIndex == 0 || selectedCategoryIndex == 5) &&
-            matchesQuery("downloads", "armazenamento", "offline", "backup", "restaurar", "exportar", "páginas")
+            matchesQuery("downloads", "armazenamento", "offline", "backup", "restaurar", "exportar", "histórico", "favoritos")
 
     val showAbout = (selectedCategoryIndex == 0 || selectedCategoryIndex == 6) &&
-            matchesQuery("sobre", "versão", "desenvolvedor", "tessera", "core")
+            matchesQuery("sobre", "versão", "desenvolvedor", "tessera")
 
     val hasAnyResult = showNavigation || showAppearance || showPrivacy || showAi || showDownloads || showAbout
 
@@ -240,166 +221,168 @@ fun TesseraSettingsScreen(
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // TOP APP BAR COM CABEÇALHO COLAPSÁVEL & MODO PESQUISA & CATEGORY PILLS
-        Surface(
-            color = topBarBg,
-            shadowElevation = if (isScrolled) 4.dp else 0.dp,
-            modifier = Modifier.fillMaxWidth()
+        // =========================================================
+        // TOP BAR EDITORIAL COM COLAPSO FLUIDO & CHIPS DE CATEGORIA
+        // =========================================================
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(topBarBg)
+                .statusBarsPadding()
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .border(
-                        width = 1.dp,
-                        color = if (isDarkMode) Color.White.copy(alpha = 0.06f) else cardBorder
-                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Linha Superior de Navegação
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Voltar",
-                                tint = textPrimary
-                            )
-                        }
-                        Text(
-                            text = if (isScrolled) "Configurações" else "Tessera Browser",
-                            color = if (isScrolled) titleColor else textSecondary,
-                            fontSize = if (isScrolled) 17.sp else 13.sp,
-                            fontWeight = if (isScrolled) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-
-                    if (searchQuery.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { searchQuery = "" }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Limpar",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = accentColor
-                            )
-                        }
-                    }
-                }
-
-                // Título Grande (quando no topo da tela)
-                if (!isScrolled) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        Text(
-                            text = "Configurações",
-                            color = titleColor,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Campo de Pesquisa em Cápsula / Pill
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .height(42.dp)
-                        .clip(RoundedCornerShape(21.dp))
-                        .background(pillBg)
-                        .border(1.dp, cardBorder, RoundedCornerShape(21.dp))
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = textSecondary,
-                        modifier = Modifier.size(17.dp)
-                    )
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (searchQuery.isEmpty()) {
-                            Text(
-                                text = "Pesquisar nas configurações...",
-                                color = textSecondary,
-                                fontSize = 13.5.sp
-                            )
-                        }
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                color = textPrimary,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Medium
-                            ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(accentColor),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Limpar texto",
-                            tint = textSecondary,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { searchQuery = "" }
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Voltar",
+                            tint = textPrimary
                         )
                     }
+                    Text(
+                        text = if (isHeaderCollapsed) "Configurações" else "Tessera Browser",
+                        color = if (isHeaderCollapsed) textPrimary else textSecondary,
+                        fontSize = if (isHeaderCollapsed) 17.sp else 13.sp,
+                        fontWeight = if (isHeaderCollapsed) FontWeight.SemiBold else FontWeight.Medium
+                    )
                 }
 
-                // Linha de Chips / Pills de Categoria (rolagem horizontal)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    categories.forEachIndexed { index, categoryName ->
-                        val isSelected = selectedCategoryIndex == index
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) accentColor else pillBg)
-                                .border(
-                                    1.dp,
-                                    if (isSelected) accentColor else cardBorder,
-                                    RoundedCornerShape(16.dp)
-                                )
-                                .clickable { selectedCategoryIndex = index }
-                                .padding(horizontal = 13.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = categoryName,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else textPrimary
-                            )
-                        }
+                if (searchQuery.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { searchQuery = "" }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Limpar",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentColor
+                        )
                     }
                 }
             }
+
+            AnimatedVisibility(
+                visible = !isHeaderCollapsed,
+                enter = expandVertically(tween(220)) + fadeIn(tween(180)),
+                exit = shrinkVertically(tween(220)) + fadeOut(tween(140))
+            ) {
+                Text(
+                    text = "Configurações",
+                    color = textPrimary,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.6).sp,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp)
+                )
+            }
+
+            // Campo de Pesquisa Editorial
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(pillBg)
+                    .border(0.7.dp, cardBorder, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = textSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            text = "Buscar ajustes...",
+                            color = textSecondary,
+                            fontSize = 13.5.sp
+                        )
+                    }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = textPrimary,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        cursorBrush = SolidColor(accentColor),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (searchQuery.isNotEmpty()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Limpar texto",
+                        tint = textSecondary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { searchQuery = "" }
+                    )
+                }
+            }
+
+            // Pílulas de Categoria
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                categories.forEachIndexed { index, categoryName ->
+                    val isSelected = selectedCategoryIndex == index
+                    val selectedBg = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+                    val selectedFg = if (isDarkMode) Color.Black else Color.White
+
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(if (isSelected) selectedBg else pillBg)
+                            .border(
+                                width = 0.7.dp,
+                                color = if (isSelected) selectedBg else cardBorder,
+                                shape = CircleShape
+                            )
+                            .clickable { selectedCategoryIndex = index }
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = categoryName,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) selectedFg else textPrimary
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 0.7.dp, color = cardBorder)
         }
 
-        // SCROLLABLE SETTINGS CONTENT
+        // =========================================================
+        // CONTEÚDO PRINCIPAL EM SEÇÕES AGRUPADAS
+        // =========================================================
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -408,934 +391,580 @@ fun TesseraSettingsScreen(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-
-            // ==========================================
-            // SEÇÃO 1: NAVEGADOR PADRÃO & BUSCA
-            // ==========================================
-            if (showNavigation) {
-                SettingsSection(
-                title = "Navegador padrão & Busca",
-                headerColor = sectionHeaderColor
-            ) {
-                // Card do Navegador Padrão do Sistema
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable(onClick = onRequestDefaultBrowser)
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isDefaultBrowser) Color(0xFF4CAF50).copy(alpha = 0.15f)
-                                        else (if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1)).copy(alpha = 0.15f)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (isDefaultBrowser) Icons.Rounded.CheckCircle else Icons.Rounded.Language,
-                                    contentDescription = null,
-                                    tint = if (isDefaultBrowser) Color(0xFF4CAF50)
-                                    else if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "Navegador padrão do sistema",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textPrimary
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (isDefaultBrowser) "Tessera Browser é seu navegador padrão ✓"
-                                    else "Toque para definir o Tessera como navegador padrão",
-                                    fontSize = 12.sp,
-                                    color = if (isDefaultBrowser) Color(0xFF4CAF50) else textSecondary
-                                )
-                            }
-                        }
-
-                        if (!isDefaultBrowser) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+            // ---------------------------------------------------------
+            // SEÇÃO 1: APARÊNCIA & LEITURA WEB (VITRINE VISUAL)
+            // ---------------------------------------------------------
+            if (showAppearance) {
+                EditorialSection(title = "Aparência & Leitura", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Tema do Ambiente",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary
                             )
-                        }
-                    }
-                }
+                            Text(
+                                text = "Contraste editorial calibrado para dia e noite",
+                                fontSize = 12.sp,
+                                color = textSecondary
+                            )
 
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Buscador padrão",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Escolha o mecanismo utilizado para pesquisas na barra de endereços",
-                            fontSize = 12.5.sp,
-                            color = textSecondary
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                        SearchEngine.entries.forEachIndexed { index, engine ->
-                            val isSelected = engine == selectedSearchEngine
+                            // Cartões Visuais Clicáveis Lado a Lado: Journal Claro vs Pure OLED Escuro
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) {
-                                            if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.12f) else Color(0xFF0288D1).copy(alpha = 0.10f)
-                                        } else Color.Transparent
-                                    )
-                                    .clickable { onSearchEngineSelected(engine) }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                ThemePreviewCard(
+                                    title = "Journal",
+                                    subtitle = "Papel creme",
+                                    previewSurface = Color(0xFFF7F4EB),
+                                    previewCard = Color(0xFFFCFBF7),
+                                    previewInk = Color(0xFF1F1D1A),
+                                    previewHairline = Color(0xFFDDD8CB),
+                                    icon = Icons.Rounded.LightMode,
+                                    isSelected = !isDarkMode,
+                                    accentColor = accentColor,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    cardBorder = cardBorder,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onDarkModeChanged(false) }
+                                )
+
+                                ThemePreviewCard(
+                                    title = "Pure OLED",
+                                    subtitle = "Preto absoluto",
+                                    previewSurface = Color(0xFF000000),
+                                    previewCard = Color(0xFF18181C),
+                                    previewInk = Color(0xFFF5F5F7),
+                                    previewHairline = Color(0xFF2C2C32),
+                                    icon = Icons.Rounded.DarkMode,
+                                    isSelected = isDarkMode,
+                                    accentColor = accentColor,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    cardBorder = cardBorder,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onDarkModeChanged(true) }
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            // Escala Padrão de Texto das Páginas Web (A- / 100% / A+)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f).padding(end = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Image(
-                                        painter = painterResource(id = engine.iconRes),
-                                        contentDescription = engine.displayName,
-                                        modifier = Modifier.size(24.dp)
+                                    MonochromeSquircleIcon(
+                                        icon = Icons.Rounded.FormatSize,
+                                        squircleBg = squircleBg,
+                                        iconTint = textPrimary
                                     )
                                     Column {
                                         Text(
-                                            text = engine.displayName,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            text = "Tamanho do texto web",
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Medium,
                                             color = textPrimary
                                         )
                                         Text(
-                                            text = engine.homeUrl,
-                                            fontSize = 11.5.sp,
+                                            text = "Escala global das fontes nos sites",
+                                            fontSize = 12.sp,
                                             color = textSecondary
                                         )
                                     }
                                 }
 
-                                if (isSelected) {
+                                Row(
+                                    modifier = Modifier
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(squircleBg)
+                                        .border(0.6.dp, cardBorder, RoundedCornerShape(11.dp)),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1)),
+                                            .size(width = 32.dp, height = 36.dp)
+                                            .clickable(enabled = pageTextZoom > 60) { onDecreaseTextZoom() },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = "Selecionado",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(15.dp)
+                                        Text(
+                                            text = "A-",
+                                            color = if (pageTextZoom > 60) textPrimary else textSecondary.copy(alpha = 0.4f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .height(36.dp)
+                                            .clickable { onResetTextZoom() }
+                                            .padding(horizontal = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${pageTextZoom}%",
+                                            color = if (pageTextZoom != 100) accentColor else textPrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 32.dp, height = 36.dp)
+                                            .clickable(enabled = pageTextZoom < 200) { onIncreaseTextZoom() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "A+",
+                                            color = if (pageTextZoom < 200) textPrimary else textSecondary.copy(alpha = 0.4f),
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
                             }
-                            if (index < SearchEngine.entries.size - 1) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    color = dividerColor
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            }
 
-            // ==========================================
-            // SEÇÃO 2: APARÊNCIA & PERSONALIZAÇÃO
-            // ==========================================
-            if (showAppearance) {
-                SettingsSection(
-                title = "Aparência e Personalização",
-                headerColor = sectionHeaderColor
-            ) {
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Tema do Aplicativo (Ambiente)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Ambiente (Tema do app)",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = if (isDarkMode) "Modo escuro ativado" else "Modo claro ativado",
-                                    fontSize = 12.5.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            ThemeTogglePill(
-                                isDarkMode = isDarkMode,
-                                onToggle = { onDarkModeChanged(!isDarkMode) }
-                            )
-                        }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Forçar Modo Escuro nas Páginas Web
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                                Text(
-                                    text = "Forçar páginas escuras",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Inverte as cores de fundo em sites claros para leitura confortável à noite",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
+                            // Forçar Páginas Escuras
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.DarkMode,
+                                title = "Forçar páginas escuras",
+                                subtitle = "Adapta sites claros automaticamente para leitura noturna",
                                 checked = forceDarkPages,
                                 onCheckedChange = onForceDarkPagesChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
                                 isDarkMode = isDarkMode
                             )
                         }
                     }
                 }
             }
-            }
 
-            // ==========================================
-            // SEÇÃO 3: PRIVACIDADE & SEGURANÇA
-            // ==========================================
-            if (showPrivacy) {
-                SettingsSection(
-                title = "Privacidade e Segurança",
-                headerColor = sectionHeaderColor
-            ) {
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Bloqueador de Anúncios (AdBlock)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Shield,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Bloqueador de anúncios (AdBlock)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Bloqueia anúncios intrusivos e rastreadores em tempo real",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = adBlockEnabled,
-                                onCheckedChange = onAdBlockChanged,
-                                isDarkMode = isDarkMode
+            // ---------------------------------------------------------
+            // SEÇÃO 2: NAVEGAÇÃO & BUSCA
+            // ---------------------------------------------------------
+            if (showNavigation) {
+                EditorialSection(title = "Navegação & Busca", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            EditorialSettingClickRow(
+                                icon = if (isDefaultBrowser) Icons.Rounded.CheckCircle else Icons.Rounded.Language,
+                                iconTint = if (isDefaultBrowser) ApplePalette.Green else textPrimary,
+                                squircleBg = if (isDefaultBrowser) ApplePalette.Green.copy(alpha = 0.14f) else squircleBg,
+                                title = "Navegador padrão do sistema",
+                                subtitle = if (isDefaultBrowser) "Tessera é seu navegador padrão" else "Toque para definir como padrão no Android",
+                                subtitleColor = if (isDefaultBrowser) ApplePalette.Green else textSecondary,
+                                showChevron = !isDefaultBrowser,
+                                textPrimary = textPrimary,
+                                onClick = onRequestDefaultBrowser
                             )
-                        }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
 
-                        // Bloqueador de Avisos de Cookies (LGPD)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Cookie,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFFB74D),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Bloquear avisos de cookies (LGPD)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Suprime pop-ups irritantes de aceitação de cookies",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = cookieBlockerEnabled,
-                                onCheckedChange = onCookieBlockerChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Limpar Dados de Navegação
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { showClearDataDialog = true }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.DeleteOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFF5252),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Limpar dados de navegação",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Histórico, cache de imagens e cookies salvos",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Permissões e Configurações de Sites
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onOpenSiteSettings)
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Lock,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Permissões e dados de sites",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Gerencie permissões de câmera, microfone, localização e armazenamento",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Google Safe Browsing Status
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Security,
-                                contentDescription = null,
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "Navegação Segura (Google Safe Browsing)",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Proteção em tempo real contra phishing, malwares e sites maliciosos",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Bloquear Modo Anônimo com Biometria
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Fingerprint,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF80D8FF) else Color(0xFF0078D4),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Bloquear guias anônimas ao sair",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Exigir biometria ou PIN do aparelho para desbloquear guias anônimas",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
-                                checked = incognitoBiometricLock,
-                                onCheckedChange = onIncognitoBiometricLockChanged,
-                                isDarkMode = isDarkMode
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Abrir Links em Apps Externos (Instagram, WhatsApp, X, etc.)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFFFFB74D) else Color(0xFFF57C00),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Abrir links em aplicativos externos",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Direcionar automaticamente links do Instagram, WhatsApp, YouTube, X e outros para seus aplicativos instalados",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            TesseraSwitch(
+                            EditorialSettingToggleRow(
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                                title = "Abrir links em apps instalados",
+                                subtitle = "Direciona YouTube, Instagram, WhatsApp e X para seus apps nativos",
                                 checked = openLinksInExternalApps,
                                 onCheckedChange = onOpenLinksInExternalAppsChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                isDarkMode = isDarkMode
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.PictureInPictureAlt,
+                                title = "Picture-in-Picture automático",
+                                subtitle = "Continua vídeos em janela flutuante ao minimizar o navegador",
+                                checked = isAutoPipEnabled,
+                                onCheckedChange = onAutoPipChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
                                 isDarkMode = isDarkMode
                             )
                         }
                     }
-                }
-            }
-            }
 
-            // ==========================================
-            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL
-            // ==========================================
-            if (showAi) {
-                SettingsSection(
-                title = "Inteligência Artificial",
-                headerColor = sectionHeaderColor
-            ) {
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Seleção de Provedor de IA
-                        Column(modifier = Modifier.fillMaxWidth()) {
+                    // Mecanismo de Busca
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Provedor Ativo de IA",
+                                text = "Mecanismo de Busca",
                                 fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 color = textPrimary
                             )
                             Text(
-                                text = "Motor que processa a sumarização de páginas e responde dúvidas",
+                                text = "Motor utilizado na barra de endereços e sugestões",
                                 fontSize = 12.sp,
                                 color = textSecondary
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Chip Groq
-                                val isGroq = aiProvider == AiProvider.GROQ
-                                val groqColor = Color(0xFFF55036)
-                                Box(
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            SearchEngine.entries.forEachIndexed { index, engine ->
+                                val isSelected = engine == selectedSearchEngine
+                                Row(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isGroq) groqColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f) else Color.Transparent)
-                                        .border(1.dp, if (isGroq) groqColor else dividerColor, RoundedCornerShape(10.dp))
-                                        .clickable { onAiProviderChanged(AiProvider.GROQ) }
-                                        .padding(vertical = 9.dp, horizontal = 10.dp),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) accentColor.copy(alpha = 0.10f) else Color.Transparent)
+                                        .clickable { onSearchEngineSelected(engine) }
+                                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            text = "Groq Cloud",
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isGroq) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isGroq) groqColor else textPrimary
-                                        )
-                                        Text(
-                                            text = "Llama 3.3 70B",
-                                            fontSize = 11.sp,
-                                            color = textSecondary
-                                        )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(RoundedCornerShape(9.dp))
+                                                .background(squircleBg),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Image(
+                                                painter = painterResource(id = engine.iconRes),
+                                                contentDescription = engine.displayName,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Column {
+                                            Text(
+                                                text = engine.displayName,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                                color = textPrimary
+                                            )
+                                            Text(
+                                                text = engine.homeUrl.removePrefix("https://"),
+                                                fontSize = 11.5.sp,
+                                                color = textSecondary
+                                            )
+                                        }
+                                    }
+
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .clip(CircleShape)
+                                                .background(accentColor),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = "Selecionado",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
-
-                                // Chip Gemini
-                                val isGemini = aiProvider == AiProvider.GEMINI
-                                val geminiColor = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0078D4)
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isGemini) geminiColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f) else Color.Transparent)
-                                        .border(1.dp, if (isGemini) geminiColor else dividerColor, RoundedCornerShape(10.dp))
-                                        .clickable { onAiProviderChanged(AiProvider.GEMINI) }
-                                        .padding(vertical = 9.dp, horizontal = 10.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            text = "Google Gemini",
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isGemini) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isGemini) geminiColor else textPrimary
-                                        )
-                                        Text(
-                                            text = "Gemini Flash",
-                                            fontSize = 11.sp,
-                                            color = textSecondary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Chave Groq API Card
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { showGroqKeyDialog = true }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Key,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF55036),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Chave Groq API (console.groq.com)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = if (!groqApiKey.isNullOrBlank()) "Chave ativa (Llama 3.3 70B configurado)" else "Toque para configurar sua chave gratuita",
-                                        fontSize = 12.sp,
-                                        color = if (!groqApiKey.isNullOrBlank()) Color(0xFF81C784) else textSecondary
+                                if (index < SearchEngine.entries.size - 1) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        color = dividerColor
                                     )
                                 }
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
+                    }
+                }
+            }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Chave Gemini API Card
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { showGeminiKeyDialog = true }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0078D4),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Chave Gemini API (Google AI Studio)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = if (!geminiApiKey.isNullOrBlank()) "Chave ativa (Gemini Flash configurado)" else "Toque para configurar sua chave gratuita",
-                                        fontSize = 12.sp,
-                                        color = if (!geminiApiKey.isNullOrBlank()) Color(0xFF81C784) else textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
-
-                        // Tessera AI Master Switch
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Assistente Tessera AI",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary
-                                )
-                                Text(
-                                    text = "Habilita resumos estilo Arc Search e ações contextuais",
-                                    fontSize = 12.sp,
-                                    color = textSecondary
-                                )
-                            }
-                            TesseraSwitch(
-                                checked = tesseraAiEnabled,
-                                onCheckedChange = onTesseraAiChanged,
+            // ---------------------------------------------------------
+            // SEÇÃO 3: PRIVACIDADE & SEGURANÇA
+            // ---------------------------------------------------------
+            if (showPrivacy) {
+                EditorialSection(title = "Privacidade & Segurança", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.Shield,
+                                title = "Bloqueador de anúncios e rastreadores",
+                                subtitle = "Filtra scripts invasivos e telemetria em tempo real",
+                                checked = adBlockEnabled,
+                                onCheckedChange = onAdBlockChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
                                 isDarkMode = isDarkMode
                             )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.Cookie,
+                                title = "Suprimir avisos de cookies",
+                                subtitle = "Oculta banners repetitivos de consentimento LGPD/GDPR",
+                                checked = cookieBlockerEnabled,
+                                onCheckedChange = onCookieBlockerChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                isDarkMode = isDarkMode
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.Fingerprint,
+                                title = "Trancar modo anônimo com biometria",
+                                subtitle = "Solicita impressão digital ou PIN ao retornar ao app",
+                                checked = incognitoBiometricLock,
+                                onCheckedChange = onIncognitoBiometricLockChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                isDarkMode = isDarkMode
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Lock,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Permissões e dados de sites",
+                                subtitle = "Câmera, microfone, localização, pop-ups e JavaScript por domínio",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onOpenSiteSettings
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                MonochromeSquircleIcon(
+                                    icon = Icons.Rounded.Security,
+                                    squircleBg = ApplePalette.Green.copy(alpha = 0.14f),
+                                    iconTint = ApplePalette.Green
+                                )
+                                Column {
+                                    Text(
+                                        text = "Google Safe Browsing",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Proteção ativa contra phishing e páginas maliciosas",
+                                        fontSize = 12.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.DeleteOutline,
+                                iconTint = ApplePalette.Red,
+                                squircleBg = ApplePalette.Red.copy(alpha = 0.12f),
+                                title = "Limpar dados de navegação",
+                                subtitle = "Remover histórico, cache de imagens e cookies salvos",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = ApplePalette.Red,
+                                onClick = { showClearDataDialog = true }
+                            )
                         }
                     }
                 }
             }
+
+            // ---------------------------------------------------------
+            // SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL
+            // ---------------------------------------------------------
+            if (showAi) {
+                EditorialSection(title = "Inteligência Artificial", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            EditorialSettingToggleRow(
+                                icon = Icons.Rounded.AutoAwesome,
+                                title = "Assistente Tessera AI",
+                                subtitle = "Síntese instantânea de artigos e respostas contextuais",
+                                checked = tesseraAiEnabled,
+                                onCheckedChange = onTesseraAiChanged,
+                                squircleBg = squircleBg,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                isDarkMode = isDarkMode
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            Text(
+                                text = "Motor de Inferência",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                AiProviderCard(
+                                    title = "Groq Cloud",
+                                    subtitle = "Llama 3.3 70B",
+                                    isSelected = aiProvider == AiProvider.GROQ,
+                                    accentColor = accentColor,
+                                    squircleBg = squircleBg,
+                                    cardBorder = cardBorder,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onAiProviderChanged(AiProvider.GROQ) }
+                                )
+
+                                AiProviderCard(
+                                    title = "Google Gemini",
+                                    subtitle = "Gemini Flash",
+                                    isSelected = aiProvider == AiProvider.GEMINI,
+                                    accentColor = accentColor,
+                                    squircleBg = squircleBg,
+                                    cardBorder = cardBorder,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onAiProviderChanged(AiProvider.GEMINI) }
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Key,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Chave Groq Cloud",
+                                subtitle = if (!groqApiKey.isNullOrBlank()) "Configurada • console.groq.com" else "Toque para adicionar chave gratuita",
+                                subtitleColor = if (!groqApiKey.isNullOrBlank()) ApplePalette.Green else textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = { showGroqKeyDialog = true }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Key,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Chave Google Gemini",
+                                subtitle = if (!geminiApiKey.isNullOrBlank()) "Configurada • Google AI Studio" else "Toque para adicionar chave gratuita",
+                                subtitleColor = if (!geminiApiKey.isNullOrBlank()) ApplePalette.Green else textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = { showGeminiKeyDialog = true }
+                            )
+                        }
+                    }
+                }
             }
 
-            // ==========================================
-            // SEÇÃO 5: DOWNLOADS & HISTÓRICO
-            // ==========================================
+            // ---------------------------------------------------------
+            // SEÇÃO 5: DADOS, DOWNLOADS & BACKUP
+            // ---------------------------------------------------------
             if (showDownloads) {
-                SettingsSection(
-                title = "Downloads e Dados Salvos",
-                headerColor = sectionHeaderColor
-            ) {
-                SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Hub de Downloads
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onOpenDownloads)
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Download,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF81C784) else Color(0xFF2E7D32),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Gerenciador de Downloads",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Visualizar arquivos baixados e progresso",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+                EditorialSection(title = "Dados & Armazenamento", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.History,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Histórico, Favoritos e Páginas Offline",
+                                subtitle = "Gerenciar registros de navegação e leituras salvas",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onOpenHistory
                             )
-                        }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
 
-                        // Histórico e Favoritos
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onOpenHistory)
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.History,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFF64B5F6) else Color(0xFF1976D2),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Histórico e Favoritos",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Acessar histórico de navegação, favoritos e páginas salvas",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Download,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Gerenciador de Downloads",
+                                subtitle = "Arquivos baixados no dispositivo",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onOpenDownloads
                             )
-                        }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
 
-                        // Exportar Backup Geral (JSON)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onExportBackup)
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Backup,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFFFFB74D) else Color(0xFFF57C00),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Exportar Backup Geral (JSON)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Salvar favoritos, histórico, espaços e ajustes em arquivo",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Backup,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Exportar backup completo",
+                                subtitle = "Salvar favoritos, histórico, espaços e ajustes em JSON",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onExportBackup
                             )
-                        }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = dividerColor)
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
 
-                        // Restaurar Backup Geral (JSON)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onImportBackup)
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Restore,
-                                    contentDescription = null,
-                                    tint = if (isDarkMode) Color(0xFFBA68C8) else Color(0xFF7B1FA2),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Restaurar Backup Geral (JSON)",
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Restaurar favoritos, histórico e dados de um backup .json",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Restore,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Restaurar backup",
+                                subtitle = "Importar dados a partir de um arquivo .json do Tessera",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onImportBackup
                             )
                         }
                     }
                 }
             }
-            }
 
-            // ==========================================
+            // ---------------------------------------------------------
             // SEÇÃO 6: SOBRE O TESSERA BROWSER
-            // ==========================================
+            // ---------------------------------------------------------
             if (showAbout) {
-                SettingsSection(
-                    title = "Sobre",
-                    headerColor = sectionHeaderColor
-                ) {
-                    // Card Especial: Sobre o Desenvolvedor
-                    SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                EditorialSection(title = "Sobre", kickerColor = textSecondary) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
                                 .clickable { showDeveloperScreen = true }
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1350,58 +979,45 @@ fun TesseraSettingsScreen(
                                     painter = painterResource(id = R.drawable.ic_developer_avatar),
                                     contentDescription = "Desenvolvedor",
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(42.dp)
                                         .clip(CircleShape)
-                                        .border(1.5.dp, accentColor, CircleShape)
+                                        .border(1.dp, cardBorder, CircleShape)
                                 )
                                 Column {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = "Sobre o Desenvolvedor",
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textPrimary
-                                        )
-                                        Text(
-                                            text = "✦",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = accentColor
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Filosofia de criação, arquitetura e ecossistema Tessera",
+                                        text = "Sobre o Desenvolvedor",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "Filosofia de design, arquitetura e ecossistema Tessera",
                                         fontSize = 12.sp,
                                         color = textSecondary
                                     )
                                 }
                             }
                             Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                imageVector = Icons.Rounded.ChevronRight,
                                 contentDescription = null,
                                 tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
 
-                    // Card da Identidade e Versão do Browser
-                    SettingsCard(backgroundColor = cardBg, borderColor = cardBorder) {
+                    EditorialCard(backgroundColor = cardBg, borderColor = cardBorder) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(24.dp),
+                                .padding(horizontal = 24.dp, vertical = 26.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.ic_tessera_browser_logo),
                                 contentDescription = "Tessera Browser Logo",
                                 modifier = Modifier
-                                    .size(76.dp)
+                                    .size(68.dp)
                                     .clip(AppleShapes.SquircleMedium)
                             )
                             Spacer(modifier = Modifier.height(14.dp))
@@ -1409,289 +1025,252 @@ fun TesseraSettingsScreen(
                                 painter = painterResource(id = R.drawable.ic_tessera_header_logo),
                                 contentDescription = "Tessera",
                                 colorFilter = ColorFilter.tint(textPrimary),
-                                modifier = Modifier.height(38.dp)
+                                modifier = Modifier.height(34.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "BROWSER",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 4.sp,
-                                color = ApplePalette.Teal
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Versão 3.2.0 • Tema Journal Ativado",
-                                fontSize = 12.5.sp,
                                 color = textSecondary
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Navegador ultrarrápido, seguro e focado em produtividade desenvolvido com Jetpack Compose, Kotlin e Material You no Android 15.",
+                                text = if (isDarkMode) "Versão 3.3.0 • Pure OLED" else "Versão 3.3.0 • Edição Journal",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Projetado para foco, privacidade e leitura calma.",
                                 fontSize = 12.5.sp,
                                 color = textSecondary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
             }
 
-            // Estado Vazio quando a busca não encontrar itens
+            // Estado Vazio na Busca
             if (!hasAnyResult) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(vertical = 44.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "🔍",
-                            fontSize = 32.sp
-                        )
-                        Text(
-                            text = "Nenhuma configuração encontrada",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary
-                        )
-                        Text(
-                            text = "Tente pesquisar por outros termos como tema, adblock ou busca",
-                            fontSize = 13.sp,
-                            color = textSecondary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(cardBg)
-                                .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
-                                .clickable {
-                                    searchQuery = ""
-                                    selectedCategoryIndex = 0
-                                }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = "Limpar busca",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = accentColor
-                            )
-                        }
-                    }
+                    MonochromeSquircleIcon(
+                        icon = Icons.Rounded.Search,
+                        squircleBg = squircleBg,
+                        iconTint = textSecondary
+                    )
+                    Text(
+                        text = "Nenhum ajuste encontrado",
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = "Tente buscar por tema, texto, adblock ou chave",
+                        fontSize = 12.5.sp,
+                        color = textSecondary
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
-    // DIÁLOGO DE LIMPEZA DE DADOS
+    // =========================================================
+    // MODAL EDITORIAL 1: LIMPAR DADOS DE NAVEGAÇÃO
+    // =========================================================
     if (showClearDataDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDataDialog = false },
-            title = {
-                Text(
-                    text = "Limpar dados de navegação",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Selecione quais dados você deseja remover:",
-                        fontSize = 13.sp,
-                        color = textSecondary
-                    )
+        Dialog(onDismissRequest = { showClearDataDialog = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 400.dp),
+                shape = RoundedCornerShape(26.dp),
+                color = cardBg,
+                border = BorderStroke(0.8.dp, cardBorder),
+                shadowElevation = 22.dp
+            ) {
+                Column(modifier = Modifier.padding(22.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearHistoryChecked = !clearHistoryChecked }
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Checkbox(
+                        MonochromeSquircleIcon(
+                            icon = Icons.Rounded.DeleteOutline,
+                            squircleBg = ApplePalette.Red.copy(alpha = 0.14f),
+                            iconTint = ApplePalette.Red
+                        )
+                        Column {
+                            Text(
+                                text = "Limpar dados",
+                                color = textPrimary,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Escolha o que deseja remover agora",
+                                color = textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        EditorialCheckOption(
+                            label = "Histórico de navegação",
                             checked = clearHistoryChecked,
-                            onCheckedChange = { clearHistoryChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
+                            squircleBg = squircleBg,
+                            cardBorder = cardBorder,
+                            textPrimary = textPrimary,
+                            accentColor = ApplePalette.Red,
+                            onToggle = { clearHistoryChecked = !clearHistoryChecked }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Histórico de navegação", fontSize = 14.sp)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearCacheChecked = !clearCacheChecked }
-                    ) {
-                        Checkbox(
+                        EditorialCheckOption(
+                            label = "Cache de páginas e imagens",
                             checked = clearCacheChecked,
-                            onCheckedChange = { clearCacheChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
+                            squircleBg = squircleBg,
+                            cardBorder = cardBorder,
+                            textPrimary = textPrimary,
+                            accentColor = ApplePalette.Red,
+                            onToggle = { clearCacheChecked = !clearCacheChecked }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Cache de páginas e imagens", fontSize = 14.sp)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { clearCookiesChecked = !clearCookiesChecked }
-                    ) {
-                        Checkbox(
+                        EditorialCheckOption(
+                            label = "Cookies e sessões de sites",
                             checked = clearCookiesChecked,
-                            onCheckedChange = { clearCookiesChecked = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF5252))
+                            squircleBg = squircleBg,
+                            cardBorder = cardBorder,
+                            textPrimary = textPrimary,
+                            accentColor = ApplePalette.Red,
+                            onToggle = { clearCookiesChecked = !clearCookiesChecked }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Cookies e dados de sites", fontSize = 14.sp)
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearDataDialog = false
-                        onClearBrowsingData(clearHistoryChecked, clearCookiesChecked, clearCacheChecked)
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(squircleBg)
+                                .clickable { showClearDataDialog = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Cancelar",
+                                color = textPrimary,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        val canConfirm = clearHistoryChecked || clearCacheChecked || clearCookiesChecked
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(if (canConfirm) ApplePalette.Red else ApplePalette.Red.copy(alpha = 0.35f))
+                                .clickable(enabled = canConfirm) {
+                                    showClearDataDialog = false
+                                    onClearBrowsingData(clearHistoryChecked, clearCookiesChecked, clearCacheChecked)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Limpar Agora",
+                                color = Color.White,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
-                ) {
-                    Text("Limpar agora", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDataDialog = false }) {
-                    Text("Cancelar")
                 }
             }
-        )
+        }
     }
 
-    // DIÁLOGO DA CHAVE GEMINI API
+    // =========================================================
+    // MODAL EDITORIAL 2: CHAVE GEMINI API
+    // =========================================================
     if (showGeminiKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showGeminiKeyDialog = false },
-            title = {
-                Text(
-                    text = "Chave da API Gemini",
-                    fontWeight = FontWeight.Bold
-                )
+        EditorialApiKeyDialog(
+            title = "Chave Google Gemini",
+            description = "Insira sua chave gratuita gerada no Google AI Studio (aistudio.google.com). A chave permanece armazenada apenas no seu dispositivo.",
+            placeholder = "AIzaSy...",
+            value = tempGeminiKey,
+            hasSavedKey = !geminiApiKey.isNullOrBlank(),
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            squircleBg = squircleBg,
+            textPrimary = textPrimary,
+            textSecondary = textSecondary,
+            accentColor = accentColor,
+            onValueChange = { tempGeminiKey = it },
+            onSave = {
+                onGeminiApiKeyChanged(tempGeminiKey.trim())
+                showGeminiKeyDialog = false
             },
-            text = {
-                Column {
-                    Text(
-                        text = "Configure sua chave gratuita do Google AI Studio (aistudio.google.com) para resumos Arc ultrarrápidos e sem limites.\n\nSe deixar em branco, o Tessera usará automaticamente o motor inteligente integrado.",
-                        fontSize = 13.sp,
-                        color = textSecondary
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value = tempGeminiKey,
-                        onValueChange = { tempGeminiKey = it },
-                        placeholder = { Text("Cole sua chave AIzaSy...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+            onRemove = {
+                tempGeminiKey = ""
+                onGeminiApiKeyChanged("")
+                showGeminiKeyDialog = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onGeminiApiKeyChanged(tempGeminiKey.trim())
-                        showGeminiKeyDialog = false
-                    }
-                ) {
-                    Text("Salvar")
-                }
-            },
-            dismissButton = {
-                Row {
-                    if (!geminiApiKey.isNullOrBlank()) {
-                        TextButton(
-                            onClick = {
-                                tempGeminiKey = ""
-                                onGeminiApiKeyChanged("")
-                                showGeminiKeyDialog = false
-                            }
-                        ) {
-                            Text("Remover", color = Color(0xFFE53935))
-                        }
-                    }
-                    TextButton(onClick = { showGeminiKeyDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            }
+            onDismiss = { showGeminiKeyDialog = false }
         )
     }
 
-    // DIÁLOGO DA CHAVE GROQ API
+    // =========================================================
+    // MODAL EDITORIAL 3: CHAVE GROQ CLOUD API
+    // =========================================================
     if (showGroqKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showGroqKeyDialog = false },
-            title = {
-                Text(
-                    text = "Chave da API Groq Cloud",
-                    fontWeight = FontWeight.Bold
-                )
+        EditorialApiKeyDialog(
+            title = "Chave Groq Cloud",
+            description = "Insira sua chave gratuita de console.groq.com/keys para resumos instantâneos com Llama 3.3 70B. Armazenada apenas localmente.",
+            placeholder = "gsk_...",
+            value = tempGroqKey,
+            hasSavedKey = !groqApiKey.isNullOrBlank(),
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            squircleBg = squircleBg,
+            textPrimary = textPrimary,
+            textSecondary = textSecondary,
+            accentColor = accentColor,
+            onValueChange = { tempGroqKey = it },
+            onSave = {
+                onGroqApiKeyChanged(tempGroqKey.trim())
+                showGroqKeyDialog = false
             },
-            text = {
-                Column {
-                    Text(
-                        text = "Gere sua chave gratuita em console.groq.com/keys para usar o modelo Llama 3.3 70B com velocidades de inferência extremas.\n\nO Tessera não compartilha sua chave com nenhum servidor intermediário.",
-                        fontSize = 13.sp,
-                        color = textSecondary
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value = tempGroqKey,
-                        onValueChange = { tempGroqKey = it },
-                        placeholder = { Text("Cole sua chave gsk_...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+            onRemove = {
+                tempGroqKey = ""
+                onGroqApiKeyChanged("")
+                showGroqKeyDialog = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onGroqApiKeyChanged(tempGroqKey.trim())
-                        showGroqKeyDialog = false
-                    }
-                ) {
-                    Text("Salvar")
-                }
-            },
-            dismissButton = {
-                Row {
-                    if (!groqApiKey.isNullOrBlank()) {
-                        TextButton(
-                            onClick = {
-                                tempGroqKey = ""
-                                onGroqApiKeyChanged("")
-                                showGroqKeyDialog = false
-                            }
-                        ) {
-                            Text("Remover", color = Color(0xFFE53935))
-                        }
-                    }
-                    TextButton(onClick = { showGroqKeyDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            }
+            onDismiss = { showGroqKeyDialog = false }
         )
     }
 }
 
 @Composable
-private fun SettingsSection(
+private fun EditorialSection(
     title: String,
-    headerColor: Color,
+    kickerColor: Color,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -1700,10 +1279,10 @@ private fun SettingsSection(
     ) {
         Text(
             text = title.uppercase(),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = headerColor,
-            letterSpacing = 1.sp,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = kickerColor,
+            letterSpacing = 1.1.sp,
             modifier = Modifier.padding(start = 6.dp)
         )
         content()
@@ -1711,7 +1290,7 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun SettingsCard(
+private fun EditorialCard(
     backgroundColor: Color,
     borderColor: Color,
     content: @Composable () -> Unit
@@ -1722,8 +1301,526 @@ private fun SettingsCard(
             .fillMaxWidth()
             .clip(cardShape)
             .background(backgroundColor)
-            .border(width = 1.dp, color = borderColor, shape = cardShape)
+            .border(width = 0.8.dp, color = borderColor, shape = cardShape)
     ) {
         content()
+    }
+}
+
+@Composable
+private fun MonochromeSquircleIcon(
+    icon: ImageVector,
+    squircleBg: Color,
+    iconTint: Color
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(squircleBg),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(17.dp)
+        )
+    }
+}
+
+@Composable
+private fun EditorialSettingToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    squircleBg: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    isDarkMode: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MonochromeSquircleIcon(
+                icon = icon,
+                squircleBg = squircleBg,
+                iconTint = textPrimary
+            )
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = textSecondary,
+                    lineHeight = 16.sp
+                )
+            }
+        }
+        TesseraSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            isDarkMode = isDarkMode
+        )
+    }
+}
+
+@Composable
+private fun EditorialSettingClickRow(
+    icon: ImageVector,
+    iconTint: Color,
+    squircleBg: Color,
+    title: String,
+    subtitle: String,
+    subtitleColor: Color,
+    showChevron: Boolean,
+    textPrimary: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MonochromeSquircleIcon(
+                icon = icon,
+                squircleBg = squircleBg,
+                iconTint = iconTint
+            )
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = subtitleColor,
+                    lineHeight = 16.sp
+                )
+            }
+        }
+        if (showChevron) {
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = subtitleColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThemePreviewCard(
+    title: String,
+    subtitle: String,
+    previewSurface: Color,
+    previewCard: Color,
+    previewInk: Color,
+    previewHairline: Color,
+    icon: ImageVector,
+    isSelected: Boolean,
+    accentColor: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    cardBorder: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val outerShape = RoundedCornerShape(16.dp)
+    val borderColor = if (isSelected) accentColor else cardBorder
+    val borderWidth = if (isSelected) 1.6.dp else 0.8.dp
+
+    Column(
+        modifier = modifier
+            .clip(outerShape)
+            .border(borderWidth, borderColor, outerShape)
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Mini Mockup Visual do Ambiente
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(68.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(previewSurface)
+                .border(0.7.dp, previewHairline, RoundedCornerShape(11.dp))
+                .padding(10.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 26.dp, height = 5.dp)
+                            .clip(CircleShape)
+                            .background(previewInk.copy(alpha = 0.80f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(width = 14.dp, height = 5.dp)
+                            .clip(CircleShape)
+                            .background(previewInk.copy(alpha = 0.25f))
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(previewCard)
+                        .border(0.6.dp, previewHairline, RoundedCornerShape(7.dp))
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.58f)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(previewInk.copy(alpha = 0.45f))
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isSelected) accentColor else textSecondary,
+                    modifier = Modifier.size(15.dp)
+                )
+                Column {
+                    Text(
+                        text = title,
+                        color = textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = subtitle,
+                        color = textSecondary,
+                        fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(19.dp)
+                        .clip(CircleShape)
+                        .background(accentColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Ativo",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiProviderCard(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    accentColor: Color,
+    squircleBg: Color,
+    cardBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(13.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(if (isSelected) accentColor.copy(alpha = 0.11f) else squircleBg)
+            .border(
+                width = if (isSelected) 1.3.dp else 0.7.dp,
+                color = if (isSelected) accentColor else cardBorder,
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isSelected) accentColor else textPrimary
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditorialCheckOption(
+    label: String,
+    checked: Boolean,
+    squircleBg: Color,
+    cardBorder: Color,
+    textPrimary: Color,
+    accentColor: Color,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(13.dp))
+            .background(squircleBg)
+            .border(
+                width = 0.7.dp,
+                color = if (checked) accentColor.copy(alpha = 0.45f) else cardBorder,
+                shape = RoundedCornerShape(13.dp)
+            )
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            color = textPrimary,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (checked) accentColor else Color.Transparent)
+                .border(
+                    width = 1.2.dp,
+                    color = if (checked) accentColor else cardBorder,
+                    shape = RoundedCornerShape(6.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (checked) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorialApiKeyDialog(
+    title: String,
+    description: String,
+    placeholder: String,
+    value: String,
+    hasSavedKey: Boolean,
+    cardBg: Color,
+    cardBorder: Color,
+    squircleBg: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentColor: Color,
+    onValueChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 400.dp),
+            shape = RoundedCornerShape(26.dp),
+            color = cardBg,
+            border = BorderStroke(0.8.dp, cardBorder),
+            shadowElevation = 22.dp
+        ) {
+            Column(modifier = Modifier.padding(22.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MonochromeSquircleIcon(
+                        icon = Icons.Rounded.Key,
+                        squircleBg = squircleBg,
+                        iconTint = textPrimary
+                    )
+                    Text(
+                        text = title,
+                        color = textPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = description,
+                    color = textSecondary,
+                    fontSize = 12.5.sp,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(squircleBg)
+                        .border(0.8.dp, cardBorder, RoundedCornerShape(13.dp))
+                        .padding(horizontal = 13.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = textSecondary,
+                            fontSize = 13.5.sp
+                        )
+                    }
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = textPrimary,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        cursorBrush = SolidColor(accentColor),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (hasSavedKey) {
+                        Box(
+                            modifier = Modifier
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(ApplePalette.Red.copy(alpha = 0.12f))
+                                .clickable(onClick = onRemove)
+                                .padding(horizontal = 13.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Remover",
+                                color = ApplePalette.Red,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(squircleBg)
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Cancelar",
+                            color = textPrimary,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(accentColor)
+                            .clickable(onClick = onSave),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Salvar",
+                            color = Color.White,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
     }
 }

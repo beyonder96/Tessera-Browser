@@ -2,118 +2,118 @@ package com.tessera.browser.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AppShortcut
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.OfflinePin
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
-import com.tessera.browser.data.AvailableWallpapers
-import com.tessera.browser.data.SearchEngine
-import com.tessera.browser.data.WallpaperTheme
 import com.tessera.browser.ui.theme.ApplePalette
-import com.tessera.browser.ui.theme.AppleShapes
 
 /**
- * Painel de Configurações Rápidas (Quick Settings BottomSheet).
- * Limpo, focado e direto ao ponto — inspirado nos melhores navegadores modernos (Opera, Samsung Internet, Arc).
- * Contém alternâncias imediatas (Modo Escuro, Desktop, AdBlock, Cookies), ações contextuais da página ativa,
- * personalização rápida de papel de parede e atalho direto para a Tela Completa de Configurações.
+ * Menu Rápido Editorial — Floating Bento Card (iOS 18 / Arc Edition).
+ *
+ * Cartão flutuante destacado das bordas (`28.dp`) com estética monocromática
+ * calibrada para os temas Journal Claro (#FCFBF7) e Pure OLED Escuro (#141416),
+ * sem rolagem horizontal e sem switches gigantes.
  */
 @Composable
 fun QuickSettingsPanel(
     isDarkMode: Boolean,
+    isIncognito: Boolean = false,
     forceDarkPages: Boolean,
-    showWallpaper: Boolean,
-    selectedWallpaperId: String,
-    customWallpaperUri: String? = null,
-    showFavoritesBar: Boolean = true,
-    tesseraAiEnabled: Boolean = true,
-    aiToolbarButton: Boolean = true,
-    aiTextHighlightPrompts: Boolean = true,
-    showSidebar: Boolean = false,
-    autoHideSidebar: Boolean = true,
     adBlockEnabled: Boolean = true,
     isDesktopMode: Boolean = false,
     cookieBlockerEnabled: Boolean = true,
     isWebPageActive: Boolean = false,
-    showWeatherWidget: Boolean = true,
-    showQuotesWidget: Boolean = true,
+    currentUrl: String = "",
+    isSecureSite: Boolean = true,
+    canGoBack: Boolean = false,
+    canGoForward: Boolean = false,
+    isBookmarked: Boolean = false,
+    isReaderModeActive: Boolean = false,
+    isListeningPage: Boolean = false,
+    isVideoPlaying: Boolean = false,
+    pageTextZoom: Int = 100,
+    privacyBlockedCount: Int = 0,
+    onGoBack: () -> Unit = {},
+    onGoForward: () -> Unit = {},
+    onReload: () -> Unit = {},
+    onToggleBookmark: () -> Unit = {},
+    onListenPage: () -> Unit = {},
+    onOpenAi: () -> Unit = {},
+    onToggleIncognito: () -> Unit = {},
+    onIncreaseTextZoom: () -> Unit = {},
+    onDecreaseTextZoom: () -> Unit = {},
+    onResetTextZoom: () -> Unit = {},
     onDarkModeChanged: (Boolean) -> Unit,
     onForceDarkPagesChanged: (Boolean) -> Unit,
-    onShowWallpaperChanged: (Boolean) -> Unit,
-    onSelectWallpaper: (String) -> Unit,
-    onUploadWallpaper: () -> Unit = {},
-    onShowFavoritesBarChanged: (Boolean) -> Unit = {},
-    onShowWeatherWidgetChanged: (Boolean) -> Unit = {},
-    onShowQuotesWidgetChanged: (Boolean) -> Unit = {},
-    onTesseraAiChanged: (Boolean) -> Unit = {},
-    onAiToolbarButtonChanged: (Boolean) -> Unit = {},
-    onAiTextHighlightPromptsChanged: (Boolean) -> Unit = {},
-    onShowSidebarChanged: (Boolean) -> Unit = {},
-    onAutoHideSidebarChanged: (Boolean) -> Unit = {},
     onAdBlockChanged: (Boolean) -> Unit,
     onDesktopModeChanged: (Boolean) -> Unit = {},
     onCookieBlockerChanged: (Boolean) -> Unit = {},
@@ -126,619 +126,1029 @@ fun QuickSettingsPanel(
     onTranslatePage: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {},
     onOpenPrivacyDashboard: () -> Unit = {},
-    selectedSearchEngine: SearchEngine = SearchEngine.GOOGLE,
-    onSearchEngineSelected: (SearchEngine) -> Unit = {},
-    onClearBrowsingData: (clearHistory: Boolean, clearCookies: Boolean, clearCache: Boolean) -> Unit = { _, _, _ -> },
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit = {},
     onOpenReaderMode: () -> Unit = {},
     onOpenFullSettings: () -> Unit = {},
-    isAutoPipEnabled: Boolean = true,
-    onAutoPipChanged: (Boolean) -> Unit = {},
     onEnterPip: () -> Unit = {},
     onOpenInExternalApp: () -> Unit = {},
-    geminiApiKey: String? = null,
-    onGeminiApiKeyChanged: (String) -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val panelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    val verticalScrollState = rememberScrollState()
+    val useDarkTokens = isDarkMode || isIncognito
 
-    val panelBg = if (isDarkMode) ApplePalette.OledSurface else ApplePalette.MatteSurface
-    val panelBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
+    val cardBg = when {
+        isIncognito -> Color(0xFF151122)
+        isDarkMode -> ApplePalette.DarkSurface
+        else -> Color(0xFFFCFBF7)
+    }
+    val cardBorder = when {
+        isIncognito -> ApplePalette.Purple.copy(alpha = 0.28f)
+        isDarkMode -> ApplePalette.DarkHairline
+        else -> ApplePalette.LightHairline
+    }
+    val tileBg = when {
+        isIncognito -> Color(0xFF1F1932)
+        isDarkMode -> ApplePalette.DarkElevated
+        else -> Color(0xFFF2EEE3)
+    }
+    val tileBorder = when {
+        isIncognito -> ApplePalette.Purple.copy(alpha = 0.18f)
+        isDarkMode -> Color.White.copy(alpha = 0.06f)
+        else -> Color(0xFFE2DDD0)
+    }
+    val textPrimary = if (useDarkTokens) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val textSecondary = if (useDarkTokens) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val accentColor = when {
+        isIncognito -> ApplePalette.Purple
+        isDarkMode -> ApplePalette.BlueDark
+        else -> ApplePalette.Blue
+    }
 
-    val titleColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
-    val iconButtonTint = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-    val primaryTextColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
-    val secondaryTextColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-    val sectionHeaderColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
-    val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
-    val accentColor = if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue
+    val cleanDomain = remember(currentUrl, isWebPageActive) {
+        if (!isWebPageActive || currentUrl.isBlank()) {
+            "Tessera Zen"
+        } else {
+            try {
+                val uri = android.net.Uri.parse(
+                    if (currentUrl.startsWith("http")) currentUrl else "https://$currentUrl"
+                )
+                uri.host?.removePrefix("www.") ?: currentUrl.substringBefore('/')
+            } catch (e: Exception) {
+                currentUrl
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
+            shape = RoundedCornerShape(28.dp),
+            color = cardBg,
+            border = BorderStroke(0.8.dp, cardBorder),
+            shadowElevation = if (useDarkTokens) 24.dp else 14.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Drag Handle Minimalista
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .size(width = 34.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(textSecondary.copy(alpha = 0.25f))
+                )
+
+                // =========================================================
+                // 1. HEADER CONTEXTUAL: DOMÍNIO/PERMISSÕES + ZOOM A-/A+ + ⚙️
+                // =========================================================
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Domínio Ativo & Permissões do Site
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(tileBg)
+                            .border(0.6.dp, tileBorder, RoundedCornerShape(14.dp))
+                            .clickable {
+                                onDismiss()
+                                if (isWebPageActive) onOpenSiteSettings() else onOpenPrivacyDashboard()
+                            }
+                            .padding(horizontal = 11.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                !isWebPageActive -> Icons.Rounded.Shield
+                                isSecureSite -> Icons.Rounded.Lock
+                                else -> Icons.Rounded.LockOpen
+                            },
+                            contentDescription = "Segurança e permissões",
+                            tint = when {
+                                !isWebPageActive -> accentColor
+                                isSecureSite -> ApplePalette.Green
+                                else -> ApplePalette.Red
+                            },
+                            modifier = Modifier.size(15.dp)
+                        )
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = cleanDomain,
+                                color = textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = if (isWebPageActive) {
+                                    "Permissões do site"
+                                } else if (privacyBlockedCount > 0) {
+                                    "$privacyBlockedCount rastreadores barrados"
+                                } else {
+                                    "Proteção ativa"
+                                },
+                                color = textSecondary,
+                                fontSize = 10.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = textSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    // Pílula Inline de Zoom de Texto (A- | 100% | A+)
+                    Row(
+                        modifier = Modifier
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(tileBg)
+                            .border(0.6.dp, tileBorder, RoundedCornerShape(14.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 32.dp, height = 40.dp)
+                                .clickable(enabled = pageTextZoom > 60) { onDecreaseTextZoom() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "A-",
+                                color = if (pageTextZoom > 60) textPrimary else textSecondary.copy(alpha = 0.4f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .height(40.dp)
+                                .clickable { onResetTextZoom() }
+                                .padding(horizontal = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${pageTextZoom}%",
+                                color = if (pageTextZoom != 100) accentColor else textSecondary,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(width = 32.dp, height = 40.dp)
+                                .clickable(enabled = pageTextZoom < 200) { onIncreaseTextZoom() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "A+",
+                                color = if (pageTextZoom < 200) textPrimary else textSecondary.copy(alpha = 0.4f),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Botão Engrenagem -> Configurações Completas
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(tileBg)
+                            .border(0.6.dp, tileBorder, RoundedCornerShape(14.dp))
+                            .clickable {
+                                onDismiss()
+                                onOpenFullSettings()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "Configurações",
+                            tint = textPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // =========================================================
+                // 2. NAVEGAÇÃO TÁTIL: 5 BOTÕES CIRCULARES DE TOQUE RÁPIDO
+                // =========================================================
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TactileNavButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        label = "Voltar",
+                        enabled = canGoBack,
+                        isActive = false,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onGoBack()
+                        }
+                    )
+                    TactileNavButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowForward,
+                        label = "Avançar",
+                        enabled = canGoForward,
+                        isActive = false,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onGoForward()
+                        }
+                    )
+                    TactileNavButton(
+                        icon = Icons.Rounded.Refresh,
+                        label = "Recarregar",
+                        enabled = isWebPageActive,
+                        isActive = false,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onReload()
+                        }
+                    )
+                    TactileNavButton(
+                        icon = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        label = if (isBookmarked) "Salvo" else "Favoritar",
+                        enabled = isWebPageActive,
+                        isActive = isBookmarked && isWebPageActive,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onToggleBookmark()
+                        }
+                    )
+                    TactileNavButton(
+                        icon = Icons.Rounded.Headphones,
+                        label = if (isListeningPage) "Ouvindo" else "Ouvir",
+                        enabled = isWebPageActive,
+                        isActive = isListeningPage,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onListenPage()
+                        }
+                    )
+                }
+
+                // =========================================================
+                // 3. DOIS HERO CARDS LADO A LADO: TESSERA AI & ANÔNIMO
+                // =========================================================
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Hero Card 1: Tessera AI
+                    HeroFeatureCard(
+                        icon = Icons.Rounded.AutoAwesome,
+                        title = "Tessera AI",
+                        subtitle = if (isWebPageActive) "Resumir & perguntar" else "Síntese inteligente",
+                        isActive = false,
+                        isHighlightAccent = true,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onOpenAi()
+                        }
+                    )
+
+                    // Hero Card 2: Modo Anônimo
+                    HeroFeatureCard(
+                        icon = Icons.Rounded.VisibilityOff,
+                        title = "Modo Anônimo",
+                        subtitle = if (isIncognito) "Ativo • Sem rastros" else "Navegação privada",
+                        isActive = isIncognito,
+                        isHighlightAccent = false,
+                        tileBg = tileBg,
+                        tileBorder = tileBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        accentColor = ApplePalette.Purple,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onToggleIncognito()
+                        }
+                    )
+                }
+
+                // =========================================================
+                // 4. GRADE BENTO MONOCROMÁTICA 4x2 (SEM ROLAGEM HORIZONTAL)
+                // =========================================================
+                val gridRow1 = remember(isWebPageActive, isReaderModeActive, isDesktopMode) {
+                    listOf(
+                        BentoActionSpec(
+                            icon = Icons.Rounded.Share,
+                            label = "Compartilhar",
+                            enabled = isWebPageActive,
+                            isActive = false,
+                            action = ActionKind.SHARE
+                        ),
+                        BentoActionSpec(
+                            icon = Icons.AutoMirrored.Rounded.MenuBook,
+                            label = "Leitura",
+                            enabled = isWebPageActive,
+                            isActive = isReaderModeActive,
+                            action = ActionKind.READER
+                        ),
+                        BentoActionSpec(
+                            icon = Icons.Rounded.Search,
+                            label = "Buscar",
+                            enabled = isWebPageActive,
+                            isActive = false,
+                            action = ActionKind.FIND
+                        ),
+                        BentoActionSpec(
+                            icon = Icons.Rounded.Computer,
+                            label = "Versão PC",
+                            enabled = true,
+                            isActive = isDesktopMode,
+                            action = ActionKind.DESKTOP
+                        )
+                    )
+                }
+
+                val gridRow2 = remember(isWebPageActive, isVideoPlaying) {
+                    listOf(
+                        BentoActionSpec(
+                            icon = Icons.Rounded.Translate,
+                            label = "Traduzir",
+                            enabled = isWebPageActive,
+                            isActive = false,
+                            action = ActionKind.TRANSLATE
+                        ),
+                        BentoActionSpec(
+                            icon = Icons.Rounded.Print,
+                            label = "Salvar PDF",
+                            enabled = isWebPageActive,
+                            isActive = false,
+                            action = ActionKind.PRINT
+                        ),
+                        BentoActionSpec(
+                            icon = Icons.Rounded.OfflinePin,
+                            label = "Offline",
+                            enabled = isWebPageActive,
+                            isActive = false,
+                            action = ActionKind.OFFLINE
+                        ),
+                        if (isVideoPlaying) {
+                            BentoActionSpec(
+                                icon = Icons.Rounded.PictureInPictureAlt,
+                                label = "Vídeo PiP",
+                                enabled = true,
+                                isActive = true,
+                                action = ActionKind.PIP
+                            )
+                        } else {
+                            BentoActionSpec(
+                                icon = Icons.Rounded.QrCode2,
+                                label = "Código QR",
+                                enabled = isWebPageActive,
+                                isActive = false,
+                                action = ActionKind.QR
+                            )
+                        }
+                    )
+                }
+
+                val handleBentoAction: (ActionKind) -> Unit = { kind ->
+                    when (kind) {
+                        ActionKind.SHARE -> { onDismiss(); onSharePage() }
+                        ActionKind.READER -> { onDismiss(); onOpenReaderMode() }
+                        ActionKind.FIND -> { onDismiss(); onFindInPage() }
+                        ActionKind.DESKTOP -> { onDesktopModeChanged(!isDesktopMode) }
+                        ActionKind.TRANSLATE -> { onDismiss(); onTranslatePage() }
+                        ActionKind.PRINT -> { onDismiss(); onPrintPage() }
+                        ActionKind.OFFLINE -> { onDismiss(); onSavePageOffline() }
+                        ActionKind.PIP -> { onDismiss(); onEnterPip() }
+                        ActionKind.QR -> { onDismiss(); onShowQrCode() }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gridRow1.forEach { spec ->
+                            BentoGridTile(
+                                spec = spec,
+                                tileBg = tileBg,
+                                tileBorder = tileBorder,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                accentColor = accentColor,
+                                modifier = Modifier.weight(1f),
+                                onClick = { handleBentoAction(spec.action) }
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gridRow2.forEach { spec ->
+                            BentoGridTile(
+                                spec = spec,
+                                tileBg = tileBg,
+                                tileBorder = tileBorder,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                accentColor = accentColor,
+                                modifier = Modifier.weight(1f),
+                                onClick = { handleBentoAction(spec.action) }
+                            )
+                        }
+                    }
+                }
+
+                // Pílulas Contextuais Discretas da Página Ativa (Atalho Home & Abrir em App)
+                if (isWebPageActive) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SlimContextPill(
+                            icon = Icons.Rounded.AppShortcut,
+                            label = "Adicionar à Tela Inicial",
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                onDismiss()
+                                onAddToHomeScreen()
+                            }
+                        )
+                        SlimContextPill(
+                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                            label = "Abrir no App",
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                onDismiss()
+                                onOpenInExternalApp()
+                            }
+                        )
+                    }
+                }
+
+                // =========================================================
+                // 5. TOGGLES TÁTEIS BENTO 2x2 (SEM SWITCHES GIGANTES)
+                // =========================================================
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        BentoToggleCard(
+                            icon = Icons.Rounded.Shield,
+                            title = "AdBlock",
+                            stateText = if (adBlockEnabled) "Ativo" else "Inativo",
+                            checked = adBlockEnabled,
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            accentColor = accentColor,
+                            modifier = Modifier.weight(1f),
+                            onToggle = { onAdBlockChanged(!adBlockEnabled) }
+                        )
+                        BentoToggleCard(
+                            icon = if (isDarkMode) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
+                            title = "Tema",
+                            stateText = if (isDarkMode) "Pure OLED" else "Journal",
+                            checked = isDarkMode,
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            accentColor = accentColor,
+                            modifier = Modifier.weight(1f),
+                            onToggle = { onDarkModeChanged(!isDarkMode) }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        BentoToggleCard(
+                            icon = Icons.Rounded.DarkMode,
+                            title = "Sites Escuros",
+                            stateText = if (forceDarkPages) "Forçado" else "Padrão",
+                            checked = forceDarkPages,
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            accentColor = accentColor,
+                            modifier = Modifier.weight(1f),
+                            onToggle = { onForceDarkPagesChanged(!forceDarkPages) }
+                        )
+                        BentoToggleCard(
+                            icon = Icons.Rounded.Cookie,
+                            title = "Anti-Cookies",
+                            stateText = if (cookieBlockerEnabled) "Ativo" else "Inativo",
+                            checked = cookieBlockerEnabled,
+                            tileBg = tileBg,
+                            tileBorder = tileBorder,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            accentColor = accentColor,
+                            modifier = Modifier.weight(1f),
+                            onToggle = { onCookieBlockerChanged(!cookieBlockerEnabled) }
+                        )
+                    }
+                }
+
+                // =========================================================
+                // 6. RODAPÉ UNIFICADO: HISTÓRICO & FAVORITOS • DOWNLOADS • ESCUDO
+                // =========================================================
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(tileBg)
+                        .border(0.6.dp, tileBorder, RoundedCornerShape(15.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FooterSegmentButton(
+                        icon = Icons.Rounded.History,
+                        label = "Histórico",
+                        textColor = textPrimary,
+                        iconTint = textSecondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onOpenHistory()
+                        }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(0.8.dp)
+                            .height(20.dp)
+                            .background(cardBorder)
+                    )
+
+                    FooterSegmentButton(
+                        icon = Icons.Rounded.Download,
+                        label = "Downloads",
+                        textColor = textPrimary,
+                        iconTint = textSecondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onOpenDownloads()
+                        }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(0.8.dp)
+                            .height(20.dp)
+                            .background(cardBorder)
+                    )
+
+                    FooterSegmentButton(
+                        icon = Icons.Rounded.Shield,
+                        label = "Escudo",
+                        textColor = textPrimary,
+                        iconTint = textSecondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onDismiss()
+                            onOpenPrivacyDashboard()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private enum class ActionKind {
+    SHARE, READER, FIND, DESKTOP, TRANSLATE, PRINT, OFFLINE, PIP, QR
+}
+
+@Immutable
+private data class BentoActionSpec(
+    val icon: ImageVector,
+    val label: String,
+    val enabled: Boolean,
+    val isActive: Boolean,
+    val action: ActionKind
+)
+
+@Composable
+private fun TactileNavButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    isActive: Boolean,
+    tileBg: Color,
+    tileBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val bgColor = if (isActive) accentColor.copy(alpha = 0.15f) else tileBg
+    val borderColor = if (isActive) accentColor.copy(alpha = 0.50f) else tileBorder
+    val iconColor = when {
+        !enabled -> textSecondary.copy(alpha = 0.35f)
+        isActive -> accentColor
+        else -> textPrimary
+    }
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .clip(panelShape)
-            .background(panelBg)
-            .border(width = 1.dp, color = panelBorder, shape = panelShape)
-            .padding(horizontal = 20.dp)
-            .verticalScroll(verticalScrollState)
+            .alpha(if (enabled) 1f else 0.55f)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // DRAG HANDLE & HEADER
-        Spacer(modifier = Modifier.height(10.dp))
         Box(
             modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .size(width = 36.dp, height = 4.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.15f))
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .background(bgColor)
+                .border(0.7.dp, borderColor, CircleShape),
+            contentAlignment = Alignment.Center
         ) {
-            Column {
-                Text(
-                    text = "Ações & Ferramentas",
-                    color = titleColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (isWebPageActive) "Página ativa & navegador" else "Navegador & ferramentas rápidas",
-                    color = sectionHeaderColor,
-                    fontSize = 12.sp
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Atalho para Configurações Completas
-                IconButton(
-                    onClick = {
-                        onDismiss()
-                        onOpenFullSettings()
-                    },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = "Todas as configurações",
-                        tint = accentColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Fechar
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Fechar",
-                        tint = iconButtonTint,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // CARD DE NAVEGADOR PADRÃO (SE AINDA NÃO FOR O PADRÃO DO ANDROID)
-        val context = LocalContext.current
-        val isDefaultBrowser = remember(context) { com.tessera.browser.util.DefaultBrowserHelper.isDefaultBrowser(context) }
-        if (!isDefaultBrowser) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(cardBg)
-                    .border(1.dp, panelBorder, RoundedCornerShape(14.dp))
-                    .clickable {
-                        onDismiss()
-                        com.tessera.browser.util.DefaultBrowserHelper.requestDefaultBrowser(context)
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Shield,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Definir como Navegador Padrão",
-                            color = primaryTextColor,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Abra links externos diretamente no Tessera",
-                            color = secondaryTextColor,
-                            fontSize = 11.5.sp
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = secondaryTextColor,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-        }
-
-        // 1. LINHA DE AÇÕES RÁPIDAS (ESTILO SHARE SHEET)
-        Text(
-            text = "AÇÕES RÁPIDAS",
-            color = sectionHeaderColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        val actionItems = buildList {
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.Share,
-                    label = "Compartilhar",
-                    tint = Color(0xFF64B5F6),
-                    onClick = {
-                        onDismiss()
-                        onSharePage()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.AutoMirrored.Rounded.MenuBook,
-                    label = "Leitura",
-                    tint = Color(0xFFFFB74D),
-                    onClick = {
-                        onDismiss()
-                        onOpenReaderMode()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.Search,
-                    label = "Buscar",
-                    tint = Color(0xFF81C784),
-                    onClick = {
-                        onDismiss()
-                        onFindInPage()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.Computer,
-                    label = if (isDesktopMode) "Versão PC (Ativo)" else "Versão PC",
-                    tint = if (isDesktopMode) accentColor else Color(0xFFBA68C8),
-                    isActive = isDesktopMode,
-                    onClick = {
-                        onDesktopModeChanged(!isDesktopMode)
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.Translate,
-                    label = "Traduzir",
-                    tint = Color(0xFF26A69A),
-                    onClick = {
-                        onDismiss()
-                        onTranslatePage()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.OfflinePin,
-                    label = "Salvar Offline",
-                    tint = primaryTextColor,
-                    onClick = {
-                        onDismiss()
-                        onSavePageOffline()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.Print,
-                    label = "Salvar PDF",
-                    tint = Color(0xFFFF8A65),
-                    onClick = {
-                        onDismiss()
-                        onPrintPage()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.AppShortcut,
-                    label = "Atalho Home",
-                    tint = Color(0xFF4DD0E1),
-                    onClick = {
-                        onDismiss()
-                        onAddToHomeScreen()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.Rounded.QrCode2,
-                    label = "Código QR",
-                    tint = Color(0xFF90A4AE),
-                    onClick = {
-                        onDismiss()
-                        onShowQrCode()
-                    }
-                )
-            )
-            add(
-                QuickActionItem(
-                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                    label = "Abrir no App",
-                    tint = Color(0xFFFFD54F),
-                    onClick = {
-                        onDismiss()
-                        onOpenInExternalApp()
-                    }
-                )
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            actionItems.forEach { action ->
-                QuickActionTile(
-                    item = action,
-                    cardBg = cardBg,
-                    textColor = primaryTextColor,
-                    borderColor = panelBorder
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-        SettingsDivider(isDarkMode = isDarkMode)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 2. FERRAMENTAS E PROTEÇÃO (ESTILO TABELA AGRUPADA NATIVA)
-        Text(
-            text = "FERRAMENTAS & PROTEÇÃO",
-            color = sectionHeaderColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .border(1.dp, panelBorder, RoundedCornerShape(16.dp))
-        ) {
-            // AdBlock
-            QuickSettingToggleRow(
-                icon = Icons.Rounded.Shield,
-                iconTint = if (adBlockEnabled) Color(0xFF64B5F6) else sectionHeaderColor,
-                title = "Bloqueador de Anúncios",
-                subtitle = if (adBlockEnabled) "Ativo • Rastreadores bloqueados" else "Desativado",
-                checked = adBlockEnabled,
-                onCheckedChange = onAdBlockChanged,
-                isDarkMode = isDarkMode
-            )
-
-            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
-
-            // Modo Escuro
-            QuickSettingToggleRow(
-                icon = if (isDarkMode) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
-                iconTint = if (isDarkMode) Color(0xFFFFA726) else Color(0xFFF57C00),
-                title = "Tema Escuro OLED",
-                subtitle = if (isDarkMode) "Ativo • Preto absoluto" else "Modo claro ativo",
-                checked = isDarkMode,
-                onCheckedChange = onDarkModeChanged,
-                isDarkMode = isDarkMode
-            )
-
-            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
-
-            // Forçar Dark Mode em Sites
-            QuickSettingToggleRow(
-                icon = Icons.Rounded.DarkMode,
-                iconTint = if (forceDarkPages) Color(0xFFBA68C8) else sectionHeaderColor,
-                title = "Forçar Modo Escuro em Sites",
-                subtitle = if (forceDarkPages) "Invertendo páginas web claras" else "Padrão do site",
-                checked = forceDarkPages,
-                onCheckedChange = onForceDarkPagesChanged,
-                isDarkMode = isDarkMode
-            )
-
-            HorizontalDivider(thickness = 0.8.dp, color = panelBorder)
-
-            // Bloquear Avisos de Cookies
-            QuickSettingToggleRow(
-                icon = Icons.Rounded.Cookie,
-                iconTint = if (cookieBlockerEnabled) Color(0xFFFFB74D) else sectionHeaderColor,
-                title = "Bloquear Avisos de Cookies",
-                subtitle = if (cookieBlockerEnabled) "Ocultando popups LGPD/GDPR" else "Padrão",
-                checked = cookieBlockerEnabled,
-                onCheckedChange = onCookieBlockerChanged,
-                isDarkMode = isDarkMode
-            )
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // 3. ATALHOS RÁPIDOS (Histórico, Downloads, Privacidade)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            QuickNavButton(
-                icon = Icons.Rounded.History,
-                label = "Histórico",
-                cardBg = cardBg,
-                borderColor = panelBorder,
-                tint = Color(0xFF64B5F6),
-                textColor = primaryTextColor,
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    onDismiss()
-                    onOpenHistory()
-                }
-            )
-
-            QuickNavButton(
-                icon = Icons.Rounded.Download,
-                label = "Downloads",
-                cardBg = cardBg,
-                borderColor = panelBorder,
-                tint = Color(0xFF81C784),
-                textColor = primaryTextColor,
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    onDismiss()
-                    onOpenDownloads()
-                }
-            )
-
-            QuickNavButton(
-                icon = Icons.Rounded.Shield,
-                label = "Privacidade",
-                cardBg = cardBg,
-                borderColor = panelBorder,
-                tint = Color(0xFF00E676),
-                textColor = primaryTextColor,
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    onDismiss()
-                    onOpenPrivacyDashboard()
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // 4. BOTÃO ELEGANTE: TODAS AS CONFIGURAÇÕES
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .border(1.dp, panelBorder, RoundedCornerShape(16.dp))
-                .clickable {
-                    onDismiss()
-                    onOpenFullSettings()
-                }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(accentColor.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Column {
-                    Text(
-                        text = "Todas as Configurações",
-                        color = primaryTextColor,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Buscador, papéis de parede, IA e personalização",
-                        color = sectionHeaderColor,
-                        fontSize = 11.5.sp
-                    )
-                }
-            }
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = null,
-                tint = secondaryTextColor,
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconColor,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+        Text(
+            text = label,
+            color = if (isActive) accentColor else textSecondary,
+            fontSize = 10.5.sp,
+            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun HeroFeatureCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    isActive: Boolean,
+    isHighlightAccent: Boolean,
+    tileBg: Color,
+    tileBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val bgColor = when {
+        isActive -> accentColor.copy(alpha = 0.16f)
+        isHighlightAccent -> accentColor.copy(alpha = 0.08f)
+        else -> tileBg
+    }
+    val border = when {
+        isActive -> accentColor.copy(alpha = 0.55f)
+        isHighlightAccent -> accentColor.copy(alpha = 0.28f)
+        else -> tileBorder
+    }
+    val squircleBg = when {
+        isActive -> accentColor
+        isHighlightAccent -> accentColor.copy(alpha = 0.16f)
+        else -> textPrimary.copy(alpha = 0.07f)
+    }
+    val iconTint = when {
+        isActive -> Color.White
+        isHighlightAccent -> accentColor
+        else -> textPrimary
+    }
+
+    Row(
+        modifier = modifier
+            .height(58.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bgColor)
+            .border(0.8.dp, border, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(squircleBg),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = iconTint,
                 modifier = Modifier.size(18.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
-    }
-}
-
-private data class QuickActionItem(
-    val icon: ImageVector,
-    val label: String,
-    val tint: Color,
-    val isActive: Boolean = false,
-    val onClick: () -> Unit
-)
-
-@Composable
-private fun QuickActionTile(
-    item: QuickActionItem,
-    cardBg: Color,
-    textColor: Color,
-    borderColor: Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clickable(onClick = item.onClick)
-            .padding(vertical = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (item.isActive) item.tint.copy(alpha = 0.2f) else cardBg)
-                .border(
-                    width = if (item.isActive) 1.5.dp else 1.dp,
-                    color = if (item.isActive) item.tint else borderColor,
-                    shape = RoundedCornerShape(16.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.label,
-                tint = item.tint,
-                modifier = Modifier.size(24.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (isActive) accentColor else textPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                color = textSecondary,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = item.label,
-            color = textColor,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1
-        )
     }
 }
 
 @Composable
-private fun QuickSettingToggleRow(
-    icon: ImageVector,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    isDarkMode: Boolean
+private fun BentoGridTile(
+    spec: BentoActionSpec,
+    tileBg: Color,
+    tileBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    val bgColor = if (spec.isActive) accentColor.copy(alpha = 0.15f) else tileBg
+    val borderColor = if (spec.isActive) accentColor.copy(alpha = 0.50f) else tileBorder
+    val iconColor = when {
+        !spec.enabled -> textSecondary.copy(alpha = 0.38f)
+        spec.isActive -> accentColor
+        else -> textPrimary
+    }
+
+    Column(
+        modifier = modifier
+            .height(64.dp)
+            .alpha(if (spec.enabled) 1f else 0.52f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .border(0.7.dp, borderColor, RoundedCornerShape(16.dp))
+            .clickable(enabled = spec.enabled, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(iconTint.copy(alpha = if (isDarkMode) 0.18f else 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    color = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = subtitle,
-                    color = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary,
-                    fontSize = 11.sp
-                )
-            }
-        }
-        TesseraSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            isDarkMode = isDarkMode
+        Icon(
+            imageVector = spec.icon,
+            contentDescription = spec.label,
+            tint = iconColor,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(
+            text = spec.label,
+            color = if (spec.isActive) accentColor else textPrimary,
+            fontSize = 10.5.sp,
+            fontWeight = if (spec.isActive) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
-private fun QuickNavButton(
+private fun SlimContextPill(
     icon: ImageVector,
     label: String,
-    cardBg: Color,
-    borderColor: Color,
-    tint: Color,
-    textColor: Color,
+    tileBg: Color,
+    tileBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(cardBg)
-            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .height(34.dp)
+            .clip(RoundedCornerShape(11.dp))
+            .background(tileBg)
+            .border(0.6.dp, tileBorder, RoundedCornerShape(11.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(16.dp)
+            tint = textSecondary,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            color = textPrimary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun BentoToggleCard(
+    icon: ImageVector,
+    title: String,
+    stateText: String,
+    checked: Boolean,
+    tileBg: Color,
+    tileBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onToggle: () -> Unit
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (checked) accentColor.copy(alpha = 0.12f) else tileBg,
+        animationSpec = tween(180),
+        label = "bento_toggle_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (checked) accentColor.copy(alpha = 0.42f) else tileBorder,
+        animationSpec = tween(180),
+        label = "bento_toggle_border"
+    )
+
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(bgColor)
+            .border(0.7.dp, borderColor, RoundedCornerShape(15.dp))
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (checked) accentColor.copy(alpha = 0.18f)
+                        else textPrimary.copy(alpha = 0.06f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (checked) accentColor else textSecondary,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = title,
+                    color = textPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stateText,
+                    color = if (checked) accentColor else textSecondary,
+                    fontSize = 10.sp,
+                    fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
+        }
+
+        // Indicador Luminoso Minimalista
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(if (checked) ApplePalette.Green else textSecondary.copy(alpha = 0.28f))
+        )
+    }
+}
+
+@Composable
+private fun FooterSegmentButton(
+    icon: ImageVector,
+    label: String,
+    textColor: Color,
+    iconTint: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .height(42.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconTint,
+            modifier = Modifier.size(15.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
@@ -747,270 +1157,6 @@ private fun QuickNavButton(
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1
-        )
-    }
-}
-
-@Composable
-fun WallpaperCarousel(
-    wallpapers: List<WallpaperTheme>,
-    selectedId: String,
-    customWallpaperUri: String?,
-    onUpload: () -> Unit,
-    onSelect: (String) -> Unit,
-    isDarkMode: Boolean = true
-) {
-    val scrollState = rememberScrollState()
-    val shape = RoundedCornerShape(16.dp)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 1. Botão de Upload de Foto da Galeria
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable(onClick = onUpload)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(width = 86.dp, height = 58.dp)
-                    .clip(shape)
-                    .background(
-                        if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.05f)
-                    )
-                    .border(
-                        width = 1.2.dp,
-                        brush = Brush.linearGradient(
-                            listOf(
-                                Color(0xFF00E5FF).copy(alpha = 0.7f),
-                                Color(0xFF7C4DFF).copy(alpha = 0.7f)
-                            )
-                        ),
-                        shape = shape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AddPhotoAlternate,
-                        contentDescription = "Upload de Foto",
-                        tint = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0078D4),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Upload",
-                        color = if (isDarkMode) Color.White.copy(alpha = 0.9f) else Color(0xFF1E1E1E),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Nova Foto",
-                color = if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Normal
-            )
-        }
-
-        // 2. Foto Personalizada Carregada pelo Usuário
-        if (!customWallpaperUri.isNullOrBlank()) {
-            val isCustomSelected = selectedId == "custom"
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onSelect("custom") }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 86.dp, height = 58.dp)
-                        .clip(shape)
-                        .border(
-                            width = if (isCustomSelected) 2.dp else 1.dp,
-                            color = if (isCustomSelected) Color(0xFF00E5FF) else (if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)),
-                            shape = shape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    SubcomposeAsyncImage(
-                        model = customWallpaperUri,
-                        contentDescription = "Minha Foto",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    if (isCustomSelected) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF00E5FF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = "Selecionado",
-                                tint = Color.Black,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Minha Foto",
-                    color = if (isCustomSelected) Color(0xFF00E5FF) else (if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366)),
-                    fontSize = 11.5.sp,
-                    fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
-            }
-        }
-
-        // 3. Papéis de Parede Oficiais
-        wallpapers.forEach { theme ->
-            val isSelected = theme.id == selectedId
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onSelect(theme.id) }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 86.dp, height = 58.dp)
-                        .clip(shape)
-                        .border(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) theme.accentColor else (if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)),
-                            shape = shape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (theme.drawableRes != null) {
-                        Image(
-                            painter = painterResource(theme.drawableRes),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Brush.linearGradient(theme.gradientColors))
-                        )
-                    }
-
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(theme.accentColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = "Selecionado",
-                                tint = Color.Black,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = theme.name,
-                    color = if (isSelected) theme.accentColor else (if (isDarkMode) Color.White.copy(alpha = 0.75f) else Color(0xFF636366)),
-                    fontSize = 11.5.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ThemeTogglePill(
-    isDarkMode: Boolean,
-    onToggle: () -> Unit
-) {
-    val pillShape = RoundedCornerShape(20.dp)
-
-    Row(
-        modifier = Modifier
-            .clip(pillShape)
-            .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0x0E000000))
-            .border(
-                1.dp,
-                if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0x18000000),
-                pillShape
-            )
-            .clickable(onClick = onToggle)
-            .padding(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ThemeIconChip(
-            icon = Icons.Rounded.LightMode,
-            isSelected = !isDarkMode,
-            isDarkMode = isDarkMode,
-            description = "Modo claro"
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        ThemeIconChip(
-            icon = Icons.Rounded.DarkMode,
-            isSelected = isDarkMode,
-            isDarkMode = isDarkMode,
-            description = "Modo escuro"
-        )
-    }
-}
-
-@Composable
-fun ThemeIconChip(
-    icon: ImageVector,
-    isSelected: Boolean,
-    isDarkMode: Boolean = true,
-    description: String
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) {
-            if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.White
-        } else Color.Transparent,
-        animationSpec = tween(200),
-        label = "chip_bg"
-    )
-
-    val iconTint = if (isSelected) {
-        if (isDarkMode) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E)
-    } else {
-        if (isDarkMode) Color.White.copy(alpha = 0.4f) else Color(0xFF8E8E93)
-    }
-
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .then(
-                if (isSelected && !isDarkMode) {
-                    Modifier.shadow(2.dp, CircleShape)
-                } else Modifier
-            )
-            .clip(CircleShape)
-            .background(bgColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = iconTint,
-            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -1040,72 +1186,7 @@ fun SettingsDivider(
     isDarkMode: Boolean = true
 ) {
     HorizontalDivider(
-        thickness = 1.dp,
-        color = if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color(0x0E000000)
+        thickness = 0.7.dp,
+        color = if (isDarkMode) Color.White.copy(alpha = 0.07f) else ApplePalette.LightHairline
     )
-}
-
-@Composable
-fun SearchEngineSelector(
-    selectedEngine: SearchEngine,
-    onSelectEngine: (SearchEngine) -> Unit,
-    isDarkMode: Boolean
-) {
-    val scrollState = rememberScrollState()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        SearchEngine.entries.forEach { engine ->
-            val isSelected = engine == selectedEngine
-            val shape = RoundedCornerShape(14.dp)
-            val chipBg = if (isSelected) {
-                if (isDarkMode) Color(0xFF00E5FF).copy(alpha = 0.18f) else Color(0xFF0288D1).copy(alpha = 0.12f)
-            } else {
-                if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f)
-            }
-            val borderModifier = if (isSelected) {
-                Modifier.border(
-                    width = 1.3.dp,
-                    color = if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1),
-                    shape = shape
-                )
-            } else {
-                Modifier.border(
-                    width = 1.dp,
-                    color = if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
-                    shape = shape
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .clip(shape)
-                    .then(borderModifier)
-                    .background(chipBg)
-                    .clickable { onSelectEngine(engine) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Image(
-                    painter = painterResource(id = engine.iconRes),
-                    contentDescription = engine.displayName,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = engine.displayName,
-                    fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) {
-                        if (isDarkMode) Color(0xFF00E5FF) else Color(0xFF0288D1)
-                    } else {
-                        if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF1E1E1E)
-                    }
-                )
-            }
-        }
-    }
 }

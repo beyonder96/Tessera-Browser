@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.Refresh
@@ -60,11 +62,11 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -77,7 +79,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import kotlinx.coroutines.delay
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
@@ -128,6 +132,7 @@ fun TesseraAirBar(
     onHome: () -> Unit = {},
     onReload: () -> Unit = {},
     onSearch: (String) -> Unit,
+    onVoiceSearch: () -> Unit = {},
     onQueryChange: (String) -> Unit = {},
     onOpenAi: (String) -> Unit = {},
     onBrowseForMe: (String) -> Unit = {},
@@ -203,10 +208,41 @@ fun TesseraAirBar(
         isEditing = false
     }
 
+    // Gerenciamento fluido do progresso e fade-out gracioso ao concluir
+    var showProgress by remember { mutableStateOf(false) }
+    var targetProgressFraction by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(progress, isHomePage) {
+        if (isHomePage) {
+            showProgress = false
+            targetProgressFraction = 0f
+        } else if (progress > 0f && progress < 1f) {
+            showProgress = true
+            targetProgressFraction = progress
+        } else if (progress >= 1f) {
+            targetProgressFraction = 1f
+            delay(200)
+            showProgress = false
+        } else {
+            // progress == 0f (ex: ao finalizar a navegação ou reset)
+            if (showProgress) {
+                targetProgressFraction = 1f
+                delay(200)
+                showProgress = false
+            }
+        }
+    }
+
     val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        targetValue = targetProgressFraction,
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
         label = "safari_progress"
+    )
+
+    val progressAlpha by animateFloatAsState(
+        targetValue = if (showProgress && !isEditing && !isHomePage) 1f else 0f,
+        animationSpec = tween(durationMillis = 260, easing = LinearOutSlowInEasing),
+        label = "safari_progress_alpha"
     )
 
     val animatedTintColor by animateColorAsState(
@@ -330,32 +366,14 @@ fun TesseraAirBar(
                         )
                     }
                 } else {
-                    Column(
+                    // Linha Principal de Controles Cirúrgicos (Altura 48dp, centralizada no Dock de 58dp)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                    // Indicador de Progresso de Carregamento Ultra-Fino
-                    if (progress > 0f && progress < 1f && !isHomePage) {
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .clip(RoundedCornerShape(1.dp)),
-                            color = effectiveAccent,
-                            trackColor = Color.Transparent
-                        )
-                    }
-
-                    // Linha Principal de Controles Cirúrgicos (Altura 48dp)
-                    Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .draggable(
+                            .height(48.dp)
+                            .align(Alignment.Center)
+                            .padding(horizontal = 8.dp)
+                            .draggable(
                         state = draggableState,
                         orientation = Orientation.Horizontal,
                         enabled = !isEditing && !isHomePage,
@@ -474,10 +492,30 @@ fun TesseraAirBar(
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
+                        } else {
+                            // Busca por Voz discreta e monocromática
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isEditing = false
+                                        onVoiceSearch()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Pesquisa por voz",
+                                    tint = mutedColor,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
                         }
                     }
 
-                    // 3. Botão Ir (se houver texto)
+                    // 3. Botão Ir (quando há texto) OU Atalhos de Abas & Menu (quando vazio — acesso direto a partir da Home!)
                     if (queryText.isNotBlank()) {
                         Box(
                             modifier = Modifier
@@ -495,6 +533,71 @@ fun TesseraAirBar(
                                 contentDescription = "Ir",
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else {
+                        val tabBadgeShape = RoundedCornerShape(8.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isEditing = false
+                                        onOpenTabs()
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isEditing = false
+                                        onOpenSpaces()
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(tabBadgeShape)
+                                    .border(
+                                        width = 1.3.dp,
+                                        color = contentColor.copy(alpha = 0.88f),
+                                        shape = tabBadgeShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = tabCount.toString(),
+                                    color = contentColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isEditing = false
+                                        onOpenSettings()
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreHoriz,
+                                contentDescription = "Menu de opções",
+                                tint = contentColor,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -551,108 +654,141 @@ fun TesseraAirBar(
                         "Pesquisar ou digitar endereço"
                     }
 
-                    Row(
+                    val pillShape = RoundedCornerShape(22.dp)
+                    Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
+                            .clip(pillShape)
                             .background(solidPillBg)
-                            .border(0.8.dp, solidBorder, RoundedCornerShape(22.dp))
+                            .border(0.8.dp, solidBorder, pillShape)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = { isEditing = true }
-                            )
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            ),
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         Row(
-                            modifier = Modifier.weight(1f, fill = false),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            if (isWeb && !isHomePage) {
-                                Icon(
-                                    imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                    contentDescription = "Segurança",
-                                    tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            } else if (isHomePage) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Search,
-                                    contentDescription = null,
-                                    tint = mutedColor,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-
-                            Text(
-                                text = hostText,
-                                color = if (isHomePage) mutedColor else contentColor,
-                                fontSize = 13.5.sp,
-                                fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        // SMARTDOCK: Sugestão Contextual de Modo Leitor
-                        AnimatedVisibility(
-                            visible = (isReaderModeAvailable || isReaderModeActive) && !isHomePage,
-                            enter = fadeIn(tween(180)) + expandHorizontally(),
-                            exit = fadeOut(tween(180)) + shrinkHorizontally()
-                        ) {
-                            val readerBg = if (isReaderModeActive) {
-                                if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
-                            } else {
-                                if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
-                            }
-                            val readerContentColor = if (isReaderModeActive) {
-                                if (isDarkMode) Color.Black else Color.White
-                            } else {
-                                contentColor
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .height(28.dp)
-                                    .clip(CircleShape)
-                                    .background(readerBg)
-                                    .border(
-                                        width = 0.8.dp,
-                                        color = if (isReaderModeActive) Color.Transparent else solidBorder,
-                                        shape = CircleShape
-                                    )
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onToggleReaderMode()
-                                    }
-                                    .padding(horizontal = 9.dp),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
+                                if (isWeb && !isHomePage) {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                        contentDescription = "Modo Leitura",
-                                        tint = readerContentColor,
+                                        imageVector = if (isSecure) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                        contentDescription = "Segurança",
+                                        tint = if (isSecure) ApplePalette.Green else ApplePalette.Red,
                                         modifier = Modifier.size(13.dp)
                                     )
-                                    Text(
-                                        text = "Leitor",
-                                        color = readerContentColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                } else if (isHomePage) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = null,
+                                        tint = mutedColor,
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
+
+                                Text(
+                                    text = hostText,
+                                    color = if (isHomePage) mutedColor else contentColor,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = if (isHomePage) FontWeight.Normal else FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
+
+                            // SMARTDOCK: Sugestão Contextual de Modo Leitor
+                            AnimatedVisibility(
+                                visible = (isReaderModeAvailable || isReaderModeActive) && !isHomePage,
+                                enter = fadeIn(tween(180)) + expandHorizontally(),
+                                exit = fadeOut(tween(180)) + shrinkHorizontally()
+                            ) {
+                                val readerBg = if (isReaderModeActive) {
+                                    if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+                                } else {
+                                    if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightElevated
+                                }
+                                val readerContentColor = if (isReaderModeActive) {
+                                    if (isDarkMode) Color.Black else Color.White
+                                } else {
+                                    contentColor
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .height(28.dp)
+                                        .clip(CircleShape)
+                                        .background(readerBg)
+                                        .border(
+                                            width = 0.8.dp,
+                                            color = if (isReaderModeActive) Color.Transparent else solidBorder,
+                                            shape = CircleShape
+                                        )
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onToggleReaderMode()
+                                        }
+                                        .padding(horizontal = 9.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                            contentDescription = "Modo Leitura",
+                                            tint = readerContentColor,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = "Leitor",
+                                            color = readerContentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Indicador de Progresso Luminoso Integrado na Base da Pílula (Estilo Safari / Arc)
+                        if (progressAlpha > 0f) {
+                            val highlightColor = when {
+                                isIncognito -> Color(0xFFE9D5FF)
+                                isDarkMode -> Color(0xFF90CAF9)
+                                else -> Color(0xFFBAE6FD)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth(animatedProgress.coerceIn(0.005f, 1f))
+                                    .height(2.5.dp)
+                                    .graphicsLayer { alpha = progressAlpha }
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                effectiveAccent.copy(alpha = 0.70f),
+                                                effectiveAccent,
+                                                highlightColor
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(topEnd = 1.5.dp, bottomEnd = 1.5.dp)
+                                    )
+                            )
                         }
                     }
 
@@ -726,166 +862,6 @@ fun TesseraAirBar(
     }
 }
 }
-}
-
-/**
- * Minimalist floating dock for Tessera Browser Home screen.
- */
-@Composable
-fun TesseraHomeBottomDock(
-    tabCount: Int,
-    isDarkMode: Boolean,
-    effectiveAccent: Color = ApplePalette.BlueDark,
-    capsuleBg: Color = if (isDarkMode) Color(0xE61C1C1E) else Color(0xF5FFFFFF),
-    capsuleBorder: Color = if (isDarkMode) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f),
-    contentColor: Color = if (isDarkMode) Color.White.copy(alpha = 0.94f) else Color(0xFF1C1C1E),
-    mutedColor: Color = if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color(0xFF8E8E93),
-    onSearchClick: () -> Unit,
-    onOpenTabs: () -> Unit,
-    onOpenAiAction: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    val homePillShape = AppleShapes.Capsule
-    val squircleShape = AppleShapes.SquircleMedium
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // 1. Search Pill
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = homePillShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.10f)
-                )
-                .clip(homePillShape)
-                .background(capsuleBg)
-                .border(0.8.dp, capsuleBorder, homePillShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onSearchClick
-                )
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Pesquisar",
-                    tint = mutedColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Pesquisar ou digitar endereço",
-                    color = mutedColor,
-                    fontSize = 14.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 2. Tab Count Button
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = squircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.10f)
-                )
-                .clip(squircleShape)
-                .background(capsuleBg)
-                .border(0.8.dp, capsuleBorder, squircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenTabs()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .border(1.5.dp, contentColor.copy(alpha = 0.85f), RoundedCornerShape(6.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "$tabCount",
-                    color = contentColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        // 3. AI Action Button (Apple Intelligence Sparkle Emblem)
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .shadow(
-                    elevation = 10.dp,
-                    shape = CircleShape,
-                    ambientColor = Color(0x660A84FF),
-                    spotColor = Color(0x99BF5AF2)
-                )
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF0A84FF),
-                            Color(0xFF5E5CE6),
-                            Color(0xFFBF5AF2)
-                        )
-                    )
-                )
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.85f),
-                            Color.White.copy(alpha = 0.25f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenAiAction()
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
-                contentDescription = "Tessera Intelligence",
-                tint = Color.White,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
-}
 
 @Composable
 private fun SearchSuggestionsFloatingCard(
@@ -898,11 +874,11 @@ private fun SearchSuggestionsFloatingCard(
 ) {
     if (suggestions.isEmpty()) return
 
-    val cardShape = AppleShapes.SquircleLarge
-    val cardBg = if (isDarkMode) Color(0xF21C1C1E) else Color(0xF5FFFFFF)
-    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.94f) else Color(0xFF1C1C1E)
-    val iconTint = if (isDarkMode) Color.White.copy(alpha = 0.50f) else Color(0xFF8E8E93)
-    val cardBorder = if (isDarkMode) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+    val cardShape = RoundedCornerShape(22.dp)
+    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else Color(0xFFFCFBF7)
+    val textColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val iconTint = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
 
     Column(
         modifier = Modifier

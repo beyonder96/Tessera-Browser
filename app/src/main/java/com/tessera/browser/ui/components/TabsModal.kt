@@ -46,6 +46,8 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -118,6 +120,10 @@ fun TabsModal(
     onUpdateSpace: (spaceId: String, name: String, emoji: String, colorArgb: Long) -> Unit = { _, _, _, _ -> },
     onDeleteSpace: (spaceId: String) -> Unit = {},
     onMoveTabToSpace: (tabId: String, targetSpaceId: String) -> Unit = { _, _ -> },
+    isIncognito: Boolean = false,
+    onToggleIncognito: () -> Unit = {},
+    canRestoreClosedTab: Boolean = false,
+    onRestoreClosedTab: () -> Unit = {},
     accentColor: Color? = null,
     isDarkMode: Boolean = false,
     modifier: Modifier = Modifier
@@ -131,14 +137,31 @@ fun TabsModal(
     val currentSpaceTabs = tabs.filter { it.spaceId == activeSpaceId }
     val visibleTabs = if (currentSpaceTabs.isNotEmpty()) currentSpaceTabs else tabs
 
-    val monoAccent = accentColor ?: if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val monoAccent = when {
+        isIncognito -> ApplePalette.Purple
+        accentColor != null -> accentColor
+        isDarkMode -> ApplePalette.DarkLabelPrimary
+        else -> ApplePalette.LightLabelPrimary
+    }
     val onMonoAccent = if (monoAccent.luminance() > 0.5f) ApplePalette.DarkBackground else Color.White
 
-    val sheetBg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
-    val cardBg = if (isDarkMode) ApplePalette.DarkSurface else ApplePalette.LightCard
-    val cardBorder = if (isDarkMode) ApplePalette.DarkHairline else ApplePalette.LightHairline
-    val contentColor = if (isDarkMode) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
-    val mutedColor = if (isDarkMode) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
+    val sheetBg = when {
+        isIncognito -> Color(0xFF0E0B16)
+        isDarkMode -> ApplePalette.DarkBackground
+        else -> ApplePalette.LightBackground
+    }
+    val cardBg = when {
+        isIncognito -> Color(0xFF171324)
+        isDarkMode -> ApplePalette.DarkSurface
+        else -> Color(0xFFFCFBF7)
+    }
+    val cardBorder = when {
+        isIncognito -> ApplePalette.Purple.copy(alpha = 0.25f)
+        isDarkMode -> ApplePalette.DarkHairline
+        else -> ApplePalette.LightHairline
+    }
+    val contentColor = if (isDarkMode || isIncognito) ApplePalette.DarkLabelPrimary else ApplePalette.LightLabelPrimary
+    val mutedColor = if (isDarkMode || isIncognito) ApplePalette.DarkLabelSecondary else ApplePalette.LightLabelSecondary
 
     Box(
         modifier = modifier
@@ -150,25 +173,192 @@ fun TabsModal(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // 1. CABEÇALHO SUPERIOR SÓLIDO
+            // 1. CABEÇALHO EDITORIAL: ESPAÇOS + ANÔNIMO + REABRIR + CONCLUÍDO
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Botão Concluído / Fechar Modal
-                TextButton(
-                    onClick = onDismiss,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Concluído",
-                        color = monoAccent,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Seletor de Espaços (Arc Spaces)
+                    Box {
+                        Surface(
+                            onClick = { showSpaceSelectorMenu = true },
+                            shape = CircleShape,
+                            color = cardBg,
+                            border = BorderStroke(0.8.dp, cardBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                SpaceVectorIcon(
+                                    identifier = currentSpace.iconEmoji,
+                                    tint = contentColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = currentSpace.name,
+                                    color = contentColor,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = "Alternar Espaço",
+                                    tint = mutedColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showSpaceSelectorMenu,
+                            onDismissRequest = { showSpaceSelectorMenu = false },
+                            modifier = Modifier.background(cardBg)
+                        ) {
+                            spaces.forEach { sp ->
+                                val isSelected = sp.id == currentSpace.id
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            SpaceVectorIcon(
+                                                identifier = sp.iconEmoji,
+                                                tint = if (isSelected) monoAccent else contentColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = sp.name,
+                                                color = contentColor,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    },
+                                    trailingIcon = if (isSelected) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = monoAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    } else null,
+                                    onClick = {
+                                        showSpaceSelectorMenu = false
+                                        onSelectSpace(sp.id)
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "+ Novo Espaço",
+                                        color = if (isDarkMode || isIncognito) ApplePalette.BlueDark else ApplePalette.Blue,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.5.sp
+                                    )
+                                },
+                                onClick = {
+                                    showSpaceSelectorMenu = false
+                                    newSpaceName = ""
+                                    showCreateSpaceDialog = true
+                                }
+                            )
+                        }
+                    }
+
+                    // Pílula de Modo Anônimo
+                    Surface(
+                        onClick = onToggleIncognito,
+                        shape = CircleShape,
+                        color = if (isIncognito) ApplePalette.Purple.copy(alpha = 0.22f) else cardBg,
+                        border = BorderStroke(
+                            0.8.dp,
+                            if (isIncognito) ApplePalette.Purple.copy(alpha = 0.55f) else cardBorder
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.VisibilityOff,
+                                contentDescription = "Modo Anônimo",
+                                tint = if (isIncognito) ApplePalette.Purple else mutedColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Anônimo",
+                                color = if (isIncognito) ApplePalette.Purple else contentColor,
+                                fontSize = 12.5.sp,
+                                fontWeight = if (isIncognito) FontWeight.SemiBold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Pílula Reabrir Guia Fechada
+                    AnimatedVisibility(
+                        visible = canRestoreClosedTab,
+                        enter = fadeIn(tween(180)),
+                        exit = fadeOut(tween(180))
+                    ) {
+                        Surface(
+                            onClick = onRestoreClosedTab,
+                            shape = CircleShape,
+                            color = cardBg,
+                            border = BorderStroke(0.8.dp, cardBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Replay,
+                                    contentDescription = "Reabrir guia fechada",
+                                    tint = contentColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Reabrir",
+                                    color = contentColor,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    // Botão Concluído / Fechar Modal
+                    TextButton(
+                        onClick = onDismiss,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Concluído",
+                            color = if (isIncognito) ApplePalette.Purple else if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 

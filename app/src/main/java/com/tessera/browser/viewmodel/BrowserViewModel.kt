@@ -4,8 +4,6 @@ import android.Manifest
 import android.graphics.Bitmap
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Geocoder
-import android.location.LocationManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
@@ -26,7 +24,6 @@ import android.webkit.WebView
 import android.widget.Toast
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.FileProvider
-import com.tessera.browser.data.AvailableWallpapers
 import com.tessera.browser.data.BrowserSpace
 import com.tessera.browser.ai.AiChatMessage
 import com.tessera.browser.ai.AiProvider
@@ -46,7 +43,6 @@ import com.tessera.browser.data.SafeBrowsingThreatInfo
 import com.tessera.browser.data.SavedPageItem
 import com.tessera.browser.data.SearchEngine
 import com.tessera.browser.data.SpeedDialItem
-import com.tessera.browser.data.WallpaperTheme
 import com.tessera.browser.data.PrivacyDashboardState
 import com.tessera.browser.data.BlockedTrackerItem
 import com.tessera.browser.data.ContextMenuTarget
@@ -76,32 +72,6 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.UUID
-
-data class WeatherData(
-    val cityName: String = "São Paulo",
-    val temperature: Int = 24,
-    val apparentTemperature: Int = 24,
-    val humidity: Int = 65,
-    val conditionText: String = "Parcialmente nublado",
-    val weatherCode: Int = 1,
-    val isDay: Boolean = true,
-    val isLoading: Boolean = false,
-    val lastUpdated: Long = System.currentTimeMillis()
-)
-
-data class QuoteItem(
-    val symbol: String, // "USD", "EUR", "BTC"
-    val name: String,   // "Dólar", "Euro", "Bitcoin"
-    val value: String,  // "R$ 5,64"
-    val change: String, // "+0,42%"
-    val isPositive: Boolean
-)
-
-data class QuotesData(
-    val items: List<QuoteItem> = emptyList(),
-    val isLoading: Boolean = false,
-    val lastUpdated: Long = System.currentTimeMillis()
-)
 
 data class BrowserTab(
     val id: String = UUID.randomUUID().toString(),
@@ -289,7 +259,6 @@ data class BrowserUiState(
     val geminiApiKey: String? = null,
     val groqApiKey: String? = null,
     val aiProvider: AiProvider = AiProvider.GEMINI,
-    val digitalMinimalismMode: Boolean = true,
 
     // AdBlocker & Privacy Shield
     val adBlockEnabled: Boolean = true,
@@ -304,7 +273,6 @@ data class BrowserUiState(
     // Erro Nativo de Página / Offline
     val pageError: PageErrorInfo? = null,
 
-
     // Search Autocomplete & Trends
     val searchSuggestions: List<String> = emptyList(),
     val trendingTopics: List<String> = listOf(
@@ -316,43 +284,18 @@ data class BrowserUiState(
         "Cinema & Séries"
     ),
 
-    // Widgets da Home (Desativados por padrão para experiência Zen)
-    val showWeatherWidget: Boolean = false,
-    val showQuotesWidget: Boolean = false,
-    val weatherData: WeatherData? = WeatherData(
-        cityName = "São Paulo",
-        temperature = 24,
-        apparentTemperature = 24,
-        humidity = 65,
-        conditionText = "Parcialmente nublado",
-        weatherCode = 1,
-        isDay = true,
-        isLoading = false
-    ),
-    val quotesData: QuotesData? = QuotesData(
-        items = listOf(
-            QuoteItem("USD", "Dólar", "R$ 5,64", "+0,35%", true),
-            QuoteItem("EUR", "Euro", "R$ 6,18", "-0,12%", false),
-            QuoteItem("BTC", "Bitcoin", "R$ 358k", "+1,85%", true)
-        ),
-        isLoading = false
-    ),
-
-    // Configuração Fácil & Aparência
+    // Aparência Editorial, Zoom de Texto & Reabrir Guia
     val isDarkMode: Boolean = false,
     val forceDarkPages: Boolean = false,
+    val pageTextZoom: Int = 100,
     val siteThemeColor: Color? = null,
-    val showWallpaper: Boolean = false,
-    val selectedWallpaperId: String = "summer_villa",
-    val customWallpaperUri: String? = null,
-    val showFavoritesBar: Boolean = false,
-    val showPillTabsBar: Boolean = false,
     val tabThumbnails: Map<String, Bitmap> = emptyMap(),
+    val recentlyClosedTabs: List<BrowserTab> = emptyList(),
+    val showUndoCloseTabBanner: Boolean = false,
+    val lastClosedTabTitle: String = "",
     val tesseraAiEnabled: Boolean = true,
     val aiToolbarButton: Boolean = true,
     val aiTextHighlightPrompts: Boolean = true,
-    val showSidebar: Boolean = false,
-    val autoHideSidebar: Boolean = true,
 
     // Speed Dial / Bookmarks
     val speedDialItems: List<SpeedDialItem> = listOf(
@@ -400,20 +343,6 @@ data class BrowserUiState(
         )
     )
 ) {
-    val activeWallpaper: WallpaperTheme
-        get() {
-            if (selectedWallpaperId == "custom" && !customWallpaperUri.isNullOrBlank()) {
-                return WallpaperTheme(
-                    id = "custom",
-                    name = "Minha Foto",
-                    gradientColors = listOf(androidx.compose.ui.graphics.Color(0xFF1E1E24), androidx.compose.ui.graphics.Color(0xFF121214)),
-                    accentColor = androidx.compose.ui.graphics.Color(0xFFE0E0E0)
-                )
-            }
-            return AvailableWallpapers.find { it.id == selectedWallpaperId }
-                ?: AvailableWallpapers.first()
-        }
-
     val isCurrentPageBookmarked: Boolean
         get() = speedDialItems.any { it.url.equals(displayUrl, ignoreCase = true) || it.url.equals(currentUrl, ignoreCase = true) }
 
@@ -435,6 +364,7 @@ class BrowserViewModel : ViewModel() {
     val uiState: StateFlow<BrowserUiState> = _uiState.asStateFlow()
 
     private var suggestionJob: Job? = null
+    private var undoBannerJob: Job? = null
     private var appContext: Context? = null
 
     init {
@@ -901,6 +831,23 @@ class BrowserViewModel : ViewModel() {
         )
     }
 
+    fun playWebPageContentAsPodcast(context: Context, title: String, domain: String, content: String) {
+        val cleanContent = content.trim()
+        if (cleanContent.isBlank()) {
+            Toast.makeText(context, "Não foi possível extrair texto suficiente para ouvir esta página", Toast.LENGTH_SHORT).show()
+            return
+        }
+        PodcastAudioManager.initialize(context)
+        val cleanTitle = title.ifBlank { domain.ifBlank { "Página Atual" } }
+        val subtitle = domain.ifBlank { "Leitura em Áudio" }
+        PodcastAudioManager.playArticleOrContent(
+            context = context,
+            title = cleanTitle,
+            subtitle = subtitle,
+            content = "$cleanTitle. $cleanContent"
+        )
+    }
+
     fun toggleReaderTts(context: Context) {
         val article = _uiState.value.readerArticle
         if (_uiState.value.podcastAudioState.isPlaying) {
@@ -976,12 +923,14 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun closeAllTabs() {
+        val closable = _uiState.value.tabs.filter { !it.isPinned && !it.isHomePage }
         val pinnedTabs = _uiState.value.tabs.filter { it.isPinned }
         if (pinnedTabs.isNotEmpty()) {
             _uiState.update { state ->
                 val first = pinnedTabs.first()
                 state.copy(
                     tabs = pinnedTabs,
+                    recentlyClosedTabs = (closable.reversed() + state.recentlyClosedTabs).take(15),
                     activeTabId = first.id,
                     isHomePage = first.isHomePage,
                     currentUrl = first.url,
@@ -990,10 +939,11 @@ class BrowserViewModel : ViewModel() {
             }
         } else {
             val newId = UUID.randomUUID().toString()
-            val defaultTab = BrowserTab(id = newId, isHomePage = true)
+            val defaultTab = BrowserTab(id = newId, isHomePage = true, spaceId = _uiState.value.activeSpaceId)
             _uiState.update { state ->
                 state.copy(
                     tabs = listOf(defaultTab),
+                    recentlyClosedTabs = (closable.reversed() + state.recentlyClosedTabs).take(15),
                     activeTabId = newId,
                     isHomePage = true,
                     currentUrl = "https://duckduckgo.com",
@@ -1001,49 +951,7 @@ class BrowserViewModel : ViewModel() {
                 )
             }
         }
-    }
-
-    fun setCustomWallpaperUri(uri: String?) {
-        _uiState.update { it.copy(customWallpaperUri = uri, showWallpaper = true) }
-        saveSettings()
-    }
-
-    fun importCustomWallpaper(context: Context, sourceUri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(sourceUri) ?: return@launch
-                // Remove previous persistent custom wallpapers to save space
-                context.filesDir.listFiles { _, name -> name.startsWith("custom_wallpaper_") }?.forEach { it.delete() }
-
-                val file = File(context.filesDir, "custom_wallpaper_${System.currentTimeMillis()}.jpg")
-                file.outputStream().use { output ->
-                    inputStream.copyTo(output)
-                }
-                inputStream.close()
-
-                val persistentUriString = Uri.fromFile(file).toString()
-                _uiState.update {
-                    it.copy(
-                        customWallpaperUri = persistentUriString,
-                        selectedWallpaperId = "custom",
-                        showWallpaper = true
-                    )
-                }
-                saveSettings()
-            } catch (e: Exception) {
-                Log.e("BrowserViewModel", "Erro ao importar papel de parede personalizado", e)
-            }
-        }
-    }
-
-    fun clearCustomWallpaper() {
-        _uiState.update {
-            it.copy(
-                customWallpaperUri = null,
-                selectedWallpaperId = AvailableWallpapers.first().id
-            )
-        }
-        saveSettings()
+        saveTabs()
     }
 
     fun updateProgress(progress: Float) {
@@ -1138,13 +1046,26 @@ class BrowserViewModel : ViewModel() {
 
         val remainingTabs = currentTabs.filterNot { it.id == tabId }
 
+        // Registra na pilha de guias fechadas recentemente (se tiver conteúdo real)
+        val shouldRecordClosed = tabToClose != null && (!tabToClose.isHomePage || currentTabs.size > 1)
+        val closedTitle = if (tabToClose != null) {
+            if (tabToClose.isHomePage) "Nova Guia"
+            else tabToClose.title.takeIf { it.isNotBlank() && it != "Nova Guia" } ?: extractDomain(tabToClose.url)
+        } else ""
+
         if (remainingInSpace.isEmpty()) {
             val newId = UUID.randomUUID().toString()
             val freshTab = BrowserTab(id = newId, isHomePage = true, spaceId = effectiveSpaceId)
             val updatedTabs = remainingTabs + freshTab
             _uiState.update { state ->
+                val updatedRecentlyClosed = if (shouldRecordClosed && tabToClose != null) {
+                    (listOf(tabToClose) + state.recentlyClosedTabs.filterNot { it.id == tabToClose.id }).take(15)
+                } else state.recentlyClosedTabs
                 state.copy(
                     tabs = updatedTabs,
+                    recentlyClosedTabs = updatedRecentlyClosed,
+                    showUndoCloseTabBanner = shouldRecordClosed && !tabToClose!!.isHomePage,
+                    lastClosedTabTitle = closedTitle,
                     activeTabId = newId,
                     isHomePage = true,
                     currentUrl = "https://duckduckgo.com",
@@ -1159,8 +1080,14 @@ class BrowserViewModel : ViewModel() {
                 remainingTabs.find { it.id == _uiState.value.activeTabId } ?: remainingInSpace.last()
             }
             _uiState.update { state ->
+                val updatedRecentlyClosed = if (shouldRecordClosed && tabToClose != null) {
+                    (listOf(tabToClose) + state.recentlyClosedTabs.filterNot { it.id == tabToClose.id }).take(15)
+                } else state.recentlyClosedTabs
                 state.copy(
                     tabs = remainingTabs,
+                    recentlyClosedTabs = updatedRecentlyClosed,
+                    showUndoCloseTabBanner = shouldRecordClosed,
+                    lastClosedTabTitle = closedTitle,
                     activeTabId = nextActiveTab.id,
                     isHomePage = nextActiveTab.isHomePage,
                     currentUrl = nextActiveTab.url,
@@ -1169,8 +1096,53 @@ class BrowserViewModel : ViewModel() {
                 )
             }
         }
+
+        if (shouldRecordClosed && (tabToClose?.isHomePage == false || remainingInSpace.isNotEmpty())) {
+            undoBannerJob?.cancel()
+            undoBannerJob = viewModelScope.launch {
+                delay(4500)
+                _uiState.update { it.copy(showUndoCloseTabBanner = false) }
+            }
+        }
+
         removeTabThumbnail(tabId)
         saveTabs()
+    }
+
+    fun restoreLastClosedTab() {
+        val lastClosed = _uiState.value.recentlyClosedTabs.firstOrNull() ?: return
+        undoBannerJob?.cancel()
+        val restoredId = UUID.randomUUID().toString()
+        val effectiveSpaceId = if (_uiState.value.spaces.any { it.id == lastClosed.spaceId }) {
+            lastClosed.spaceId
+        } else {
+            _uiState.value.activeSpaceId
+        }
+        val restoredTab = lastClosed.copy(
+            id = restoredId,
+            spaceId = effectiveSpaceId,
+            lastAccessedTimestamp = System.currentTimeMillis()
+        )
+        _uiState.update { state ->
+            state.copy(
+                tabs = state.tabs + restoredTab,
+                recentlyClosedTabs = state.recentlyClosedTabs.drop(1),
+                showUndoCloseTabBanner = false,
+                activeTabId = restoredId,
+                activeSpaceId = effectiveSpaceId,
+                isHomePage = restoredTab.isHomePage,
+                currentUrl = restoredTab.url,
+                displayUrl = if (restoredTab.isHomePage) "" else restoredTab.url,
+                canGoBack = restoredTab.canGoBack,
+                canGoForward = restoredTab.canGoForward
+            )
+        }
+        saveTabs()
+    }
+
+    fun dismissUndoCloseTabBanner() {
+        undoBannerJob?.cancel()
+        _uiState.update { it.copy(showUndoCloseTabBanner = false) }
     }
 
     fun updateTabThumbnail(tabId: String, bitmap: Bitmap) {
@@ -2172,15 +2144,9 @@ class BrowserViewModel : ViewModel() {
                 // Settings
                 val isDark = if (prefs.contains("is_dark_mode")) prefs.getBoolean("is_dark_mode", false) else null
                 val forceDark = if (prefs.contains("force_dark_pages")) prefs.getBoolean("force_dark_pages", false) else null
-                val showWallpaper = if (prefs.contains("show_wallpaper")) prefs.getBoolean("show_wallpaper", true) else null
-                val selectedWallpaper = prefs.getString("selected_wallpaper_id", null)
-                val customWallpaper = prefs.getString("custom_wallpaper_uri", null)
-                val showFavorites = if (prefs.contains("show_favorites_bar")) prefs.getBoolean("show_favorites_bar", true) else null
-                val showPillTabs = if (prefs.contains("show_pill_tabs_bar")) prefs.getBoolean("show_pill_tabs_bar", true) else null
+                val pageTextZoom = if (prefs.contains("page_text_zoom")) prefs.getInt("page_text_zoom", 100).coerceIn(60, 200) else null
                 val tesseraAi = if (prefs.contains("tessera_ai_enabled")) prefs.getBoolean("tessera_ai_enabled", true) else null
                 val adBlock = if (prefs.contains("ad_block_enabled")) prefs.getBoolean("ad_block_enabled", true) else null
-                val showWeather = if (prefs.contains("show_weather_widget")) prefs.getBoolean("show_weather_widget", true) else null
-                val showQuotes = if (prefs.contains("show_quotes_widget")) prefs.getBoolean("show_quotes_widget", true) else null
                 val cookieBlocker = if (prefs.contains("cookie_blocker_enabled")) prefs.getBoolean("cookie_blocker_enabled", true) else null
                 val isDesktop = if (prefs.contains("is_desktop_mode")) prefs.getBoolean("is_desktop_mode", false) else null
                 val searchEngineId = prefs.getString("search_engine_id", null)
@@ -2201,7 +2167,6 @@ class BrowserViewModel : ViewModel() {
                 val loadedGeminiKey = prefs.getString("gemini_api_key", null)
                 val loadedGroqKey = prefs.getString("groq_api_key", null)
                 val loadedAiProvider = prefs.getString("ai_provider", null)?.let { AiProvider.fromKey(it) }
-                val loadedDigitalMinimalism = if (prefs.contains("digital_minimalism_mode")) prefs.getBoolean("digital_minimalism_mode", true) else null
                 val loadedIncognitoLock = if (prefs.contains("incognito_biometric_lock")) prefs.getBoolean("incognito_biometric_lock", false) else null
                 val loadedOpenInExternal = if (prefs.contains("open_links_in_external_apps")) prefs.getBoolean("open_links_in_external_apps", true) else null
                 val savedTotalBlocked = prefs.getInt("total_blocked_trackers", 0)
@@ -2275,17 +2240,11 @@ class BrowserViewModel : ViewModel() {
                         siteSettings = loadedSiteSettings ?: current.siteSettings,
                         isDarkMode = isDark ?: current.isDarkMode,
                         forceDarkPages = forceDark ?: current.forceDarkPages,
-                        showWallpaper = showWallpaper ?: current.showWallpaper,
-                        selectedWallpaperId = selectedWallpaper ?: current.selectedWallpaperId,
-                        customWallpaperUri = customWallpaper ?: current.customWallpaperUri,
-                        showFavoritesBar = showFavorites ?: current.showFavoritesBar,
-                        showPillTabsBar = showPillTabs ?: current.showPillTabsBar,
+                        pageTextZoom = pageTextZoom ?: current.pageTextZoom,
                         tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
                         adBlockEnabled = adBlock ?: current.adBlockEnabled,
                         cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
                         isDesktopMode = isDesktop ?: current.isDesktopMode,
-                        showWeatherWidget = showWeather ?: current.showWeatherWidget,
-                        showQuotesWidget = showQuotes ?: current.showQuotesWidget,
                         searchEngine = searchEngine ?: current.searchEngine,
                         readerFontSizeSp = readerFontSize ?: current.readerFontSizeSp,
                         readerTheme = readerTheme ?: current.readerTheme,
@@ -2295,7 +2254,6 @@ class BrowserViewModel : ViewModel() {
                         geminiApiKey = loadedGeminiKey ?: current.geminiApiKey,
                         groqApiKey = loadedGroqKey ?: current.groqApiKey,
                         aiProvider = loadedAiProvider ?: current.aiProvider,
-                        digitalMinimalismMode = loadedDigitalMinimalism ?: current.digitalMinimalismMode,
                         incognitoBiometricLock = loadedIncognitoLock ?: current.incognitoBiometricLock,
                         openLinksInExternalApps = loadedOpenInExternal ?: current.openLinksInExternalApps,
                         privacyState = current.privacyState.copy(
@@ -2431,17 +2389,11 @@ class BrowserViewModel : ViewModel() {
                 prefs.edit()
                     .putBoolean("is_dark_mode", s.isDarkMode)
                     .putBoolean("force_dark_pages", s.forceDarkPages)
-                    .putBoolean("show_wallpaper", s.showWallpaper)
-                    .putString("selected_wallpaper_id", s.selectedWallpaperId)
-                    .putString("custom_wallpaper_uri", s.customWallpaperUri)
-                    .putBoolean("show_favorites_bar", s.showFavoritesBar)
-                    .putBoolean("show_pill_tabs_bar", s.showPillTabsBar)
+                    .putInt("page_text_zoom", s.pageTextZoom)
                     .putBoolean("tessera_ai_enabled", s.tesseraAiEnabled)
                     .putBoolean("ad_block_enabled", s.adBlockEnabled)
                     .putBoolean("cookie_blocker_enabled", s.cookieBlockerEnabled)
                     .putBoolean("is_desktop_mode", s.isDesktopMode)
-                    .putBoolean("show_weather_widget", s.showWeatherWidget)
-                    .putBoolean("show_quotes_widget", s.showQuotesWidget)
                     .putString("search_engine_id", s.searchEngine.id)
                     .putInt("reader_font_size", s.readerFontSizeSp)
                     .putString("reader_theme", s.readerTheme.name)
@@ -2450,7 +2402,6 @@ class BrowserViewModel : ViewModel() {
                     .putString("gemini_api_key", s.geminiApiKey)
                     .putString("groq_api_key", s.groqApiKey)
                     .putString("ai_provider", s.aiProvider.keyName)
-                    .putBoolean("digital_minimalism_mode", s.digitalMinimalismMode)
                     .putBoolean("incognito_biometric_lock", s.incognitoBiometricLock)
                     .putBoolean("open_links_in_external_apps", s.openLinksInExternalApps)
                     .apply()
@@ -2611,12 +2562,10 @@ class BrowserViewModel : ViewModel() {
             val settingsObj = JSONObject().apply {
                 put("isDarkMode", _uiState.value.isDarkMode)
                 put("forceDarkPages", _uiState.value.forceDarkPages)
+                put("pageTextZoom", _uiState.value.pageTextZoom)
                 put("adBlockEnabled", _uiState.value.adBlockEnabled)
                 put("cookieBlockerEnabled", _uiState.value.cookieBlockerEnabled)
                 put("searchEngine", _uiState.value.searchEngine.name)
-                put("selectedWallpaperId", _uiState.value.selectedWallpaperId)
-                put("showWeatherWidget", _uiState.value.showWeatherWidget)
-                put("showQuotesWidget", _uiState.value.showQuotesWidget)
             }
             root.put("settings", settingsObj)
 
@@ -3110,11 +3059,6 @@ class BrowserViewModel : ViewModel() {
         saveSettings()
     }
 
-    fun setDigitalMinimalismMode(enabled: Boolean) {
-        _uiState.update { it.copy(digitalMinimalismMode = enabled) }
-        saveSettings()
-    }
-
     fun prepareAiAssistant(title: String, domain: String, url: String) {
         aiAssistantJob?.cancel()
         aiQuestionJob?.cancel()
@@ -3467,24 +3411,22 @@ class BrowserViewModel : ViewModel() {
         saveSettings()
     }
 
-    fun setShowWallpaper(enabled: Boolean) {
-        _uiState.update { it.copy(showWallpaper = enabled) }
+    fun setPageTextZoom(zoom: Int) {
+        val clamped = zoom.coerceIn(60, 200)
+        _uiState.update { it.copy(pageTextZoom = clamped) }
         saveSettings()
     }
 
-    fun selectWallpaper(wallpaperId: String) {
-        _uiState.update { it.copy(selectedWallpaperId = wallpaperId, showWallpaper = true) }
-        saveSettings()
+    fun increasePageTextZoom() {
+        setPageTextZoom(_uiState.value.pageTextZoom + 10)
     }
 
-    fun setShowFavoritesBar(enabled: Boolean) {
-        _uiState.update { it.copy(showFavoritesBar = enabled) }
-        saveSettings()
+    fun decreasePageTextZoom() {
+        setPageTextZoom(_uiState.value.pageTextZoom - 10)
     }
 
-    fun setShowPillTabsBar(enabled: Boolean) {
-        _uiState.update { it.copy(showPillTabsBar = enabled) }
-        saveSettings()
+    fun resetPageTextZoom() {
+        setPageTextZoom(100)
     }
 
     fun setTesseraAiEnabled(enabled: Boolean) {
@@ -3502,28 +3444,8 @@ class BrowserViewModel : ViewModel() {
         saveSettings()
     }
 
-    fun setShowSidebar(enabled: Boolean) {
-        _uiState.update { it.copy(showSidebar = enabled) }
-        saveSettings()
-    }
-
-    fun setAutoHideSidebar(enabled: Boolean) {
-        _uiState.update { it.copy(autoHideSidebar = enabled) }
-        saveSettings()
-    }
-
     fun toggleQuickSettings() {
         _uiState.update { it.copy(showQuickSettings = !it.showQuickSettings) }
-    }
-
-    fun setShowWeatherWidget(enabled: Boolean) {
-        _uiState.update { it.copy(showWeatherWidget = enabled) }
-        saveSettings()
-    }
-
-    fun setShowQuotesWidget(enabled: Boolean) {
-        _uiState.update { it.copy(showQuotesWidget = enabled) }
-        saveSettings()
     }
 
     fun setOpenLinksInExternalApps(enabled: Boolean) {
@@ -3537,270 +3459,6 @@ class BrowserViewModel : ViewModel() {
             val opened = com.tessera.browser.util.DeepLinkHelper.openUrlInExternalApp(context, url)
             if (!opened) {
                 Toast.makeText(context, "Nenhum aplicativo externo encontrado para este link", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun getWeatherConditionText(code: Int, isDay: Boolean): String {
-        return when (code) {
-            0 -> if (isDay) "Céu limpo" else "Noite limpa"
-            1 -> "Predominantemente ensolarado"
-            2 -> "Parcialmente nublado"
-            3 -> "Nublado"
-            45, 48 -> "Nevoeiro"
-            51, 53, 55 -> "Garoa leve"
-            56, 57 -> "Garoa congelante"
-            61, 63 -> "Chuva moderada"
-            65 -> "Chuva forte"
-            66, 67 -> "Chuva congelante"
-            71, 73, 75 -> "Neve"
-            77 -> "Grãos de neve"
-            80, 81, 82 -> "Pancadas de chuva"
-            85, 86 -> "Pancadas de neve"
-            95 -> "Tempestade"
-            96, 99 -> "Tempestade com granizo"
-            else -> if (isDay) "Ensolarado" else "Céu limpo"
-        }
-    }
-
-    fun fetchWeather(context: Context, forceRefresh: Boolean = false) {
-        val current = _uiState.value.weatherData
-        if (!forceRefresh && current != null && (System.currentTimeMillis() - current.lastUpdated < 15 * 60 * 1000)) {
-            return
-        }
-
-        _uiState.update {
-            it.copy(weatherData = it.weatherData?.copy(isLoading = true) ?: WeatherData(isLoading = true))
-        }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            var lat = -23.5505
-            var lon = -46.6333
-            var cityName = "São Paulo"
-            var hasGpsLocation = false
-
-            // 1. Try Android LocationManager if coarse location is granted
-            try {
-                val hasPermission = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-
-                if (hasPermission) {
-                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                    if (locationManager != null) {
-                        val providers = listOf(
-                            LocationManager.NETWORK_PROVIDER,
-                            LocationManager.GPS_PROVIDER,
-                            LocationManager.PASSIVE_PROVIDER
-                        )
-                        for (provider in providers) {
-                            try {
-                                if (locationManager.isProviderEnabled(provider)) {
-                                    val loc = locationManager.getLastKnownLocation(provider)
-                                    if (loc != null) {
-                                        lat = loc.latitude
-                                        lon = loc.longitude
-                                        hasGpsLocation = true
-                                        break
-                                    }
-                                }
-                            } catch (e: SecurityException) {
-                                // Ignore permission races
-                            }
-                        }
-                    }
-
-                    if (hasGpsLocation) {
-                        try {
-                            val geocoder = Geocoder(context, Locale.getDefault())
-                            @Suppress("DEPRECATION")
-                            val addresses = geocoder.getFromLocation(lat, lon, 1)
-                            val address = addresses?.firstOrNull()
-                            if (address != null) {
-                                val detectedCity = address.locality ?: address.subAdminArea ?: address.adminArea
-                                if (!detectedCity.isNullOrBlank()) {
-                                    cityName = detectedCity
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Geocoder may fail on offline or emulators
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore location errors
-            }
-
-            // 2. If no GPS location, fallback to IP-based Geolocation
-            if (!hasGpsLocation) {
-                try {
-                    val ipUrl = URL("https://get.geojs.io/v1/ip/geo.json")
-                    val conn = ipUrl.openConnection() as HttpURLConnection
-                    conn.connectTimeout = 3500
-                    conn.readTimeout = 3500
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
-                    if (conn.responseCode == 200) {
-                        val body = conn.inputStream.bufferedReader().use { it.readText() }
-                        val json = JSONObject(body)
-                        lat = json.optDouble("latitude", lat)
-                        lon = json.optDouble("longitude", lon)
-                        val city = json.optString("city", "")
-                        if (city.isNotBlank()) cityName = city
-                    }
-                } catch (e: Exception) {
-                    try {
-                        val ipUrl = URL("https://ipwho.is/")
-                        val conn = ipUrl.openConnection() as HttpURLConnection
-                        conn.connectTimeout = 3500
-                        conn.readTimeout = 3500
-                        if (conn.responseCode == 200) {
-                            val body = conn.inputStream.bufferedReader().use { it.readText() }
-                            val json = JSONObject(body)
-                            lat = json.optDouble("latitude", lat)
-                            lon = json.optDouble("longitude", lon)
-                            val city = json.optString("city", "")
-                            if (city.isNotBlank()) cityName = city
-                        }
-                    } catch (ex: Exception) {
-                        // Keep defaults
-                    }
-                }
-            }
-
-            // 3. Query Open-Meteo Weather API
-            try {
-                val weatherUrl = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code&timezone=auto")
-                val conn = weatherUrl.openConnection() as HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
-                if (conn.responseCode == 200) {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(body)
-                    val currentJson = json.optJSONObject("current")
-                    if (currentJson != null) {
-                        val temp = currentJson.optDouble("temperature_2m", 22.0).toInt()
-                        val apparentTemp = currentJson.optDouble("apparent_temperature", temp.toDouble()).toInt()
-                        val humidity = currentJson.optInt("relative_humidity_2m", 60)
-                        val isDay = currentJson.optInt("is_day", 1) == 1
-                        val weatherCode = currentJson.optInt("weather_code", 1)
-                        val condition = getWeatherConditionText(weatherCode, isDay)
-
-                        val weather = WeatherData(
-                            cityName = cityName,
-                            temperature = temp,
-                            apparentTemperature = apparentTemp,
-                            humidity = humidity,
-                            conditionText = condition,
-                            weatherCode = weatherCode,
-                            isDay = isDay,
-                            isLoading = false,
-                            lastUpdated = System.currentTimeMillis()
-                        )
-                        _uiState.update { it.copy(weatherData = weather) }
-                        return@launch
-                    }
-                }
-            } catch (e: Exception) {
-                // Weather query failed
-            }
-
-            // If fetch failed, use cached or fallback
-            _uiState.update {
-                it.copy(
-                    weatherData = it.weatherData?.copy(isLoading = false) ?: WeatherData(
-                        cityName = cityName,
-                        temperature = 22,
-                        conditionText = "Parcialmente nublado",
-                        isLoading = false,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                )
-            }
-        }
-    }
-
-    fun fetchQuotes(forceRefresh: Boolean = false) {
-        val current = _uiState.value.quotesData
-        if (!forceRefresh && current != null && (System.currentTimeMillis() - current.lastUpdated < 5 * 60 * 1000)) {
-            return
-        }
-
-        _uiState.update {
-            it.copy(quotesData = it.quotesData?.copy(isLoading = true) ?: QuotesData(isLoading = true))
-        }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val url = URL("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
-                if (conn.responseCode == 200) {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(body)
-                    val items = mutableListOf<QuoteItem>()
-
-                    if (json.has("USDBRL")) {
-                        val obj = json.getJSONObject("USDBRL")
-                        val bid = obj.optDouble("bid", 5.60)
-                        val pct = obj.optDouble("pctChange", 0.0)
-                        val formattedVal = String.format(Locale.US, "R$ %.2f", bid).replace('.', ',')
-                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
-                        items.add(QuoteItem("USD", "Dólar", formattedVal, formattedPct, pct >= 0))
-                    }
-
-                    if (json.has("EURBRL")) {
-                        val obj = json.getJSONObject("EURBRL")
-                        val bid = obj.optDouble("bid", 6.15)
-                        val pct = obj.optDouble("pctChange", 0.0)
-                        val formattedVal = String.format(Locale.US, "R$ %.2f", bid).replace('.', ',')
-                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
-                        items.add(QuoteItem("EUR", "Euro", formattedVal, formattedPct, pct >= 0))
-                    }
-
-                    if (json.has("BTCBRL")) {
-                        val obj = json.getJSONObject("BTCBRL")
-                        val bid = obj.optDouble("bid", 355000.0)
-                        val pct = obj.optDouble("pctChange", 0.0)
-                        val valText = if (bid >= 1000) {
-                            String.format(Locale.US, "R$ %.0fk", bid / 1000.0).replace('.', ',')
-                        } else {
-                            String.format(Locale.US, "R$ %.0f", bid)
-                        }
-                        val formattedPct = String.format(Locale.US, "%+.2f%%", pct).replace('.', ',')
-                        items.add(QuoteItem("BTC", "Bitcoin", valText, formattedPct, pct >= 0))
-                    }
-
-                    if (items.isNotEmpty()) {
-                        _uiState.update {
-                            it.copy(
-                                quotesData = QuotesData(
-                                    items = items,
-                                    isLoading = false,
-                                    lastUpdated = System.currentTimeMillis()
-                                )
-                            )
-                        }
-                        return@launch
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore network error
-            }
-
-            _uiState.update {
-                it.copy(
-                    quotesData = it.quotesData?.copy(isLoading = false) ?: QuotesData(
-                        items = listOf(
-                            QuoteItem("USD", "Dólar", "R$ 5,64", "+0,35%", true),
-                            QuoteItem("EUR", "Euro", "R$ 6,18", "-0,12%", false),
-                            QuoteItem("BTC", "Bitcoin", "R$ 358k", "+1,85%", true)
-                        ),
-                        isLoading = false,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                )
             }
         }
     }

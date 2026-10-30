@@ -31,11 +31,17 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.speech.RecognizerIntent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,21 +53,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.imePadding
 import android.net.http.SslError
 import android.os.Message
 import android.webkit.SslErrorHandler
 import android.webkit.WebSettings
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,6 +157,10 @@ import android.webkit.WebResourceError
 import com.tessera.browser.data.PageErrorInfo
 import com.tessera.browser.ui.components.DownloadVisualBanner
 import com.tessera.browser.ui.components.TesseraOfflineErrorView
+import com.tessera.browser.ui.components.UndoCloseTabPill
+import com.tessera.browser.ui.components.WebPermissionFloatingCard
+import com.tessera.browser.ui.components.WebPermissionPromptState
+import com.tessera.browser.ui.components.WebPermissionPromptType
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -612,6 +612,77 @@ private val SUMMARY_EXTRACTION_SCRIPT = """
     })();
 """.trimIndent()
 
+private val DIRECT_AUDIO_EXTRACTION_SCRIPT = """
+    (function() {
+        try {
+            var domain = (window.location.hostname || '').replace(/^www\./, '');
+            var title = '';
+            var metaOg = document.querySelector('meta[property="og:title"]');
+            var h1 = document.querySelector('h1');
+            if (metaOg && metaOg.content) title = metaOg.content.trim();
+            else if (h1 && (h1.innerText || h1.textContent || '').trim().length > 3) title = (h1.innerText || h1.textContent).trim();
+            else title = document.title || 'Artigo';
+            title = title.replace(/\s*[-–—|]\s*[^-–—|]+$/, '').trim();
+
+            var ignoreSelector = 'nav, footer, header, form, button, input, select, textarea, script, style, noscript, iframe, svg, canvas, .ad, .ads, .advertisement, [id*="google_ads"], [class*="google_ads"], .sidebar, .widget, .share, .social, #comments, .comments, .cookie-banner, .cookie-notice, .modal, .popup';
+            var candidateSelectors = [
+                'article', '[itemprop="articleBody"]', 'main article', '[role="main"] article',
+                '.article-body', '.article__body', '.post-content', '.entry-content', '.story-body',
+                '.content-article', '#article-body', '#story', 'main', '[role="main"]', '#main-content', '.main-content', '#content'
+            ];
+
+            var bestContainer = null;
+            var maxScore = -1;
+            for (var c = 0; c < candidateSelectors.length; c++) {
+                var els = document.querySelectorAll(candidateSelectors[c]);
+                for (var e = 0; e < els.length; e++) {
+                    var el = els[e];
+                    if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) continue;
+                    var pList = el.querySelectorAll('p');
+                    var text = (el.innerText || el.textContent || '').trim();
+                    var score = pList.length * 100 + text.length;
+                    if (score > maxScore && text.length > 150) {
+                        maxScore = score;
+                        bestContainer = el;
+                    }
+                }
+                if (bestContainer && maxScore > 500) break;
+            }
+            if (!bestContainer) bestContainer = document.body;
+
+            var parts = [];
+            var seen = new Set();
+            var elements = bestContainer.querySelectorAll('h1, h2, h3, p, blockquote, li');
+            for (var i = 0; i < elements.length; i++) {
+                var node = elements[i];
+                if (node.closest(ignoreSelector)) continue;
+                var t = (node.innerText || node.textContent || '').trim().replace(/\[\d+\]/g, '');
+                if (t.length < 18 || seen.has(t)) continue;
+                seen.add(t);
+                parts.push(t);
+            }
+
+            var fullText = parts.join('\n\n');
+            if (!fullText && document.body) {
+                fullText = (document.body.innerText || document.body.textContent || '').trim();
+            }
+            if (fullText.length > 12000) fullText = fullText.substring(0, 12000);
+
+            return JSON.stringify({
+                title: title.trim() || document.title || 'Página Atual',
+                domain: domain,
+                content: fullText
+            });
+        } catch(e) {
+            return JSON.stringify({
+                title: document.title || 'Página Atual',
+                domain: (window.location.hostname || '').replace(/^www\./, ''),
+                content: (document.body ? (document.body.innerText || document.body.textContent || '').substring(0, 6000) : '')
+            });
+        }
+    })();
+""".trimIndent()
+
 class TesseraWebBridge(
     private val onReaderExit: () -> Unit,
     private val onArticleExtracted: (String) -> Unit,
@@ -687,10 +758,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         contract = ActivityResultContracts.RequestPermission()
     ) { /* result ignored */ }
 
-    // Fetch initial weather, financial quotes, init persistence, safe browsing, and request notification permission
+    // Init persistence, safe browsing, and request notification permission
     LaunchedEffect(Unit) {
-        viewModel.fetchWeather(context)
-        viewModel.fetchQuotes()
         viewModel.initPersistence(context)
         viewModel.checkDefaultBrowser(context)
 
@@ -779,14 +848,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         fileUploadCallback = null
     }
 
-    val wallpaperPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.importCustomWallpaper(context, uri)
-        }
-    }
-
     val importBookmarksLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -806,31 +867,97 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     var isAirBarExpanded by remember { mutableStateOf(false) }
     var isSearchEditing by remember { mutableStateOf(false) }
 
+    // Voice Search Launcher (Native SpeechRecognizer Intent)
+    val voiceSearchLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+            if (!spoken.isNullOrBlank()) {
+                isSearchEditing = false
+                viewModel.openUrl(spoken)
+            }
+        }
+    }
+
+    val launchVoiceSearch: () -> Unit = {
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale para pesquisar no Tessera")
+            }
+            voiceSearchLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Busca por voz indisponível neste dispositivo", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Floating Web Permission Prompt & Real Android Runtime Permission Chaining
+    var activeWebPermissionPrompt by remember { mutableStateOf<WebPermissionPromptState?>(null) }
+    var pendingRuntimePermissionCallback by remember { mutableStateOf<((Map<String, Boolean>) -> Unit)?>(null) }
+    val runtimePermissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val callback = pendingRuntimePermissionCallback
+        pendingRuntimePermissionCallback = null
+        callback?.invoke(results)
+    }
+
+    val ensureAndroidPermissions: (Array<String>, (Boolean) -> Unit) -> Unit = { permissions, onResult ->
+        val missing = permissions.filter { perm ->
+            ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            onResult(true)
+        } else {
+            pendingRuntimePermissionCallback = { results ->
+                val hasLocationRequest = permissions.any {
+                    it == Manifest.permission.ACCESS_FINE_LOCATION || it == Manifest.permission.ACCESS_COARSE_LOCATION
+                }
+                val anyLocationGranted = hasLocationRequest && (
+                    results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                    results[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                )
+
+                val nonLocationPermissions = permissions.filter {
+                    it != Manifest.permission.ACCESS_FINE_LOCATION && it != Manifest.permission.ACCESS_COARSE_LOCATION
+                }
+                val allNonLocationGranted = nonLocationPermissions.all { perm ->
+                    results[perm] == true || ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+                }
+
+                val granted = if (hasLocationRequest) {
+                    anyLocationGranted && allNonLocationGranted
+                } else {
+                    allNonLocationGranted
+                }
+                onResult(granted)
+            }
+            runtimePermissionsLauncher.launch(missing.toTypedArray())
+        }
+    }
+
     val effectiveAccentColor = when {
         state.isIncognitoMode -> ApplePalette.Purple
         state.isDarkMode -> ApplePalette.DarkLabelPrimary
         else -> ApplePalette.LightLabelPrimary
     }
 
-    // System Back navigation priority:
-    // 0. Dismiss search editing (keyboard)
-    // 1. Dismiss Find in Page
-    // 2. Dismiss Peek Modal
-    // 3. Exit Fullscreen Video
-    // 4. Dismiss Quick Settings
-    // 5. Dismiss Tabs Modal
-    // 6. Dismiss History/Bookmarks Modal
-    // 7. Dismiss AI Actions Modal
-    // 8. Collapse expanded AirBar
-    // 9. WebView history back
-    // 10. Go Home
-    BackHandler(enabled = (state.isIncognitoMode && state.isIncognitoLocked) || state.safeBrowsingThreat != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    // System Back navigation priority
+    BackHandler(enabled = (state.isIncognitoMode && state.isIncognitoLocked) || state.safeBrowsingThreat != null || activeWebPermissionPrompt != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.isIncognitoMode && state.isIncognitoLocked) {
             viewModel.exitIncognito()
         } else if (state.safeBrowsingThreat != null) {
             safeBrowsingCallback?.backToSafety(true)
             viewModel.dismissSafeBrowsingThreat()
             if (state.canGoBack) webViewInstance?.goBack() else viewModel.goHome()
+        } else if (activeWebPermissionPrompt != null) {
+            activeWebPermissionPrompt?.onDeny?.invoke()
         } else if (state.showPipPermissionDialog) {
             viewModel.showPipPermissionDialog(false)
         } else if (state.showFullSettings) {
@@ -923,6 +1050,51 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
+    val launchListenPage: () -> Unit = {
+        if (state.podcastAudioState.isPlaying) {
+            viewModel.togglePodcastPlayPause(context)
+        } else if (state.isReaderModeActive && state.readerArticle != null) {
+            val art = state.readerArticle!!
+            viewModel.playWebPageContentAsPodcast(
+                context = context,
+                title = art.title,
+                domain = art.domain,
+                content = art.plainText
+            )
+        } else if (state.isHomePage) {
+            Toast.makeText(context, "Abra uma página ou artigo para ouvir em áudio.", Toast.LENGTH_SHORT).show()
+        } else {
+            webViewInstance?.evaluateJavascript(DIRECT_AUDIO_EXTRACTION_SCRIPT) { result ->
+                if (!result.isNullOrBlank() && result != "null" && result != "\"\"") {
+                    try {
+                        val trimmed = result.trim()
+                        val cleanJson = if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                            val tok = org.json.JSONTokener(trimmed).nextValue()
+                            if (tok is String) tok else tok.toString()
+                        } else {
+                            trimmed
+                        }
+                        val json = JSONObject(cleanJson)
+                        val title = json.optString("title", webViewInstance?.title ?: "Artigo")
+                        val domain = json.optString("domain", "")
+                        val content = json.optString("content", "")
+                        viewModel.playWebPageContentAsPodcast(
+                            context = context,
+                            title = title,
+                            domain = domain,
+                            content = content
+                        )
+                    } catch (e: Exception) {
+                        Log.e("TesseraBrowser", "Falha ao extrair áudio da página", e)
+                        Toast.makeText(context, "Não foi possível extrair o texto desta página.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Nenhum texto legível encontrado nesta página.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     // Scroll detector to show/hide AirBar when browsing
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -955,33 +1127,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             .background(rootBg)
     ) {
         if (state.isHomePage) {
-            // NATIVE START PAGE / LUPA CENTRAL & BARRA DE FAVORITOS
+            // START PAGE 100% ZEN (LUPA CENTRAL FLUTUANTE)
             TesseraStartPage(
-                activeWallpaper = state.activeWallpaper,
-                showWallpaper = state.showWallpaper,
-                customWallpaperUri = state.customWallpaperUri,
                 isDarkMode = state.isDarkMode,
-                favorites = state.currentSpaceFavorites,
-                searchSuggestions = state.searchSuggestions,
-                trendingTopics = state.trendingTopics,
-                digitalMinimalismMode = state.digitalMinimalismMode,
-                showWeatherWidget = state.showWeatherWidget,
-                showQuotesWidget = state.showQuotesWidget,
-                weatherData = state.weatherData,
-                quotesData = state.quotesData,
-                onRefreshWeather = { viewModel.fetchWeather(context, forceRefresh = true) },
-                onSearchQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
-                onSearch = { query -> viewModel.openUrl(query) },
-                onOpenAi = { query -> viewModel.openAiAssistant("Tessera AI", "", "", query) },
-                onOpenUrl = { url -> viewModel.openUrl(url) },
-                onOpenSettings = { viewModel.toggleQuickSettings() },
-                onSearchClick = { isSearchEditing = true },
-                totalBlockedCount = state.privacyState.totalBlockedCount,
-                onOpenPrivacyDashboard = { viewModel.togglePrivacyDashboard(true) },
-                currentSpaceEmoji = state.currentSpace.iconEmoji,
-                currentSpaceName = state.currentSpace.name,
-                currentSpaceColor = Color(state.currentSpace.colorArgb),
-                onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) }
+                onSearchClick = { isSearchEditing = true }
             )
         } else {
             val bottomBarPadding by animateDpAsState(
@@ -1055,6 +1204,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
                                 // Standard modern Chrome mobile/desktop UA
                                 userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(ctx)
+                                textZoom = state.pageTextZoom
 
                                 applyForceDark(this, state.forceDarkPages)
                                 setGeolocationEnabled(true)
@@ -1344,16 +1494,27 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     handler: SslErrorHandler?,
                                     error: SslError?
                                 ) {
-                                    AlertDialog.Builder(view?.context ?: context)
-                                        .setTitle("Aviso de Segurança SSL")
-                                        .setMessage("O certificado de segurança deste site apresentou uma falha. Deseja continuar mesmo assim?")
-                                        .setPositiveButton("Continuar") { _, _ -> handler?.proceed() }
-                                        .setNegativeButton("Voltar") { _, _ ->
+                                    val sslOrigin = error?.url?.let {
+                                        runCatching { Uri.parse(it).host?.removePrefix("www.") }.getOrNull()
+                                    }.orEmpty()
+                                    activeWebPermissionPrompt = WebPermissionPromptState(
+                                        type = WebPermissionPromptType.SSL_WARNING,
+                                        origin = sslOrigin,
+                                        title = "Conexão não é privada",
+                                        message = "O certificado SSL deste site apresentou uma falha e seus dados podem estar expostos.",
+                                        confirmLabel = "Prosseguir",
+                                        denyLabel = "Voltar com Segurança",
+                                        isDanger = true,
+                                        onAllow = {
+                                            activeWebPermissionPrompt = null
+                                            handler?.proceed()
+                                        },
+                                        onDeny = {
+                                            activeWebPermissionPrompt = null
                                             handler?.cancel()
                                             if (view?.canGoBack() == true) view.goBack() else viewModel.goHome()
                                         }
-                                        .setOnCancelListener { handler?.cancel() }
-                                        .show()
+                                    )
                                 }
 
                                 override fun onReceivedError(
@@ -1630,82 +1791,174 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     callback: GeolocationPermissions.Callback?
                                 ) {
                                     val safeOrigin = origin ?: ""
+                                    val cleanOrigin = try {
+                                        Uri.parse(if (safeOrigin.startsWith("http")) safeOrigin else "https://$safeOrigin")
+                                            .host?.removePrefix("www.") ?: safeOrigin
+                                    } catch (e: Exception) {
+                                        safeOrigin
+                                    }
+                                    val locationPerms = arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
                                     val siteSetting = viewModel.getSiteSettings(safeOrigin)
                                     if (siteSetting.locationConfigured) {
-                                        callback?.invoke(origin, siteSetting.locationGranted, true)
+                                        if (siteSetting.locationGranted) {
+                                            ensureAndroidPermissions(locationPerms) { osGranted ->
+                                                callback?.invoke(origin, osGranted, osGranted)
+                                            }
+                                        } else {
+                                            callback?.invoke(origin, false, true)
+                                        }
                                         return
                                     }
 
-                                    AlertDialog.Builder(context)
-                                        .setTitle("Permissão de Localização")
-                                        .setMessage("$safeOrigin gostaria de acessar sua localização.")
-                                        .setPositiveButton("Permitir") { _, _ ->
-                                            viewModel.updateSitePermission(safeOrigin) {
-                                                it.copy(locationGranted = true, locationConfigured = true)
+                                    activeWebPermissionPrompt = WebPermissionPromptState(
+                                        type = WebPermissionPromptType.LOCATION,
+                                        origin = cleanOrigin,
+                                        title = "Permitir localização?",
+                                        message = "${cleanOrigin.ifBlank { "Este site" }} deseja acessar sua localização atual.",
+                                        confirmLabel = "Permitir",
+                                        denyLabel = "Bloquear",
+                                        onAllow = {
+                                            activeWebPermissionPrompt = null
+                                            ensureAndroidPermissions(locationPerms) { osGranted ->
+                                                if (osGranted) {
+                                                    viewModel.updateSitePermission(safeOrigin) {
+                                                        it.copy(locationGranted = true, locationConfigured = true)
+                                                    }
+                                                    callback?.invoke(origin, true, true)
+                                                } else {
+                                                    Toast.makeText(context, "Permissão de localização negada no Android", Toast.LENGTH_SHORT).show()
+                                                    callback?.invoke(origin, false, false)
+                                                }
                                             }
-                                            callback?.invoke(origin, true, true)
-                                        }
-                                        .setNegativeButton("Bloquear") { _, _ ->
+                                        },
+                                        onDeny = {
+                                            activeWebPermissionPrompt = null
                                             viewModel.updateSitePermission(safeOrigin) {
                                                 it.copy(locationGranted = false, locationConfigured = true)
                                             }
                                             callback?.invoke(origin, false, false)
                                         }
-                                        .setOnCancelListener {
-                                            callback?.invoke(origin, false, false)
-                                        }
-                                        .show()
+                                    )
                                 }
 
                                 override fun onPermissionRequest(request: PermissionRequest?) {
                                     if (request == null) return
                                     val reqOrigin = request.origin?.toString() ?: ""
-                                    val cleanReqOrigin = try { java.net.URI(reqOrigin).host ?: reqOrigin } catch (e: Exception) { reqOrigin }
+                                    val cleanReqOrigin = try {
+                                        java.net.URI(reqOrigin).host?.removePrefix("www.") ?: reqOrigin
+                                    } catch (e: Exception) {
+                                        reqOrigin
+                                    }
                                     val currentSetting = viewModel.getSiteSettings(cleanReqOrigin)
 
                                     val needsAudio = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
                                     val needsVideo = request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+                                    val passiveResources = request.resources.filter {
+                                        it != PermissionRequest.RESOURCE_AUDIO_CAPTURE &&
+                                        it != PermissionRequest.RESOURCE_VIDEO_CAPTURE
+                                    }
 
-                                    if ((needsAudio && currentSetting.micConfigured) || (needsVideo && currentSetting.cameraConfigured)) {
-                                        val grantedResources = mutableListOf<String>()
-                                        if (needsAudio && currentSetting.micGranted) grantedResources.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
-                                        if (needsVideo && currentSetting.cameraGranted) grantedResources.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
-
-                                        if (grantedResources.isNotEmpty()) {
-                                            request.grant(grantedResources.toTypedArray())
+                                    if (!needsAudio && !needsVideo) {
+                                        if (passiveResources.isNotEmpty()) {
+                                            request.grant(passiveResources.toTypedArray())
                                         } else {
                                             request.deny()
                                         }
                                         return
                                     }
 
-                                    AlertDialog.Builder(context)
-                                        .setTitle("Permissão de Câmera/Microfone")
-                                        .setMessage("$cleanReqOrigin gostaria de acessar seus dispositivos de áudio/vídeo.")
-                                        .setPositiveButton("Permitir") { _, _ ->
-                                            viewModel.updateSitePermission(cleanReqOrigin) {
-                                                it.copy(
-                                                    cameraGranted = true,
-                                                    cameraConfigured = true,
-                                                    micGranted = true,
-                                                    micConfigured = true
-                                                )
+                                    val audioAlreadyDecided = !needsAudio || currentSetting.micConfigured
+                                    val videoAlreadyDecided = !needsVideo || currentSetting.cameraConfigured
+
+                                    if (audioAlreadyDecided && videoAlreadyDecided) {
+                                        val desiredOsPerms = mutableListOf<String>()
+                                        if (needsVideo && currentSetting.cameraGranted) desiredOsPerms.add(Manifest.permission.CAMERA)
+                                        if (needsAudio && currentSetting.micGranted) desiredOsPerms.add(Manifest.permission.RECORD_AUDIO)
+
+                                        if (desiredOsPerms.isEmpty()) {
+                                            if (passiveResources.isNotEmpty()) {
+                                                request.grant(passiveResources.toTypedArray())
+                                            } else {
+                                                request.deny()
                                             }
-                                            request.grant(request.resources)
+                                        } else {
+                                            ensureAndroidPermissions(desiredOsPerms.toTypedArray()) { osGranted ->
+                                                if (osGranted) {
+                                                    val grantedResources = mutableListOf<String>()
+                                                    grantedResources.addAll(passiveResources)
+                                                    if (needsAudio && currentSetting.micGranted) grantedResources.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                                                    if (needsVideo && currentSetting.cameraGranted) grantedResources.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+                                                    request.grant(grantedResources.toTypedArray())
+                                                } else {
+                                                    request.deny()
+                                                }
+                                            }
                                         }
-                                        .setNegativeButton("Bloquear") { _, _ ->
-                                            viewModel.updateSitePermission(cleanReqOrigin) {
-                                                it.copy(
-                                                    cameraGranted = false,
-                                                    cameraConfigured = true,
-                                                    micGranted = false,
-                                                    micConfigured = true
+                                        return
+                                    }
+
+                                    val promptType = when {
+                                        needsVideo && needsAudio -> WebPermissionPromptType.CAMERA_AND_MICROPHONE
+                                        needsVideo -> WebPermissionPromptType.CAMERA
+                                        else -> WebPermissionPromptType.MICROPHONE
+                                    }
+                                    val promptTitle = when (promptType) {
+                                        WebPermissionPromptType.CAMERA_AND_MICROPHONE -> "Permitir câmera e microfone?"
+                                        WebPermissionPromptType.CAMERA -> "Permitir acesso à câmera?"
+                                        else -> "Permitir acesso ao microfone?"
+                                    }
+                                    val promptMsg = when (promptType) {
+                                        WebPermissionPromptType.CAMERA_AND_MICROPHONE -> "${cleanReqOrigin.ifBlank { "Este site" }} solicita acesso à câmera e ao microfone."
+                                        WebPermissionPromptType.CAMERA -> "${cleanReqOrigin.ifBlank { "Este site" }} solicita acesso à câmera do dispositivo."
+                                        else -> "${cleanReqOrigin.ifBlank { "Este site" }} solicita acesso ao microfone para captura de voz."
+                                    }
+
+                                    activeWebPermissionPrompt = WebPermissionPromptState(
+                                        type = promptType,
+                                        origin = cleanReqOrigin,
+                                        title = promptTitle,
+                                        message = promptMsg,
+                                        confirmLabel = "Permitir",
+                                        denyLabel = "Bloquear",
+                                        onAllow = {
+                                            activeWebPermissionPrompt = null
+                                            val requiredOsPerms = mutableListOf<String>()
+                                            if (needsVideo) requiredOsPerms.add(Manifest.permission.CAMERA)
+                                            if (needsAudio) requiredOsPerms.add(Manifest.permission.RECORD_AUDIO)
+
+                                            ensureAndroidPermissions(requiredOsPerms.toTypedArray()) { osGranted ->
+                                                if (osGranted) {
+                                                    viewModel.updateSitePermission(cleanReqOrigin) { existing ->
+                                                        existing.copy(
+                                                            cameraGranted = if (needsVideo) true else existing.cameraGranted,
+                                                            cameraConfigured = if (needsVideo) true else existing.cameraConfigured,
+                                                            micGranted = if (needsAudio) true else existing.micGranted,
+                                                            micConfigured = if (needsAudio) true else existing.micConfigured
+                                                        )
+                                                    }
+                                                    request.grant(request.resources)
+                                                } else {
+                                                    Toast.makeText(context, "Permissão de câmera/microfone negada no Android", Toast.LENGTH_SHORT).show()
+                                                    request.deny()
+                                                }
+                                            }
+                                        },
+                                        onDeny = {
+                                            activeWebPermissionPrompt = null
+                                            viewModel.updateSitePermission(cleanReqOrigin) { existing ->
+                                                existing.copy(
+                                                    cameraGranted = if (needsVideo) false else existing.cameraGranted,
+                                                    cameraConfigured = if (needsVideo) true else existing.cameraConfigured,
+                                                    micGranted = if (needsAudio) false else existing.micGranted,
+                                                    micConfigured = if (needsAudio) true else existing.micConfigured
                                                 )
                                             }
                                             request.deny()
                                         }
-                                        .setOnCancelListener { request.deny() }
-                                        .show()
+                                    )
                                 }
 
                                 override fun onShowFileChooser(
@@ -1780,6 +2033,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
                         }
                         applyForceDark(view.settings, state.forceDarkPages)
+                        if (view.settings.textZoom != state.pageTextZoom) {
+                            view.settings.textZoom = state.pageTextZoom
+                        }
                         val targetUa = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(view.context)
                         if (view.settings.userAgentString != targetUa) {
                             view.settings.userAgentString = targetUa
@@ -1923,6 +2179,38 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 },
                 onDismiss = { viewModel.dismissDownloadNotice() }
             )
+
+            // Floating Editorial Web Permission Card (Camera, Mic, Location, SSL)
+            AnimatedVisibility(
+                visible = activeWebPermissionPrompt != null && !state.isInPipMode,
+                enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(240)) + fadeIn(tween(220)),
+                exit = slideOutVertically(targetOffsetY = { it / 2 }, animationSpec = tween(180)) + fadeOut(tween(180))
+            ) {
+                activeWebPermissionPrompt?.let { prompt ->
+                    WebPermissionFloatingCard(
+                        prompt = prompt,
+                        isDarkMode = state.isDarkMode,
+                        isIncognito = state.isIncognitoMode,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+            }
+
+            // Floating Undo Close Tab Pill (4.5s auto-dismiss)
+            AnimatedVisibility(
+                visible = state.showUndoCloseTabBanner && state.recentlyClosedTabs.isNotEmpty() && !state.showTabsModal && !state.isInPipMode,
+                enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(220)) + fadeIn(tween(200)),
+                exit = slideOutVertically(targetOffsetY = { it / 2 }, animationSpec = tween(180)) + fadeOut(tween(180))
+            ) {
+                UndoCloseTabPill(
+                    closedTabTitle = state.lastClosedTabTitle,
+                    isDarkMode = state.isDarkMode,
+                    isIncognito = state.isIncognitoMode,
+                    onUndo = { viewModel.restoreLastClosedTab() },
+                    onDismiss = { viewModel.dismissUndoCloseTabBanner() },
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
 
             // Docked TesseraAirBar (Ancorada no rodapé sólido)
             AnimatedVisibility(
@@ -2069,6 +2357,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onHome = { viewModel.goHome() },
                         onReload = { webViewInstance?.reload() },
                         onSearch = { query -> viewModel.openUrl(query) },
+                        onVoiceSearch = launchVoiceSearch,
                         onQueryChange = { query -> viewModel.fetchSearchSuggestions(query) },
                         onOpenAi = { query ->
                             viewModel.openAiAssistant(
@@ -2157,7 +2446,6 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                         onOpenSpaces = { viewModel.toggleSpaceSwitcherModal(true) },
                         tabs = state.currentSpaceTabs,
                         activeTabId = state.activeTabId,
-                        showTabStrip = state.showPillTabsBar,
                         onSelectTab = { tabId -> viewModel.selectTab(tabId) },
                         onCloseTab = { tabId -> viewModel.closeTab(tabId) },
                         onNewTab = { viewModel.addNewTab() }
@@ -2200,6 +2488,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onUpdateSpace = { id, name, emoji, color -> viewModel.updateSpace(id, name, emoji, color) },
                 onDeleteSpace = { viewModel.deleteSpace(it) },
                 onMoveTabToSpace = { tabId, targetSpaceId -> viewModel.moveTabToSpace(tabId, targetSpaceId) },
+                isIncognito = state.isIncognitoMode,
+                onToggleIncognito = { viewModel.toggleIncognitoMode() },
+                canRestoreClosedTab = state.recentlyClosedTabs.isNotEmpty(),
+                onRestoreClosedTab = { viewModel.restoreLastClosedTab() },
                 onSelectTab = { viewModel.selectTab(it) },
                 onCloseTab = { viewModel.closeTab(it) },
                 onNewTab = { viewModel.addNewTab() },
@@ -2314,70 +2606,88 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             )
         }
 
-        // QUICK SETTINGS BOTTOM SHEET PANEL
+        // QUICK SETTINGS FLOATING BENTO CARD
         AnimatedVisibility(
             visible = state.showQuickSettings,
             enter = slideInVertically(
                 initialOffsetY = { it },
-                animationSpec = tween(320)
-            ),
+                animationSpec = tween(300)
+            ) + fadeIn(tween(220)),
             exit = slideOutVertically(
                 targetOffsetY = { it },
-                animationSpec = tween(280)
-            ),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
+                animationSpec = tween(250)
+            ) + fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
+            val activeUrl = state.displayUrl.ifBlank { state.currentUrl }
             QuickSettingsPanel(
                 isDarkMode = state.isDarkMode,
+                isIncognito = state.isIncognitoMode,
                 forceDarkPages = state.forceDarkPages,
-                showWallpaper = state.showWallpaper,
-                selectedWallpaperId = state.selectedWallpaperId,
-                customWallpaperUri = state.customWallpaperUri,
-                showFavoritesBar = state.showFavoritesBar,
-                tesseraAiEnabled = state.tesseraAiEnabled,
-                aiToolbarButton = state.aiToolbarButton,
-                aiTextHighlightPrompts = state.aiTextHighlightPrompts,
-                showSidebar = state.showSidebar,
-                autoHideSidebar = state.autoHideSidebar,
                 adBlockEnabled = state.adBlockEnabled,
                 isDesktopMode = state.isDesktopMode,
                 cookieBlockerEnabled = state.cookieBlockerEnabled,
                 isWebPageActive = !state.isHomePage,
-                showWeatherWidget = state.showWeatherWidget,
-                showQuotesWidget = state.showQuotesWidget,
-                selectedSearchEngine = state.searchEngine,
-                onSearchEngineSelected = { viewModel.setSearchEngine(it) },
-                onClearBrowsingData = { clearHistory, clearCookies, clearCache ->
-                    viewModel.clearBrowsingData(
-                        context = context,
-                        webView = webViewInstance,
-                        clearHistory = clearHistory,
-                        clearCookies = clearCookies,
-                        clearCache = clearCache
-                    ) {
-                        Toast.makeText(context, "Dados de navegação limpos com sucesso!", Toast.LENGTH_SHORT).show()
+                currentUrl = if (state.isHomePage) "" else activeUrl,
+                isSecureSite = activeUrl.startsWith("https://", ignoreCase = true),
+                canGoBack = !state.isHomePage && state.canGoBack,
+                canGoForward = !state.isHomePage && state.canGoForward,
+                isBookmarked = !state.isHomePage && state.isCurrentPageBookmarked,
+                isReaderModeActive = state.isReaderModeActive,
+                isListeningPage = state.podcastAudioState.isPlaying,
+                isVideoPlaying = state.isVideoPlaying,
+                pageTextZoom = state.pageTextZoom,
+                privacyBlockedCount = state.privacyState.pageBlockedCount,
+                onGoBack = {
+                    viewModel.dismissQuickSettings()
+                    webViewInstance?.goBack()
+                },
+                onGoForward = {
+                    viewModel.dismissQuickSettings()
+                    webViewInstance?.goForward()
+                },
+                onReload = {
+                    viewModel.dismissQuickSettings()
+                    webViewInstance?.reload()
+                },
+                onToggleBookmark = {
+                    if (state.isHomePage) {
+                        viewModel.dismissQuickSettings()
+                        viewModel.openHistoryModal(0)
+                    } else {
+                        viewModel.toggleBookmark(
+                            title = webViewInstance?.title ?: "",
+                            url = activeUrl
+                        )
                     }
                 },
-                onDarkModeChanged = { viewModel.setDarkMode(it) },
-
-                onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
-                onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
-                onSelectWallpaper = { viewModel.selectWallpaper(it) },
-                onUploadWallpaper = {
-                    wallpaperPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                onListenPage = {
+                    viewModel.dismissQuickSettings()
+                    launchListenPage()
                 },
-                onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
-                onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
-                onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
-                onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
-                onAiToolbarButtonChanged = { viewModel.setAiToolbarButton(it) },
-                onAiTextHighlightPromptsChanged = { viewModel.setAiTextHighlightPrompts(it) },
-                onShowSidebarChanged = { viewModel.setShowSidebar(it) },
-                onAutoHideSidebarChanged = { viewModel.setAutoHideSidebar(it) },
+                onOpenAi = {
+                    viewModel.dismissQuickSettings()
+                    if (state.isReaderModeActive && state.readerArticle != null) {
+                        val art = state.readerArticle!!
+                        viewModel.openAiAssistant(art.title, art.domain, state.displayUrl, art.plainText)
+                    } else if (!state.isHomePage) {
+                        val currentTitle = webViewInstance?.title ?: ""
+                        val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                        viewModel.prepareAiAssistant(currentTitle, currentDomain, state.displayUrl)
+                        webViewInstance?.evaluateJavascript(SUMMARY_EXTRACTION_SCRIPT, null)
+                    } else {
+                        viewModel.openAiAssistant("Tessera AI", "", "", "")
+                    }
+                },
+                onToggleIncognito = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.toggleIncognitoMode()
+                },
+                onIncreaseTextZoom = { viewModel.increasePageTextZoom() },
+                onDecreaseTextZoom = { viewModel.decreasePageTextZoom() },
+                onResetTextZoom = { viewModel.resetPageTextZoom() },
+                onDarkModeChanged = { viewModel.setDarkMode(it) },
+                onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
                 onAdBlockChanged = { viewModel.setAdBlockEnabled(it) },
                 onDesktopModeChanged = { viewModel.toggleDesktopMode() },
                 onCookieBlockerChanged = { viewModel.toggleCookieBlocker() },
@@ -2442,19 +2752,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenFullSettings = {
                     viewModel.openFullSettings()
                 },
-                isAutoPipEnabled = state.isAutoPipEnabled,
-                onAutoPipChanged = { viewModel.setAutoPipEnabled(it) },
                 onEnterPip = {
+                    viewModel.dismissQuickSettings()
                     val activity = context as? Activity
                     if (activity != null) {
                         viewModel.requestEnterPip(activity)
                     }
                 },
                 onOpenInExternalApp = {
+                    viewModel.dismissQuickSettings()
                     viewModel.openCurrentUrlInExternalApp(context)
                 },
-                geminiApiKey = state.geminiApiKey,
-                onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
                 onDismiss = { viewModel.dismissQuickSettings() }
             )
         }
@@ -2469,25 +2777,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             TesseraSettingsScreen(
                 isDarkMode = state.isDarkMode,
                 forceDarkPages = state.forceDarkPages,
-                showWallpaper = state.showWallpaper,
-                selectedWallpaperId = state.selectedWallpaperId,
-                customWallpaperUri = state.customWallpaperUri,
-                showFavoritesBar = state.showFavoritesBar,
-                showPillTabsBar = state.showPillTabsBar,
-                showWeatherWidget = state.showWeatherWidget,
-                showQuotesWidget = state.showQuotesWidget,
+                pageTextZoom = state.pageTextZoom,
                 tesseraAiEnabled = state.tesseraAiEnabled,
-                aiToolbarButton = state.aiToolbarButton,
-                aiTextHighlightPrompts = state.aiTextHighlightPrompts,
-                showSidebar = state.showSidebar,
-                autoHideSidebar = state.autoHideSidebar,
                 adBlockEnabled = state.adBlockEnabled,
                 cookieBlockerEnabled = state.cookieBlockerEnabled,
+                isAutoPipEnabled = state.isAutoPipEnabled,
                 selectedSearchEngine = state.searchEngine,
                 geminiApiKey = state.geminiApiKey,
                 groqApiKey = state.groqApiKey,
                 aiProvider = state.aiProvider,
-                digitalMinimalismMode = state.digitalMinimalismMode,
                 isDefaultBrowser = state.isDefaultBrowser,
                 onRequestDefaultBrowser = {
                     fragmentActivity?.let { act ->
@@ -2514,29 +2812,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenLinksInExternalAppsChanged = { viewModel.setOpenLinksInExternalApps(it) },
                 onDarkModeChanged = { viewModel.setDarkMode(it) },
                 onForceDarkPagesChanged = { viewModel.setForceDarkPages(it) },
-                onShowWallpaperChanged = { viewModel.setShowWallpaper(it) },
-                onSelectWallpaper = { viewModel.selectWallpaper(it) },
-                onUploadWallpaper = {
-                    wallpaperPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-                onShowFavoritesBarChanged = { viewModel.setShowFavoritesBar(it) },
-                onShowPillTabsBarChanged = { viewModel.setShowPillTabsBar(it) },
-                onShowWeatherWidgetChanged = { viewModel.setShowWeatherWidget(it) },
-                onShowQuotesWidgetChanged = { viewModel.setShowQuotesWidget(it) },
+                onIncreaseTextZoom = { viewModel.increasePageTextZoom() },
+                onDecreaseTextZoom = { viewModel.decreasePageTextZoom() },
+                onResetTextZoom = { viewModel.resetPageTextZoom() },
+                onAutoPipChanged = { viewModel.setAutoPipEnabled(it) },
                 onTesseraAiChanged = { viewModel.setTesseraAiEnabled(it) },
-                onAiToolbarButtonChanged = { viewModel.setAiToolbarButton(it) },
-                onAiTextHighlightPromptsChanged = { viewModel.setAiTextHighlightPrompts(it) },
-                onShowSidebarChanged = { viewModel.setShowSidebar(it) },
-                onAutoHideSidebarChanged = { viewModel.setAutoHideSidebar(it) },
                 onAdBlockChanged = { viewModel.setAdBlockEnabled(it) },
                 onCookieBlockerChanged = { viewModel.toggleCookieBlocker() },
                 onSearchEngineSelected = { viewModel.setSearchEngine(it) },
                 onGeminiApiKeyChanged = { viewModel.setGeminiApiKey(it) },
                 onGroqApiKeyChanged = { viewModel.setGroqApiKey(it) },
                 onAiProviderChanged = { viewModel.setAiProvider(it) },
-                onDigitalMinimalismModeChanged = { viewModel.setDigitalMinimalismMode(it) },
                 onClearBrowsingData = { clearHistory, clearCookies, clearCache ->
                     viewModel.clearBrowsingData(
                         context = context,
