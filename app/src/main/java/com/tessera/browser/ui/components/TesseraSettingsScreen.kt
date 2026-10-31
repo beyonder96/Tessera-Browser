@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Cookie
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -135,6 +136,7 @@ fun TesseraSettingsScreen(
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSiteSettings: () -> Unit,
+    onOpenDesktopSync: () -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
     onBack: () -> Unit,
@@ -950,6 +952,20 @@ fun TesseraSettingsScreen(
                                 showChevron = true,
                                 textPrimary = textPrimary,
                                 onClick = onImportBackup
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 15.dp), color = dividerColor)
+
+                            EditorialSettingClickRow(
+                                icon = Icons.Rounded.Computer,
+                                iconTint = textPrimary,
+                                squircleBg = squircleBg,
+                                title = "Tessera Desktop Sync (Windows)",
+                                subtitle = "Conectar e sincronizar com seu PC na mesma rede Wi-Fi",
+                                subtitleColor = textSecondary,
+                                showChevron = true,
+                                textPrimary = textPrimary,
+                                onClick = onOpenDesktopSync
                             )
                         }
                     }

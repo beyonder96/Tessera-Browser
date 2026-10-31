@@ -124,6 +124,7 @@ import com.tessera.browser.ui.components.FindInPageBar
 import com.tessera.browser.ui.components.HistoryBookmarksModal
 import com.tessera.browser.data.ContextMenuTarget
 import com.tessera.browser.ui.components.ContextMenuModal
+import com.tessera.browser.ui.components.DesktopSyncModal
 import androidx.fragment.app.FragmentActivity
 import com.tessera.browser.ui.components.IncognitoLockOverlay
 import com.tessera.browser.util.BiometricAuthHelper
@@ -949,7 +950,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     }
 
     // System Back navigation priority
-    BackHandler(enabled = (state.isIncognitoMode && state.isIncognitoLocked) || state.safeBrowsingThreat != null || activeWebPermissionPrompt != null || state.showPipPermissionDialog || state.showQrCodeModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
+    BackHandler(enabled = (state.isIncognitoMode && state.isIncognitoLocked) || state.safeBrowsingThreat != null || activeWebPermissionPrompt != null || state.showPipPermissionDialog || state.showQrCodeModal || state.showDesktopSyncModal || state.pageError != null || isSearchEditing || state.showFindInPage || state.showPeekModal || customView != null || !state.isHomePage || state.showFullSettings || state.showQuickSettings || state.showTabsModal || state.showSpaceSwitcherModal || state.showHistoryModal || state.aiAssistantState.isVisible || state.showSiteSettingsModal || state.translationState.isBannerVisible || isAirBarExpanded) {
         if (state.isIncognitoMode && state.isIncognitoLocked) {
             viewModel.exitIncognito()
         } else if (state.safeBrowsingThreat != null) {
@@ -964,6 +965,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             viewModel.dismissFullSettings()
         } else if (state.showQrCodeModal) {
             viewModel.dismissQrCodeModal()
+        } else if (state.showDesktopSyncModal) {
+            viewModel.dismissDesktopSyncModal()
         } else if (state.pageError != null) {
             viewModel.clearPageError()
             viewModel.goHome()
@@ -2725,6 +2728,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                     viewModel.dismissQuickSettings()
                     viewModel.showQrCodeModal()
                 },
+                onOpenDesktopSync = {
+                    viewModel.dismissQuickSettings()
+                    viewModel.openDesktopSyncModal()
+                },
                 onTranslatePage = {
                     viewModel.dismissQuickSettings()
                     viewModel.showTranslationBanner(true)
@@ -2845,6 +2852,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onOpenSiteSettings = {
                     viewModel.dismissFullSettings()
                     viewModel.openSiteSettings(state.displayUrl)
+                },
+                onOpenDesktopSync = {
+                    viewModel.openDesktopSyncModal()
                 },
                 onExportBackup = {
                     viewModel.exportFullBackup(context)
@@ -3168,6 +3178,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onDismiss = { viewModel.dismissQrCodeModal() },
                 accentColor = effectiveAccentColor,
                 isDarkMode = state.isDarkMode
+            )
+        }
+
+        // TESSERA DESKTOP SYNC MODAL (WIFI LAN SYNC)
+        if (state.showDesktopSyncModal) {
+            DesktopSyncModal(
+                viewModel = viewModel,
+                isDarkMode = state.isDarkMode,
+                onDismiss = { viewModel.dismissDesktopSyncModal() }
             )
         }
 

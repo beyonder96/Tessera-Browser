@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
@@ -123,6 +124,7 @@ fun QuickSettingsPanel(
     onAddToHomeScreen: () -> Unit = {},
     onSavePageOffline: () -> Unit = {},
     onShowQrCode: () -> Unit = {},
+    onOpenDesktopSync: () -> Unit = {},
     onTranslatePage: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {},
     onOpenPrivacyDashboard: () -> Unit = {},
@@ -548,11 +550,11 @@ fun QuickSettingsPanel(
                             action = ActionKind.PRINT
                         ),
                         BentoActionSpec(
-                            icon = Icons.Rounded.OfflinePin,
-                            label = "Offline",
-                            enabled = isWebPageActive,
+                            icon = Icons.Rounded.Sync,
+                            label = "Sync PC",
+                            enabled = true,
                             isActive = false,
-                            action = ActionKind.OFFLINE
+                            action = ActionKind.DESKTOP_SYNC
                         ),
                         if (isVideoPlaying) {
                             BentoActionSpec(
@@ -583,6 +585,7 @@ fun QuickSettingsPanel(
                         ActionKind.TRANSLATE -> { onDismiss(); onTranslatePage() }
                         ActionKind.PRINT -> { onDismiss(); onPrintPage() }
                         ActionKind.OFFLINE -> { onDismiss(); onSavePageOffline() }
+                        ActionKind.DESKTOP_SYNC -> { onDismiss(); onOpenDesktopSync() }
                         ActionKind.PIP -> { onDismiss(); onEnterPip() }
                         ActionKind.QR -> { onDismiss(); onShowQrCode() }
                     }
@@ -798,7 +801,7 @@ fun QuickSettingsPanel(
 }
 
 private enum class ActionKind {
-    SHARE, READER, FIND, DESKTOP, TRANSLATE, PRINT, OFFLINE, PIP, QR
+    SHARE, READER, FIND, DESKTOP, TRANSLATE, PRINT, OFFLINE, PIP, QR, DESKTOP_SYNC
 }
 
 @Immutable

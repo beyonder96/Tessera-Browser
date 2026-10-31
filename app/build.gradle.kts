@@ -12,8 +12,8 @@ android {
         applicationId = "com.tessera.browser"
         minSdk = 26
         targetSdk = 35
-        versionCode = 41
-        versionName = "3.6.0"
+        versionCode = 42
+        versionName = "3.6.1"
     }
 
     buildTypes {

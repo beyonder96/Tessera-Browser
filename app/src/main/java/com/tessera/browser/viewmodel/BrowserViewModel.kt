@@ -251,6 +251,9 @@ data class BrowserUiState(
     // Modal de Compartilhamento QR Code
     val showQrCodeModal: Boolean = false,
 
+    // Modal de Sincronização Wi-Fi Tessera Desktop (Windows)
+    val showDesktopSyncModal: Boolean = false,
+
     // Google Safe Browsing Ameaça
     val safeBrowsingThreat: SafeBrowsingThreatInfo? = null,
 
@@ -563,6 +566,34 @@ class BrowserViewModel : ViewModel() {
 
     fun onAppForegrounded() {
         // Keeps lock overlay active if incognito is locked
+        desktopSyncManager?.let { sync ->
+            viewModelScope.launch {
+                sync.checkDesktopStatus()
+                val inboxTabs = sync.pollMobileInbox()
+                if (inboxTabs.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        for (tab in inboxTabs) {
+                            openUrl(tab.url)
+                        }
+                        appContext?.let { ctx ->
+                            Toast.makeText(ctx, "Aba recebida do Tessera Windows!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun openDesktopSyncModal() {
+        _uiState.update { it.copy(showDesktopSyncModal = true) }
+        desktopSyncManager?.startDiscoveryListener()
+        viewModelScope.launch {
+            desktopSyncManager?.checkDesktopStatus()
+        }
+    }
+
+    fun dismissDesktopSyncModal() {
+        _uiState.update { it.copy(showDesktopSyncModal = false) }
     }
 
     fun checkDefaultBrowser(context: Context) {
@@ -2689,48 +2720,101 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun mergeBackupJsonNonDestructive(content: String): Triple<Int, Int, Int> {
+        try {
+            val root = JSONObject(content)
+            val jsonObject = if (root.has("latestState")) root.getJSONObject("latestState") else root
+
+            // 1. Bookmarks merge (por URL normalizada)
+            val bookmarksArr = jsonObject.optJSONArray("bookmarks")
+            var newBookmarksCount = 0
+            val currentBookmarks = _uiState.value.speedDialItems.toMutableList()
+            val existingUrls = currentBookmarks.map { it.url.lowercase().trim() }.toMutableSet()
+
+            if (bookmarksArr != null) {
+                for (i in 0 until bookmarksArr.length()) {
+                    try {
+                        val item = SpeedDialItem.fromJson(bookmarksArr.getJSONObject(i))
+                        val norm = item.url.lowercase().trim()
+                        if (norm.isNotBlank() && !existingUrls.contains(norm)) {
+                            existingUrls.add(norm)
+                            currentBookmarks.add(item)
+                            newBookmarksCount++
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+
+            // 2. History merge (por URL normalizada)
+            val historyArr = jsonObject.optJSONArray("history")
+            var newHistoryCount = 0
+            val currentHistory = _uiState.value.history.toMutableList()
+            val existingHistoryUrls = currentHistory.map { it.url.lowercase().trim() }.toMutableSet()
+
+            if (historyArr != null) {
+                for (i in 0 until historyArr.length()) {
+                    try {
+                        val item = HistoryEntry.fromJson(historyArr.getJSONObject(i))
+                        val norm = item.url.lowercase().trim()
+                        if (norm.isNotBlank() && !existingHistoryUrls.contains(norm)) {
+                            existingHistoryUrls.add(norm)
+                            currentHistory.add(item)
+                            newHistoryCount++
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+
+            // 3. Spaces merge (por ID ou Nome)
+            val spacesArr = jsonObject.optJSONArray("spaces")
+            var newSpacesCount = 0
+            val currentSpaces = _uiState.value.spaces.toMutableList()
+            val existingSpaceIds = currentSpaces.map { it.id }.toMutableSet()
+            val existingSpaceNames = currentSpaces.map { it.name.lowercase().trim() }.toMutableSet()
+
+            if (spacesArr != null) {
+                for (i in 0 until spacesArr.length()) {
+                    try {
+                        val s = BrowserSpace.fromJson(spacesArr.getJSONObject(i))
+                        val normName = s.name.lowercase().trim()
+                        if (!existingSpaceIds.contains(s.id) && !existingSpaceNames.contains(normName)) {
+                            existingSpaceIds.add(s.id)
+                            existingSpaceNames.add(normName)
+                            currentSpaces.add(s)
+                            newSpacesCount++
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+
+            _uiState.update { state ->
+                state.copy(
+                    speedDialItems = currentBookmarks,
+                    history = currentHistory,
+                    spaces = currentSpaces
+                )
+            }
+            saveBookmarks()
+            saveHistory()
+            saveSpaces()
+            return Triple(newBookmarksCount, newHistoryCount, newSpacesCount)
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Erro ao mesclar backup JSON", e)
+            return Triple(0, 0, 0)
+        }
+    }
+
     fun importFullBackup(context: Context, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return@launch
                 val content = inputStream.bufferedReader().use { it.readText() }
-                val root = JSONObject(content)
-
-                val bookmarksArr = root.optJSONArray("bookmarks")
-                val restoredBookmarks = mutableListOf<SpeedDialItem>()
-                if (bookmarksArr != null) {
-                    for (i in 0 until bookmarksArr.length()) {
-                        try {
-                            val item = SpeedDialItem.fromJson(bookmarksArr.getJSONObject(i))
-                            restoredBookmarks.add(item)
-                        } catch (e: Exception) {}
-                    }
-                }
-
-                val historyArr = root.optJSONArray("history")
-                val restoredHistory = mutableListOf<HistoryEntry>()
-                if (historyArr != null) {
-                    for (i in 0 until historyArr.length()) {
-                        try {
-                            val item = HistoryEntry.fromJson(historyArr.getJSONObject(i))
-                            restoredHistory.add(item)
-                        } catch (e: Exception) {}
-                    }
-                }
-
-                _uiState.update { state ->
-                    state.copy(
-                        speedDialItems = if (restoredBookmarks.isNotEmpty()) restoredBookmarks else state.speedDialItems,
-                        history = if (restoredHistory.isNotEmpty()) restoredHistory else state.history
-                    )
-                }
-                saveBookmarks()
-                saveHistory()
+                val (bCount, hCount, sCount) = mergeBackupJsonNonDestructive(content)
 
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         context,
-                        "Backup restaurado com sucesso! (${restoredBookmarks.size} favoritos, ${restoredHistory.size} históricos)",
+                        "Backup restaurado com sucesso! ($bCount favoritos, $hCount históricos, $sCount espaços mesclados)",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -2803,11 +2887,17 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             val payload = getBackupJsonString()
             val result = sync.syncWithDesktop(payload)
-            result.onSuccess {
+            result.onSuccess { responseJson ->
+                val (bCount, hCount, sCount) = mergeBackupJsonNonDestructive(responseJson)
                 withContext(Dispatchers.Main) {
+                    val msg = if (bCount > 0 || hCount > 0 || sCount > 0) {
+                        "Sincronizado! ($bCount novos favoritos, $sCount novos espaços do PC)"
+                    } else {
+                        "Sincronizado com o PC com sucesso!"
+                    }
                     onComplete(true, null)
                     appContext?.let { ctx ->
-                        Toast.makeText(ctx, "Sincronizado com o PC!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
                     }
                 }
             }.onFailure { err ->

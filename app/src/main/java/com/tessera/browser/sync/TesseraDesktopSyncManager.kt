@@ -2,6 +2,7 @@ package com.tessera.browser.sync
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,14 @@ data class DesktopDeviceInfo(
     val lastSeenTimestamp: Long = 0L
 )
 
+data class RemoteDesktopTab(
+    val id: String,
+    val title: String,
+    val url: String,
+    val spaceId: String? = null,
+    val isPinned: Boolean = false
+)
+
 class TesseraDesktopSyncManager(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs: SharedPreferences = context.getSharedPreferences("tessera_sync_prefs", Context.MODE_PRIVATE)
@@ -53,13 +62,15 @@ class TesseraDesktopSyncManager(private val context: Context) {
         val id = prefs.getString("saved_desktop_id", "") ?: ""
 
         if (!ip.isNullOrBlank()) {
-            _desktopDevice.value = DesktopDeviceInfo(
+            val device = DesktopDeviceInfo(
                 deviceId = id,
                 deviceName = name,
                 ipAddress = ip,
                 port = port,
                 isOnline = false
             )
+            _desktopDevice.value = device
+            scope.launch { checkDesktopStatus() }
         }
     }
 
@@ -72,13 +83,106 @@ class TesseraDesktopSyncManager(private val context: Context) {
             .apply()
     }
 
+    suspend fun checkDesktopStatus(): Boolean = withContext(Dispatchers.IO) {
+        val target = _desktopDevice.value ?: return@withContext false
+        try {
+            val url = URL("http://${target.ipAddress}:${target.port}/api/v2/info")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 2500
+                readTimeout = 2500
+                requestMethod = "GET"
+            }
+            val ok = conn.responseCode in 200..299
+            if (ok) {
+                val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(resp)
+                val serverName = json.optString("deviceName", target.deviceName)
+                val updated = target.copy(
+                    isOnline = true,
+                    deviceName = serverName,
+                    lastSeenTimestamp = System.currentTimeMillis()
+                )
+                _desktopDevice.value = updated
+                saveDevice(updated)
+            } else {
+                _desktopDevice.value = target.copy(isOnline = false)
+            }
+            ok
+        } catch (e: Exception) {
+            _desktopDevice.value = target.copy(isOnline = false)
+            false
+        }
+    }
+
+    suspend fun connectByIpOrBridgeUrl(input: String): Result<DesktopDeviceInfo> = withContext(Dispatchers.IO) {
+        try {
+            val clean = input.trim()
+            var ip = clean
+            var port = 41828
+
+            if (clean.startsWith("http://") || clean.startsWith("https://")) {
+                val parsed = URL(clean)
+                ip = parsed.host
+                if (clean.contains("syncPort=")) {
+                    val sp = clean.substringAfter("syncPort=").substringBefore("&").toIntOrNull()
+                    if (sp != null && sp > 0) port = sp
+                } else if (parsed.port > 0) {
+                    port = parsed.port
+                }
+            } else if (clean.contains(":")) {
+                val parts = clean.split(":")
+                ip = parts[0].trim()
+                port = parts.getOrNull(1)?.toIntOrNull() ?: 41828
+            }
+
+            val testUrl = URL("http://$ip:$port/api/v2/info")
+            val conn = (testUrl.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 3000
+                readTimeout = 3000
+                requestMethod = "GET"
+            }
+
+            if (conn.responseCode in 200..299) {
+                val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(resp)
+                val deviceId = json.optString("deviceId", "win_pc")
+                val deviceName = json.optString("deviceName", "Tessera Windows")
+
+                val detected = DesktopDeviceInfo(
+                    deviceId = deviceId,
+                    deviceName = deviceName,
+                    ipAddress = ip,
+                    port = port,
+                    isOnline = true,
+                    lastSeenTimestamp = System.currentTimeMillis()
+                )
+                _desktopDevice.value = detected
+                saveDevice(detected)
+                Result.success(detected)
+            } else {
+                Result.failure(Exception("Servidor respondeu com código ${conn.responseCode}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun startDiscoveryListener() {
         if (_isDiscovering.value) return
         _isDiscovering.value = true
 
         scope.launch {
             var socket: DatagramSocket? = null
+            var lock: WifiManager.MulticastLock? = null
             try {
+                val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                lock = try {
+                    wm?.createMulticastLock("tessera_sync_udp")?.apply {
+                        setReferenceCounted(true)
+                        acquire()
+                    }
+                } catch (e: Exception) { null }
+
                 socket = DatagramSocket(41820).apply {
                     broadcast = true
                     soTimeout = 12000
@@ -116,6 +220,9 @@ class TesseraDesktopSyncManager(private val context: Context) {
                 Log.w("TesseraSync", "UDP discovery listener note: ${e.message}")
             } finally {
                 socket?.close()
+                try {
+                    if (lock?.isHeld == true) lock.release()
+                } catch (e: Exception) {}
                 _isDiscovering.value = false
             }
         }
@@ -128,9 +235,81 @@ class TesseraDesktopSyncManager(private val context: Context) {
             val packet = DatagramPacket(query, query.size, InetAddress.getByName("255.255.255.255"), 41820)
             socket.send(packet)
             socket.close()
+            checkDesktopStatus()
             true
         } catch (e: Exception) {
+            checkDesktopStatus()
             false
+        }
+    }
+
+    suspend fun fetchDesktopTabs(): List<RemoteDesktopTab> = withContext(Dispatchers.IO) {
+        val target = _desktopDevice.value ?: return@withContext emptyList()
+        try {
+            val url = URL("http://${target.ipAddress}:${target.port}/api/v2/tabs")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 3000
+                readTimeout = 3000
+                requestMethod = "GET"
+            }
+            if (conn.responseCode in 200..299) {
+                val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(resp)
+                val arr = json.optJSONArray("tabs") ?: return@withContext emptyList()
+                val list = mutableListOf<RemoteDesktopTab>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        RemoteDesktopTab(
+                            id = obj.optString("id", i.toString()),
+                            title = obj.optString("title", "Sem título"),
+                            url = obj.optString("url", ""),
+                            spaceId = obj.optString("spaceId", "").ifBlank { null },
+                            isPinned = obj.optBoolean("isPinned", false)
+                        )
+                    )
+                }
+                list
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun pollMobileInbox(): List<RemoteDesktopTab> = withContext(Dispatchers.IO) {
+        val target = _desktopDevice.value ?: return@withContext emptyList()
+        if (!target.isOnline) return@withContext emptyList()
+        try {
+            val url = URL("http://${target.ipAddress}:${target.port}/api/v2/mobile-inbox")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 2500
+                readTimeout = 2500
+                requestMethod = "GET"
+            }
+            if (conn.responseCode in 200..299) {
+                val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(resp)
+                val arr = json.optJSONArray("tabs") ?: return@withContext emptyList()
+                val list = mutableListOf<RemoteDesktopTab>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        RemoteDesktopTab(
+                            id = obj.optString("id", i.toString()),
+                            title = obj.optString("title", "Sem título"),
+                            url = obj.optString("url", ""),
+                            spaceId = obj.optString("spaceId", "").ifBlank { null }
+                        )
+                    )
+                }
+                list
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
