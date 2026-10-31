@@ -174,9 +174,8 @@ fun TesseraStartPage(
                 .padding(bottom = 120.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -190,13 +189,6 @@ fun TesseraStartPage(
                     contentDescription = "Tessera Logo",
                     colorFilter = ColorFilter.tint(contentColor),
                     modifier = Modifier.size(64.dp)
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.ic_tessera_header_logo),
-                    contentDescription = "Tessera",
-                    colorFilter = ColorFilter.tint(contentColor),
-                    modifier = Modifier.height(38.dp)
                 )
             }
         }

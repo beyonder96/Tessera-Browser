@@ -366,6 +366,7 @@ class BrowserViewModel : ViewModel() {
     private var suggestionJob: Job? = null
     private var undoBannerJob: Job? = null
     private var appContext: Context? = null
+    var desktopSyncManager: com.tessera.browser.sync.TesseraDesktopSyncManager? = null
 
     init {
         viewModelScope.launch {
@@ -1771,6 +1772,7 @@ class BrowserViewModel : ViewModel() {
         appContext = app
         initDownloads(app)
         loadPreferences(app)
+        desktopSyncManager = com.tessera.browser.sync.TesseraDesktopSyncManager(app)
     }
 
     // DOWNLOADS SUBSYSTEM
@@ -1870,10 +1872,74 @@ class BrowserViewModel : ViewModel() {
                 state.copy(downloads = updated, activeDownloadNotice = notice)
             }
             saveDownloadsToPreferences(context)
+            startDownloadProgressTracker(context.applicationContext, downloadId)
             return downloadId
         } catch (e: Exception) {
             Log.e("BrowserViewModel", "Erro ao enfileirar download", e)
             return -1L
+        }
+    }
+
+    private fun startDownloadProgressTracker(context: Context, downloadId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return@launch
+            var isFinished = false
+            var loops = 0
+            while (!isFinished && loops < 1200) { // Monitora por até 20 minutos
+                delay(800)
+                loops++
+                try {
+                    val query = DownloadManager.Query().setFilterById(downloadId)
+                    val cursor = downloadManager.query(query)
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        val bytesSoFarIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                        val totalBytesIdx = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+
+                        val statusVal = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+                        val bytesSoFar = if (bytesSoFarIdx != -1) cursor.getLong(bytesSoFarIdx) else 0L
+                        val totalBytes = if (totalBytesIdx != -1) cursor.getLong(totalBytesIdx) else 0L
+                        cursor.close()
+
+                        when (statusVal) {
+                            DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED -> {
+                                isFinished = true
+                                withContext(Dispatchers.Main) {
+                                    onDownloadCompleted(context, downloadId)
+                                }
+                            }
+                            DownloadManager.STATUS_RUNNING -> {
+                                val progressMsg = if (totalBytes > 0) {
+                                    val percent = (bytesSoFar * 100 / totalBytes).coerceIn(0, 100)
+                                    "Baixando... $percent%"
+                                } else {
+                                    "Baixando..."
+                                }
+                                _uiState.update { state ->
+                                    if (state.activeDownloadNotice?.id == downloadId &&
+                                        state.activeDownloadNotice.status == DownloadStatus.RUNNING
+                                    ) {
+                                        state.copy(
+                                            activeDownloadNotice = state.activeDownloadNotice.copy(
+                                                message = progressMsg
+                                            )
+                                        )
+                                    } else state
+                                }
+                            }
+                        }
+                    } else {
+                        cursor?.close()
+                        // Cursor vazio: download pode ter sido finalizado
+                        isFinished = true
+                        withContext(Dispatchers.Main) {
+                            onDownloadCompleted(context, downloadId)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("BrowserViewModel", "Erro ao verificar progresso do download $downloadId", e)
+                }
+            }
         }
     }
 
@@ -1920,6 +1986,32 @@ class BrowserViewModel : ViewModel() {
                     state.copy(downloads = updated, activeDownloadNotice = notice)
                 }
                 saveDownloadsToPreferences(context)
+            } else {
+                cursor?.close()
+                val completedItem = _uiState.value.downloads.find { it.id == downloadId }
+                if (completedItem != null && completedItem.status == DownloadStatus.RUNNING) {
+                    val targetFile = completedItem.filePath?.let { File(it) }
+                    val isSuccess = targetFile != null && targetFile.exists() && targetFile.length() > 0
+                    val status = if (isSuccess) DownloadStatus.SUCCESSFUL else DownloadStatus.FAILED
+                    val notice = DownloadNotice(
+                        id = downloadId,
+                        fileName = completedItem.fileName,
+                        status = status,
+                        message = if (isSuccess) "Download concluído com sucesso!" else "Falha no download"
+                    )
+                    _uiState.update { state ->
+                        val updated = state.downloads.map { item ->
+                            if (item.id == downloadId) {
+                                item.copy(
+                                    status = status,
+                                    totalBytes = if (isSuccess && targetFile != null) targetFile.length() else item.totalBytes
+                                )
+                            } else item
+                        }
+                        state.copy(downloads = updated, activeDownloadNotice = notice)
+                    }
+                    saveDownloadsToPreferences(context)
+                }
             }
         } catch (e: Exception) {
             Log.e("BrowserViewModel", "Erro ao processar download completado", e)
@@ -2646,6 +2738,81 @@ class BrowserViewModel : ViewModel() {
                 Log.e("BrowserViewModel", "Erro ao restaurar backup", e)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Arquivo de backup inválido ou corrompido", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // TESSERA DESKTOP SYNC (Wi-Fi LAN)
+    fun getBackupJsonString(): String {
+        val root = JSONObject()
+        root.put("version", 1)
+        root.put("timestamp", System.currentTimeMillis())
+
+        val bookmarksArr = JSONArray()
+        _uiState.value.speedDialItems.forEach { bookmarksArr.put(it.toJson()) }
+        root.put("bookmarks", bookmarksArr)
+
+        val historyArr = JSONArray()
+        _uiState.value.history.forEach { historyArr.put(it.toJson()) }
+        root.put("history", historyArr)
+
+        val spacesArr = JSONArray()
+        _uiState.value.spaces.forEach { spacesArr.put(it.toJson()) }
+        root.put("spaces", spacesArr)
+
+        val settingsObj = JSONObject().apply {
+            put("isDarkMode", _uiState.value.isDarkMode)
+            put("forceDarkPages", _uiState.value.forceDarkPages)
+            put("pageTextZoom", _uiState.value.pageTextZoom)
+            put("adBlockEnabled", _uiState.value.adBlockEnabled)
+            put("cookieBlockerEnabled", _uiState.value.cookieBlockerEnabled)
+            put("searchEngine", _uiState.value.searchEngine.name)
+        }
+        root.put("settings", settingsObj)
+        return root.toString()
+    }
+
+    fun sendActiveTabToDesktop(onComplete: (Boolean) -> Unit = {}) {
+        val sync = desktopSyncManager ?: run {
+            onComplete(false)
+            return
+        }
+        val tab = _uiState.value.tabs.find { it.id == _uiState.value.activeTabId } ?: run {
+            onComplete(false)
+            return
+        }
+        viewModelScope.launch {
+            val success = sync.sendTabToDesktop(tab.url, tab.title)
+            withContext(Dispatchers.Main) {
+                onComplete(success)
+                if (success) {
+                    appContext?.let { ctx ->
+                        Toast.makeText(ctx, "Aba enviada para o PC!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    fun syncAllWithDesktop(onComplete: (Boolean, String?) -> Unit = { _, _ -> }) {
+        val sync = desktopSyncManager ?: run {
+            onComplete(false, "Sincronizador não inicializado")
+            return
+        }
+        viewModelScope.launch {
+            val payload = getBackupJsonString()
+            val result = sync.syncWithDesktop(payload)
+            result.onSuccess {
+                withContext(Dispatchers.Main) {
+                    onComplete(true, null)
+                    appContext?.let { ctx ->
+                        Toast.makeText(ctx, "Sincronizado com o PC!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.onFailure { err ->
+                withContext(Dispatchers.Main) {
+                    onComplete(false, err.message)
                 }
             }
         }

@@ -804,7 +804,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             context,
             receiver,
             filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_EXPORTED
         )
         onDispose {
             try {
