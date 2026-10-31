@@ -79,9 +79,9 @@ if (-not $SkipBuild) {
         New-Item -ItemType Directory -Path $ApkDir | Out-Null
     }
 
-    $ReleaseSrc = Join-Path $ProjectRoot "app\build\outputs\apk\release\app-release-unsigned.apk"
+    $ReleaseSrc = Join-Path $ProjectRoot "app\build\outputs\apk\release\app-release.apk"
     if (-not (Test-Path $ReleaseSrc)) {
-        $ReleaseSrc = Join-Path $ProjectRoot "app\build\outputs\apk\release\app-release.apk"
+        $ReleaseSrc = Join-Path $ProjectRoot "app\build\outputs\apk\release\app-release-unsigned.apk"
     }
     $DebugSrc = Join-Path $ProjectRoot "app\build\outputs\apk\debug\app-debug.apk"
 
