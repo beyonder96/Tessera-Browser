@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.webkit.WebViewCompat
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tessera.browser.R
@@ -81,6 +82,16 @@ fun DeveloperScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    val webViewPackage = remember(context) {
+        runCatching { WebViewCompat.getCurrentWebViewPackage(context) }.getOrNull()
+    }
+    val engineName = when (webViewPackage?.packageName) {
+        "com.android.chrome" -> "Google Chrome"
+        "com.google.android.webview" -> "Android System WebView"
+        else -> webViewPackage?.packageName ?: "Chromium WebEngine"
+    }
+    val engineVersion = webViewPackage?.versionName ?: "N/D"
 
     val bg = if (isDarkMode) ApplePalette.DarkBackground else ApplePalette.LightBackground
     val cardBg = if (isDarkMode) ApplePalette.DarkElevated else ApplePalette.LightSurface
@@ -383,6 +394,82 @@ fun DeveloperScreen(
                     DeveloperInfoRow("Compile Target SDK", "35 (Android 15 Ready)", textMain, textSub)
                     HorizontalDivider(color = cardBorder, thickness = 0.8.dp)
                     DeveloperInfoRow("Pacote", context.packageName, textMain, textSub)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Seção do Motor Web & Chromium
+            Text(
+                text = "MOTOR WEB (CHROMIUM ENGINE)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = accentColor,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(cardBg)
+                    .border(BorderStroke(1.dp, cardBorder), RoundedCornerShape(20.dp))
+                    .padding(18.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DeveloperInfoRow("Motor Base", "Chromium (Blink + V8)", textMain, textSub)
+                    HorizontalDivider(color = cardBorder, thickness = 0.8.dp)
+                    DeveloperInfoRow("Provedor do Sistema", engineName, textMain, textSub)
+                    HorizontalDivider(color = cardBorder, thickness = 0.8.dp)
+                    DeveloperInfoRow("Versão do Chromium", engineVersion, textMain, textSub)
+                    HorizontalDivider(color = cardBorder, thickness = 0.8.dp)
+                    DeveloperInfoRow("Pacote do Motor", webViewPackage?.packageName ?: "com.google.android.webview", textMain, textSub)
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Botão para verificar/atualizar o WebView na Google Play Store
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isDarkMode) ApplePalette.DarkElevated else Color(0xFFF1EDE2))
+                            .border(BorderStroke(1.dp, cardBorder), RoundedCornerShape(14.dp))
+                            .clickable {
+                                val targetPkg = webViewPackage?.packageName ?: "com.google.android.webview"
+                                try {
+                                    val playIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$targetPkg")).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(playIntent)
+                                } catch (_: Exception) {
+                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$targetPkg")).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(webIntent)
+                                }
+                            }
+                            .padding(vertical = 12.dp, horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Verificar Atualização na Play Store",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textMain
+                            )
+                        }
+                    }
                 }
             }
 

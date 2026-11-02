@@ -57,14 +57,13 @@ class TesseraWebView @JvmOverloads constructor(
                     val deltaY = event.rawY - startY
                     val deltaX = event.rawX - startX
 
-                    if (isAtTopAtStart && (scrollY == 0 || !canScrollVertically(-1)) && deltaY > 0 && deltaY > abs(deltaX) * 1.2f) {
-                        val distance = (deltaY - 12f).coerceAtLeast(0f) * 0.45f
-                        if (distance > 0f) {
-                            isPulling = true
-                            onPullDistanceChange?.invoke(distance)
-                        }
-                    } else if (isPulling) {
-                        val distance = (event.rawY - startY).coerceAtLeast(0f) * 0.45f
+                    val pullThreshold = 36f
+                    if (!isPulling && isAtTopAtStart && (scrollY == 0 || !canScrollVertically(-1)) && deltaY > pullThreshold && deltaY > abs(deltaX) * 1.6f) {
+                        isPulling = true
+                    }
+
+                    if (isPulling) {
+                        val distance = (deltaY - pullThreshold).coerceAtLeast(0f) * 0.45f
                         onPullDistanceChange?.invoke(distance)
                     }
                 }

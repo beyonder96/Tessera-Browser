@@ -1098,15 +1098,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
         }
     }
 
-    // Scroll detector to show/hide AirBar when browsing
+    // Scroll detector to show/hide AirBar when browsing with stable threshold
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (available.y < -15f) viewModel.setBarVisibility(false)
-                else if (available.y > 15f) viewModel.setBarVisibility(true)
+                if (available.y < -28f) viewModel.setBarVisibility(false)
+                else if (available.y > 28f) viewModel.setBarVisibility(true)
                 return Offset.Zero
             }
         }
@@ -1136,13 +1136,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSearchClick = { isSearchEditing = true }
             )
         } else {
-            val bottomBarPadding by animateDpAsState(
-                targetValue = if (state.isBarVisible && !state.isHomePage && !state.isInPipMode) 74.dp else 0.dp,
-                animationSpec = tween(durationMillis = 220),
-                label = "webview_bottom_bar_padding"
-            )
-
-            // WEBVIEW BROWSER VIEW
+            // WEBVIEW BROWSER VIEW (Viewport com altura fixa e estável para eliminar reflow contínuo do Chromium)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1156,11 +1150,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             .fillMaxSize()
                             .statusBarsPadding()
                             .displayCutoutPadding()
-                            .padding(top = 6.dp, bottom = bottomBarPadding)
+                            .padding(top = 6.dp)
                             .imePadding()
                     }).offset { IntOffset(0, animatedPullOffsetY.roundToInt()) },
                     factory = { ctx ->
                         TesseraWebView(ctx).apply {
+                            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                             isIncognitoMode = state.isIncognitoMode
                             isNestedScrollingEnabled = true
                             isFocusable = true
@@ -1169,9 +1164,9 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             onScrollDelta = { deltaY, scrollY ->
                                 if (scrollY <= 5) {
                                     viewModel.setBarVisibility(true)
-                                } else if (deltaY > 15) {
+                                } else if (deltaY > 28) {
                                     viewModel.setBarVisibility(false)
-                                } else if (deltaY < -15) {
+                                } else if (deltaY < -28) {
                                     viewModel.setBarVisibility(true)
                                 }
                             }
@@ -1204,6 +1199,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                 allowFileAccess = true
                                 allowContentAccess = true
                                 cacheMode = WebSettings.LOAD_DEFAULT
+                                offscreenPreRaster = true
 
                                 // Standard modern Chrome mobile/desktop UA
                                 userAgentString = if (state.isDesktopMode) DESKTOP_USER_AGENT else getEffectiveMobileUserAgent(ctx)
@@ -1589,11 +1585,23 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             view?.evaluateJavascript(COSMETIC_ADBLOCK_SCRIPT, null)
                                         }
 
-                                        // Cookie banner blocker injection (Opera-style, exceto domínios Google/reCAPTCHA)
+                                        // Cookie banner blocker injection (Opera-style inteligente, exceto domínios Google/reCAPTCHA)
                                         if (state.cookieBlockerEnabled && !isGoogleOrRecaptcha) {
                                             view?.evaluateJavascript(
                                                 """
                                                 (function() {
+                                                    try {
+                                                        // Se OneTrust ou CMP estiver presente, aceitar automaticamente para não travar APIs de mapas/localização
+                                                        if (window.OneTrust && typeof window.OneTrust.AllowAll === 'function') {
+                                                            window.OneTrust.AllowAll();
+                                                        } else {
+                                                            var acceptBtn = document.querySelector('#onetrust-accept-btn-handler, #accept-recommended-btn-handler, .accept-all-cookies, button[id*="cookie-accept"], button[class*="cookie-accept"], button[id*="consent-accept"]');
+                                                            if (acceptBtn) {
+                                                                acceptBtn.click();
+                                                            }
+                                                        }
+                                                    } catch(e) {}
+
                                                     var selectors = [
                                                         '#onetrust-banner-sdk', '#onetrust-consent-sdk', '.onetrust-pc-dark-filter',
                                                         '.cookie-banner', '.cookie-notice', '.cookie-consent', '.cc-banner', '.cc-window',
@@ -1720,15 +1728,32 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         viewModel.addNewTab(url = href, isHome = false, selectNow = true)
                                         return true
                                     }
-                                    val transportWebView = WebView(ctx)
+                                    val transportWebView = WebView(ctx).apply {
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.setSupportMultipleWindows(true)
+                                    }
                                     transportWebView.webViewClient = object : WebViewClient() {
                                         override fun shouldOverrideUrlLoading(v: WebView?, req: WebResourceRequest?): Boolean {
                                             val popupUrl = req?.url?.toString()
-                                            if (!popupUrl.isNullOrBlank()) {
+                                            if (!popupUrl.isNullOrBlank() && popupUrl != "about:blank") {
                                                 viewModel.addNewTab(url = popupUrl, isHome = false, selectNow = true)
+                                                v?.post { v.destroy() }
                                                 return true
                                             }
                                             return false
+                                        }
+
+                                        override fun onPageStarted(v: WebView?, url: String?, favicon: Bitmap?) {
+                                            if (!url.isNullOrBlank() && url != "about:blank") {
+                                                viewModel.addNewTab(url = url, isHome = false, selectNow = true)
+                                                v?.post { v.destroy() }
+                                            }
+                                        }
+                                    }
+                                    transportWebView.webChromeClient = object : WebChromeClient() {
+                                        override fun onCloseWindow(window: WebView?) {
+                                            window?.post { window.destroy() }
                                         }
                                     }
                                     val transport = resultMsg?.obj as? WebView.WebViewTransport
@@ -1793,58 +1818,68 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     origin: String?,
                                     callback: GeolocationPermissions.Callback?
                                 ) {
-                                    val safeOrigin = origin ?: ""
-                                    val cleanOrigin = try {
-                                        Uri.parse(if (safeOrigin.startsWith("http")) safeOrigin else "https://$safeOrigin")
-                                            .host?.removePrefix("www.") ?: safeOrigin
-                                    } catch (e: Exception) {
-                                        safeOrigin
-                                    }
-                                    val locationPerms = arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                    val siteSetting = viewModel.getSiteSettings(safeOrigin)
-                                    if (siteSetting.locationConfigured) {
-                                        if (siteSetting.locationGranted) {
-                                            ensureAndroidPermissions(locationPerms) { osGranted ->
-                                                callback?.invoke(origin, osGranted, osGranted)
-                                            }
-                                        } else {
-                                            callback?.invoke(origin, false, true)
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        val safeOrigin = origin ?: ""
+                                        val cleanOrigin = try {
+                                            Uri.parse(if (safeOrigin.startsWith("http")) safeOrigin else "https://$safeOrigin")
+                                                .host?.removePrefix("www.") ?: safeOrigin
+                                        } catch (e: Exception) {
+                                            safeOrigin
                                         }
-                                        return
-                                    }
-
-                                    activeWebPermissionPrompt = WebPermissionPromptState(
-                                        type = WebPermissionPromptType.LOCATION,
-                                        origin = cleanOrigin,
-                                        title = "Permitir localização?",
-                                        message = "${cleanOrigin.ifBlank { "Este site" }} deseja acessar sua localização atual.",
-                                        confirmLabel = "Permitir",
-                                        denyLabel = "Bloquear",
-                                        onAllow = {
-                                            activeWebPermissionPrompt = null
-                                            ensureAndroidPermissions(locationPerms) { osGranted ->
-                                                if (osGranted) {
-                                                    viewModel.updateSitePermission(safeOrigin) {
-                                                        it.copy(locationGranted = true, locationConfigured = true)
-                                                    }
-                                                    callback?.invoke(origin, true, true)
-                                                } else {
-                                                    Toast.makeText(context, "Permissão de localização negada no Android", Toast.LENGTH_SHORT).show()
-                                                    callback?.invoke(origin, false, false)
+                                        val locationPerms = arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                        val siteSetting = viewModel.getSiteSettings(safeOrigin)
+                                        if (siteSetting.locationConfigured) {
+                                            if (siteSetting.locationGranted) {
+                                                ensureAndroidPermissions(locationPerms) { osGranted ->
+                                                    callback?.invoke(origin, osGranted, true)
                                                 }
+                                            } else {
+                                                callback?.invoke(origin, false, true)
                                             }
-                                        },
-                                        onDeny = {
-                                            activeWebPermissionPrompt = null
-                                            viewModel.updateSitePermission(safeOrigin) {
-                                                it.copy(locationGranted = false, locationConfigured = true)
-                                            }
-                                            callback?.invoke(origin, false, false)
+                                            return@post
                                         }
-                                    )
+
+                                        activeWebPermissionPrompt = WebPermissionPromptState(
+                                            type = WebPermissionPromptType.LOCATION,
+                                            origin = cleanOrigin,
+                                            title = "Permitir localização?",
+                                            message = "${cleanOrigin.ifBlank { "Este site" }} deseja acessar sua localização atual.",
+                                            confirmLabel = "Permitir",
+                                            denyLabel = "Bloquear",
+                                            onAllow = {
+                                                activeWebPermissionPrompt = null
+                                                ensureAndroidPermissions(locationPerms) { osGranted ->
+                                                    if (osGranted) {
+                                                        viewModel.updateSitePermission(safeOrigin) {
+                                                            it.copy(locationGranted = true, locationConfigured = true)
+                                                        }
+                                                        callback?.invoke(origin, true, true)
+                                                    } else {
+                                                        Toast.makeText(context, "Permissão de localização negada no Android", Toast.LENGTH_SHORT).show()
+                                                        callback?.invoke(origin, false, false)
+                                                    }
+                                                }
+                                            },
+                                            onDeny = {
+                                                activeWebPermissionPrompt = null
+                                                viewModel.updateSitePermission(safeOrigin) {
+                                                    it.copy(locationGranted = false, locationConfigured = true)
+                                                }
+                                                callback?.invoke(origin, false, true)
+                                            }
+                                        )
+                                    }
+                                }
+
+                                override fun onGeolocationPermissionsHidePrompt() {
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        if (activeWebPermissionPrompt?.type == WebPermissionPromptType.LOCATION) {
+                                            activeWebPermissionPrompt = null
+                                        }
+                                    }
                                 }
 
                                 override fun onPermissionRequest(request: PermissionRequest?) {
