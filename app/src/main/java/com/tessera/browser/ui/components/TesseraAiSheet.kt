@@ -565,8 +565,9 @@ fun TesseraAiSheet(
                             Text(
                                 text = state.pageTitle,
                                 color = textColor,
-                                fontSize = 15.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
+                                lineHeight = 22.sp,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -601,15 +602,15 @@ fun TesseraAiSheet(
                                         )
                                     }
                                     Text(
-                                        text = "Sintetizando inteligência da página...",
+                                        text = "Analisando conteúdo editorial...",
                                         color = textColor,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Processando visão geral, pontos essenciais e conclusões com ${state.activeProvider.displayName}",
+                                        text = "Destilando visão geral, pontos essenciais e conclusões com ${state.activeProvider.displayName}",
                                         color = mutedColor,
-                                        fontSize = 11.5.sp,
+                                        fontSize = 12.sp,
                                         textAlign = TextAlign.Center
                                     )
                                 }
@@ -1186,6 +1187,17 @@ private fun RichStructuredSummaryView(
     lines.forEach { line ->
         val trimmed = line.trim()
         val lower = trimmed.lowercase()
+
+        // Filtra possíveis resíduos de checagem ou eco de prompt
+        val isMetaArtifact = lower.startsWith("assistant of tessera") ||
+                lower.contains("diretrizes:") ||
+                lower.contains("instruções:") ||
+                lower.contains("direct, no jargon?") ||
+                lower == "structure:" ||
+                lower.startsWith("visão geral 2 paragraphs") ||
+                lower.startsWith("1 a 2 parágrafos")
+        if (isMetaArtifact) return@forEach
+
         when {
             lower.contains("pontos-chave") || lower.contains("pontos chave") || lower.contains("principais destaques") -> {
                 currentSection = 1
@@ -1207,7 +1219,7 @@ private fun RichStructuredSummaryView(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 1. VISÃO GERAL (CARD COM GRADIENTE SUAVE)
+        // 1. VISÃO GERAL (CARD EDITORIAL REFINADO)
         if (overviewLines.isNotEmpty()) {
             val overviewText = overviewLines.joinToString("\n\n")
                 .replace(Regex("^\\d+\\.\\s*\\*\\*[^\\*]+\\*\\*:?\\s*"), "")
@@ -1220,15 +1232,8 @@ private fun RichStructuredSummaryView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    accentColor.copy(alpha = if (isDarkMode) 0.12f else 0.08f),
-                                    cardBg
-                                )
-                            )
-                        )
-                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                        .background(cardBg)
+                        .border(1.dp, accentColor.copy(alpha = if (isDarkMode) 0.22f else 0.16f), RoundedCornerShape(18.dp))
                         .padding(16.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1245,7 +1250,7 @@ private fun RichStructuredSummaryView(
                             Text(
                                 text = "VISÃO GERAL",
                                 color = accentColor,
-                                fontSize = 11.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.8.sp
                             )

@@ -124,7 +124,7 @@ private data class ReaderColors(
 private fun rememberReaderColors(theme: ReaderTheme): ReaderColors {
     return remember(theme) {
         when (theme) {
-            ReaderTheme.LIGHT, ReaderTheme.SEPIA -> ReaderColors(
+            ReaderTheme.LIGHT -> ReaderColors(
                 canvasBackground = Color(0xFFECE7DA),
                 sheetBackground = ApplePalette.NewspaperPaper,
                 text = ApplePalette.NewspaperInk,
@@ -134,15 +134,35 @@ private fun rememberReaderColors(theme: ReaderTheme): ReaderColors {
                 quoteBorder = ApplePalette.NewspaperInk,
                 accent = ApplePalette.NewspaperInk
             )
-            ReaderTheme.DARK, ReaderTheme.AMOLED -> ReaderColors(
+            ReaderTheme.SEPIA -> ReaderColors(
+                canvasBackground = Color(0xFFEDE3CC),
+                sheetBackground = Color(0xFFFBF4E2),
+                text = Color(0xFF382A1B),
+                textSecondary = Color(0xFF75624E),
+                surface = Color(0xFFEADDBD),
+                border = Color(0xFFDECDB0),
+                quoteBorder = Color(0xFF8F6E4A),
+                accent = Color(0xFF6B4D29)
+            )
+            ReaderTheme.DARK -> ReaderColors(
                 canvasBackground = ApplePalette.DarkBackground,
-                sheetBackground = ApplePalette.DarkBackground,
+                sheetBackground = Color(0xFF1C1C1F),
                 text = ApplePalette.NewspaperInkDark,
                 textSecondary = Color(0xFF9E9C94),
                 surface = ApplePalette.DarkSurface,
                 border = ApplePalette.DarkHairline,
                 quoteBorder = ApplePalette.NewspaperInkDark,
                 accent = ApplePalette.NewspaperInkDark
+            )
+            ReaderTheme.AMOLED -> ReaderColors(
+                canvasBackground = Color(0xFF000000),
+                sheetBackground = Color(0xFF000000),
+                text = Color(0xFFF2F2F2),
+                textSecondary = Color(0xFF8A8A8E),
+                surface = Color(0xFF0D0D0E),
+                border = Color(0xFF1E1E22),
+                quoteBorder = Color(0xFFE5E5EA),
+                accent = Color(0xFFFFFFFF)
             )
         }
     }
@@ -356,7 +376,7 @@ fun TesseraReaderScreen(
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = colors.sheetBackground,
-                                shadowElevation = 3.dp,
+                                shadowElevation = if (theme == ReaderTheme.AMOLED) 0.dp else 3.dp,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                                 modifier = Modifier
                                     .fillMaxWidth()

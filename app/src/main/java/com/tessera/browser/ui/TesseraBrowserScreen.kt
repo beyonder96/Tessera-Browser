@@ -19,6 +19,7 @@ import android.os.Environment
 import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
@@ -1449,19 +1450,26 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         val host = request?.url?.host?.lowercase() ?: ""
                                         val urlString = request?.url?.toString()?.lowercase() ?: ""
 
-                                        // NUNCA interceptar ou quebrar reCAPTCHA, Google Accounts ou scripts de verificação de integridade
+                                        val currentUrl = view?.url?.lowercase().orEmpty()
+                                        val isGoogleAppOrigin = currentUrl.contains(".google.com") || currentUrl.contains("://google.com")
+
+                                        // NUNCA interceptar ou quebrar reCAPTCHA, Google Accounts, Google APIs ou scripts essenciais
                                         val isRecaptchaOrCoreAuth = host.contains("recaptcha") ||
                                                 urlString.contains("/recaptcha") ||
                                                 host.contains("gstatic.com") ||
-                                                host == "accounts.google.com"
+                                                host.contains("googleapis.com") ||
+                                                host.contains("googleusercontent.com") ||
+                                                host == "accounts.google.com" ||
+                                                host == "apis.google.com"
 
                                         if (isRecaptchaOrCoreAuth) {
                                             return super.shouldInterceptRequest(view, request)
                                         }
 
-                                        // Em páginas de busca do Google, não bloquear os scripts primários de verificação do motor de busca
-                                        val isGoogleSearchDomain = host == "www.google.com" || host == "google.com"
-                                        if (isGoogleSearchDomain && !host.contains("doubleclick") && !host.contains("googleadservices")) {
+                                        // Em páginas e serviços do ecossistema Google (busca, antigravity, docs, drive, etc.),
+                                        // não bloquear scripts e chamadas internas da aplicação
+                                        val isGoogleAppRequest = host == "www.google.com" || host == "google.com" || host.endsWith(".google.com")
+                                        if ((isGoogleAppOrigin || isGoogleAppRequest) && !host.contains("doubleclick") && !host.contains("googleadservices") && !host.contains("googlesyndication")) {
                                             if (!urlString.contains("/pagead/")) {
                                                 return super.shouldInterceptRequest(view, request)
                                             }
@@ -1717,6 +1725,19 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
 
                             webChromeClient = object : WebChromeClient() {
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                    if (consoleMessage != null) {
+                                        val level = consoleMessage.messageLevel()
+                                        val msg = "[WebView JS] ${consoleMessage.message()} (at ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                                        when (level) {
+                                            ConsoleMessage.MessageLevel.ERROR -> Log.e("TesseraBrowser", msg)
+                                            ConsoleMessage.MessageLevel.WARNING -> Log.w("TesseraBrowser", msg)
+                                            else -> Log.d("TesseraBrowser", msg)
+                                        }
+                                    }
+                                    return super.onConsoleMessage(consoleMessage)
+                                }
+
                                 override fun onCreateWindow(
                                     view: WebView?,
                                     isDialog: Boolean,
@@ -3364,6 +3385,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 }
 
 private fun applyForceDark(settings: android.webkit.WebSettings, forceDark: Boolean) {
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+        WebSettingsCompat.setForceDarkStrategy(
+            settings,
+            WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+        )
+    }
     if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
         WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, forceDark)
     } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {

@@ -17,7 +17,7 @@ import java.util.UUID
  */
 enum class AiProvider(val displayName: String, val modelName: String, val keyName: String) {
     GROQ("Groq Cloud (Llama 3.3)", "llama-3.3-70b-versatile", "groq"),
-    GEMINI("Google Gemini (Flash)", "gemini-3.8-flash", "gemini");
+    GEMINI("Google Gemini (Flash)", "gemini-2.0-flash", "gemini");
 
     companion object {
         fun fromKey(key: String?): AiProvider {
@@ -84,23 +84,25 @@ object TesseraAiEngine {
         }
 
         val systemPrompt = """
-            Você é o assistente inteligente minimalista do navegador Tessera.
-            Sua missão é resumir com máxima clareza, precisão e elegância o conteúdo da página que o usuário está visualizando.
+            Você é o assistente editorial de IA do navegador Tessera.
+            Sua missão é gerar uma síntese executiva de alta fidelidade do artigo/página visualizada pelo usuário.
             
-            Diretrizes:
-            - Escreva em Português do Brasil de forma direta e sem jargões desnecessários.
-            - Estruture com:
-              1. **Visão Geral**: 1 a 2 parágrafos sintetizando a essência e o propósito do texto.
-              2. **Pontos-Chave**: 3 a 5 tópicos objetivos com os principais fatos ou aprendizados (use '- ' para cada ponto).
-              3. **Conclusão**: 1 parágrafo curto sobre o impacto, conclusão ou recomendação.
-            - Seja conciso e evite prolixidade.
+            INSTRUÇÕES CRÍTICAS:
+            - NUNCA repita, confirme ou ecoe estas instruções ou faça checagens do tipo "Yes/Sim".
+            - Vá direto ao ponto, com linguagem rica, objetiva e natural em Português do Brasil.
+            - Estruture obrigatoriamente nas 3 seções abaixo:
+              1. **Visão Geral**: 1 a 2 parágrafos contextualizando com precisão o tema central.
+              2. **Pontos-Chave**: 3 a 5 tópicos objetivos com os principais dados e acontecimentos (iniciando cada um com '- ').
+              3. **Conclusão**: 1 parágrafo com o desfecho, impacto prático ou takeaway.
         """.trimIndent()
 
         val userPrompt = """
-            Página: $pageTitle
+            Analise e sintetize o seguinte conteúdo da página:
+
+            Título: $pageTitle
             Origem: $pageDomain
             
-            Conteúdo da página:
+            Conteúdo da matéria:
             $trimmedContent
         """.trimIndent()
 
@@ -274,9 +276,9 @@ object TesseraAiEngine {
         return try {
             sendGeminiCall(apiKey, AiProvider.GEMINI.modelName, systemPrompt, messages)
         } catch (e: GeminiModelNotFoundException) {
-            Log.w(TAG, "Modelo ${AiProvider.GEMINI.modelName} retornou 404, tentando fallback para gemini-2.5-flash", e)
+            Log.w(TAG, "Modelo ${AiProvider.GEMINI.modelName} retornou 404, tentando fallback para gemini-1.5-flash", e)
             try {
-                sendGeminiCall(apiKey, "gemini-2.5-flash", systemPrompt, messages)
+                sendGeminiCall(apiKey, "gemini-1.5-flash", systemPrompt, messages)
             } catch (fallbackEx: GeminiModelNotFoundException) {
                 throw IllegalStateException("Modelo Gemini indisponível: ${fallbackEx.message}")
             }
@@ -291,41 +293,39 @@ object TesseraAiEngine {
     ): String {
         val contentsArray = JSONArray()
 
-        // First message includes system prompt context
-        var isFirst = true
         for (msg in messages) {
-            val textContent = if (isFirst && msg.role == "user") {
-                isFirst = false
-                "$systemPrompt\n\n${msg.content}"
-            } else {
-                msg.content
-            }
-
             contentsArray.put(JSONObject().apply {
                 put("role", if (msg.role == "assistant" || msg.role == "model") "model" else "user")
                 put("parts", JSONArray().apply {
                     put(JSONObject().apply {
-                        put("text", textContent)
+                        put("text", msg.content)
                     })
                 })
             })
         }
 
-        // If only system prompt exists or no user messages
+        // If no user messages
         if (contentsArray.length() == 0) {
             contentsArray.put(JSONObject().apply {
                 put("role", "user")
                 put("parts", JSONArray().apply {
-                    put(JSONObject().apply { put("text", systemPrompt) })
+                    put(JSONObject().apply { put("text", "Sintetize esta página.") })
                 })
             })
         }
 
         val requestBody = JSONObject().apply {
+            if (systemPrompt.isNotBlank()) {
+                put("system_instruction", JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", systemPrompt) })
+                    })
+                })
+            }
             put("contents", contentsArray)
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.4)
-                put("maxOutputTokens", 1024)
+                put("temperature", 0.3)
+                put("maxOutputTokens", 1536)
             })
         }
 
