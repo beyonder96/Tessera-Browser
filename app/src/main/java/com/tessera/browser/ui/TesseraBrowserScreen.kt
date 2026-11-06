@@ -1446,52 +1446,60 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     view: WebView?,
                                     request: WebResourceRequest?
                                 ): WebResourceResponse? {
-                                    if (state.adBlockEnabled) {
-                                        val host = request?.url?.host?.lowercase() ?: ""
-                                        val urlString = request?.url?.toString()?.lowercase() ?: ""
+                                    try {
+                                        if (state.adBlockEnabled) {
+                                            val host = request?.url?.host?.lowercase() ?: ""
+                                            val urlString = request?.url?.toString()?.lowercase() ?: ""
 
-                                        val currentUrl = view?.url?.lowercase().orEmpty()
-                                        val isGoogleAppOrigin = currentUrl.contains(".google.com") || currentUrl.contains("://google.com")
+                                            // Usar state.currentUrl e header Referer em vez de view?.url,
+                                            // pois shouldInterceptRequest roda na thread IO do Chromium
+                                            // e chamar métodos de WebView (como getUrl()) fora da UI thread causa crash nativo.
+                                            val pageUrl = state.currentUrl.lowercase()
+                                            val referer = request?.requestHeaders?.get("Referer")?.lowercase().orEmpty()
+                                            val isGoogleAppOrigin = pageUrl.contains(".google.com") || pageUrl.contains("://google.com") || referer.contains(".google.com")
 
-                                        // NUNCA interceptar ou quebrar reCAPTCHA, Google Accounts, Google APIs ou scripts essenciais
-                                        val isRecaptchaOrCoreAuth = host.contains("recaptcha") ||
-                                                urlString.contains("/recaptcha") ||
-                                                host.contains("gstatic.com") ||
-                                                host.contains("googleapis.com") ||
-                                                host.contains("googleusercontent.com") ||
-                                                host == "accounts.google.com" ||
-                                                host == "apis.google.com"
+                                            // NUNCA interceptar ou quebrar reCAPTCHA, Google Accounts, Google APIs ou scripts essenciais
+                                            val isRecaptchaOrCoreAuth = host.contains("recaptcha") ||
+                                                    urlString.contains("/recaptcha") ||
+                                                    host.contains("gstatic.com") ||
+                                                    host.contains("googleapis.com") ||
+                                                    host.contains("googleusercontent.com") ||
+                                                    host == "accounts.google.com" ||
+                                                    host == "apis.google.com"
 
-                                        if (isRecaptchaOrCoreAuth) {
-                                            return super.shouldInterceptRequest(view, request)
-                                        }
-
-                                        // Em páginas e serviços do ecossistema Google (busca, antigravity, docs, drive, etc.),
-                                        // não bloquear scripts e chamadas internas da aplicação
-                                        val isGoogleAppRequest = host == "www.google.com" || host == "google.com" || host.endsWith(".google.com")
-                                        if ((isGoogleAppOrigin || isGoogleAppRequest) && !host.contains("doubleclick") && !host.contains("googleadservices") && !host.contains("googlesyndication")) {
-                                            if (!urlString.contains("/pagead/")) {
+                                            if (isRecaptchaOrCoreAuth) {
                                                 return super.shouldInterceptRequest(view, request)
                                             }
-                                        }
 
-                                        val isAd = AdBlockHosts.any { host.endsWith(it) } ||
-                                                urlString.contains("/pagead/") ||
-                                                urlString.contains("/adservice/")
-                                        if (isAd) {
-                                            viewModel.recordBlockedTracker(host, urlString)
-                                            val mime = when {
-                                                urlString.contains(".js") -> "text/javascript"
-                                                urlString.contains(".css") -> "text/css"
-                                                urlString.contains(".json") -> "application/json"
-                                                else -> "text/plain"
+                                            // Em páginas e serviços do ecossistema Google (busca, antigravity, docs, drive, etc.),
+                                            // não bloquear scripts e chamadas internas da aplicação
+                                            val isGoogleAppRequest = host == "www.google.com" || host == "google.com" || host.endsWith(".google.com")
+                                            if ((isGoogleAppOrigin || isGoogleAppRequest) && !host.contains("doubleclick") && !host.contains("googleadservices") && !host.contains("googlesyndication")) {
+                                                if (!urlString.contains("/pagead/")) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
                                             }
-                                            return WebResourceResponse(
-                                                mime,
-                                                "UTF-8",
-                                                ByteArrayInputStream(ByteArray(0))
-                                            )
+
+                                            val isAd = AdBlockHosts.any { host.endsWith(it) } ||
+                                                    urlString.contains("/pagead/") ||
+                                                    urlString.contains("/adservice/")
+                                            if (isAd) {
+                                                viewModel.recordBlockedTracker(host, urlString)
+                                                val mime = when {
+                                                    urlString.contains(".js") -> "text/javascript"
+                                                    urlString.contains(".css") -> "text/css"
+                                                    urlString.contains(".json") -> "application/json"
+                                                    else -> "text/plain"
+                                                }
+                                                return WebResourceResponse(
+                                                    mime,
+                                                    "UTF-8",
+                                                    ByteArrayInputStream(ByteArray(0))
+                                                )
+                                            }
                                         }
+                                    } catch (e: Throwable) {
+                                        Log.e("TesseraBrowser", "Falha segura em shouldInterceptRequest", e)
                                     }
                                     return super.shouldInterceptRequest(view, request)
                                 }
@@ -1726,14 +1734,18 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
                             webChromeClient = object : WebChromeClient() {
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                                    if (consoleMessage != null) {
-                                        val level = consoleMessage.messageLevel()
-                                        val msg = "[WebView JS] ${consoleMessage.message()} (at ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
-                                        when (level) {
-                                            ConsoleMessage.MessageLevel.ERROR -> Log.e("TesseraBrowser", msg)
-                                            ConsoleMessage.MessageLevel.WARNING -> Log.w("TesseraBrowser", msg)
-                                            else -> Log.d("TesseraBrowser", msg)
+                                    try {
+                                        if (consoleMessage != null) {
+                                            val level = consoleMessage.messageLevel()
+                                            val msg = "[WebView JS] ${consoleMessage.message()} (at ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                                            when (level) {
+                                                ConsoleMessage.MessageLevel.ERROR -> Log.e("TesseraBrowser", msg)
+                                                ConsoleMessage.MessageLevel.WARNING -> Log.w("TesseraBrowser", msg)
+                                                else -> Log.d("TesseraBrowser", msg)
+                                            }
                                         }
+                                    } catch (e: Throwable) {
+                                        // Ignorar exceções de log
                                     }
                                     return super.onConsoleMessage(consoleMessage)
                                 }
@@ -3385,20 +3397,24 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 }
 
 private fun applyForceDark(settings: android.webkit.WebSettings, forceDark: Boolean) {
-    if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
-        WebSettingsCompat.setForceDarkStrategy(
-            settings,
-            WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
-        )
-    }
-    if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-        WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, forceDark)
-    } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-        @Suppress("DEPRECATION")
-        WebSettingsCompat.setForceDark(
-            settings,
-            if (forceDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
-        )
+    try {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+            WebSettingsCompat.setForceDarkStrategy(
+                settings,
+                WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+            )
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, forceDark)
+        } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            @Suppress("DEPRECATION")
+            WebSettingsCompat.setForceDark(
+                settings,
+                if (forceDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
+            )
+        }
+    } catch (e: Throwable) {
+        Log.w("TesseraBrowser", "Falha ao aplicar ForceDark: ${e.message}")
     }
 }
 
