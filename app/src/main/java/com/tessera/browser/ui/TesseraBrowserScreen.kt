@@ -148,6 +148,7 @@ import com.tessera.browser.ui.components.TesseraAiSheet
 import com.tessera.browser.ui.components.TesseraAirBar
 import com.tessera.browser.ui.components.TesseraReaderScreen
 import com.tessera.browser.ui.components.TesseraStartPage
+import com.tessera.browser.ui.components.TesseraUpdateDialog
 import com.tessera.browser.ui.theme.ApplePalette
 import com.tessera.browser.ui.components.TranslateBar
 import com.tessera.browser.viewmodel.BrowserViewModel
@@ -1134,6 +1135,8 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
             // START PAGE 100% ZEN (LUPA CENTRAL FLUTUANTE)
             TesseraStartPage(
                 isDarkMode = state.isDarkMode,
+                updateInfo = state.appUpdateInfo,
+                onUpdateClick = { viewModel.showUpdateDialog(true) },
                 onSearchClick = { isSearchEditing = true }
             )
         } else {
@@ -2930,6 +2933,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onImportBackup = {
                     importBackupLauncher.launch("*/*")
                 },
+                appUpdateInfo = state.appUpdateInfo,
+                isCheckingForUpdates = state.isCheckingForUpdates,
+                onCheckForUpdates = { viewModel.checkForUpdates(forceCheck = true) },
+                onLaunchUpdate = { viewModel.launchAppUpdate() },
                 onBack = { viewModel.dismissFullSettings() }
             )
         }
@@ -3391,6 +3398,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onExitIncognito = { viewModel.exitIncognito() },
                 accentColor = effectiveAccentColor,
                 modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // GITHUB RELEASES UPDATE DIALOG
+        if (state.showUpdateDialog && state.appUpdateInfo != null && state.appUpdateInfo!!.hasUpdate) {
+            TesseraUpdateDialog(
+                updateInfo = state.appUpdateInfo!!,
+                onDismiss = { viewModel.showUpdateDialog(false) },
+                onDownload = { viewModel.launchAppUpdate() }
             )
         }
     }

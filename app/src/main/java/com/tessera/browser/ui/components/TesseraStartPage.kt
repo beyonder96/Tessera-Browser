@@ -61,6 +61,8 @@ import com.tessera.browser.ui.theme.ApplePalette
 @Composable
 fun TesseraStartPage(
     isDarkMode: Boolean,
+    updateInfo: com.tessera.browser.data.AppUpdateInfo? = null,
+    onUpdateClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -95,16 +97,26 @@ fun TesseraStartPage(
                 )
         )
 
-        // BANNER DE NAVEGADOR PADRÃO (DISMISSIBLE PILL)
-        if (!isDefaultBrowser && !isDefaultDismissed) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .displayCutoutPadding()
-                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                contentAlignment = Alignment.TopCenter
-            ) {
+        // BANNERS SUPERIORES (UPDATE PILL & NAVEGADOR PADRÃO)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .displayCutoutPadding()
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Pílula Pulsante de Nova Versão do GitHub
+            if (updateInfo != null && updateInfo.hasUpdate) {
+                TesseraUpdatePill(
+                    updateInfo = updateInfo,
+                    onClick = onUpdateClick
+                )
+            }
+
+            // BANNER DE NAVEGADOR PADRÃO (DISMISSIBLE PILL)
+            if (!isDefaultBrowser && !isDefaultDismissed) {
                 Row(
                     modifier = Modifier
                         .shadow(

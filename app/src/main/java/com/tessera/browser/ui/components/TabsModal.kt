@@ -395,14 +395,20 @@ fun TabsModal(
                         )
                     }
                 } else {
-                    val initialIndex = remember(visibleTabs, activeTabId) {
+                    val targetIndex = remember(visibleTabs, activeTabId) {
                         val idx = visibleTabs.indexOfFirst { it.id == activeTabId }
                         if (idx >= 0) idx else (visibleTabs.size - 1).coerceAtLeast(0)
                     }
                     val pagerState = rememberPagerState(
-                        initialPage = initialIndex.coerceIn(0, (visibleTabs.size - 1).coerceAtLeast(0)),
+                        initialPage = targetIndex.coerceIn(0, (visibleTabs.size - 1).coerceAtLeast(0)),
                         pageCount = { visibleTabs.size }
                     )
+
+                    LaunchedEffect(activeTabId, visibleTabs.size) {
+                        if (targetIndex in 0 until visibleTabs.size && pagerState.currentPage != targetIndex) {
+                            pagerState.scrollToPage(targetIndex)
+                        }
+                    }
 
                     HorizontalPager(
                         state = pagerState,
@@ -593,7 +599,8 @@ private fun getOptimizedTabName(tab: BrowserTab): String {
             rawTitle.startsWith("www.", ignoreCase = true) ||
             rawTitle.contains("/")
 
-    if (rawTitle.isNotBlank() && !isTitleAUrl && rawTitle != "Nova Guia") {
+    // Don't treat generic placeholders as custom titles for navigated tabs
+    if (rawTitle.isNotBlank() && !isTitleAUrl && rawTitle != "Nova Guia" && rawTitle != "Início") {
         return rawTitle
     }
 
@@ -604,7 +611,7 @@ private fun getOptimizedTabName(tab: BrowserTab): String {
         } else tab.url
         val uri = android.net.Uri.parse(candidate)
         val host = uri.host?.removePrefix("www.") ?: tab.url.removePrefix("https://").substringBefore('/')
-        if (host.isNotBlank()) host else "Página Web"
+        if (host.isNotBlank() && host != "duckduckgo.com") host else if (tab.url.contains("?q=")) "Pesquisa" else "Página Web"
     } catch (e: Exception) {
         "Página Web"
     }

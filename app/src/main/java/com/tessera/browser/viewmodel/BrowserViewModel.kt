@@ -344,7 +344,12 @@ data class BrowserUiState(
             iconRes = com.tessera.browser.R.drawable.ic_brand_reddit,
             badgeColor = 0xFFFF4500
         )
-    )
+    ),
+
+    // Atualizações Automáticas via GitHub Releases
+    val appUpdateInfo: com.tessera.browser.data.AppUpdateInfo? = null,
+    val showUpdateDialog: Boolean = false,
+    val isCheckingForUpdates: Boolean = false
 ) {
     val isCurrentPageBookmarked: Boolean
         get() = speedDialItems.any { it.url.equals(displayUrl, ignoreCase = true) || it.url.equals(currentUrl, ignoreCase = true) }
@@ -390,16 +395,35 @@ class BrowserViewModel : ViewModel() {
         if (trimmed.isBlank()) return
 
         val formattedUrl = formatInputAsUrl(trimmed)
+        val isQuerySearch = formattedUrl.contains("?q=") || formattedUrl.contains("&q=")
+        val initialTitle = if (isQuerySearch) trimmed else extractDomain(formattedUrl)
+
         _uiState.update { state ->
-            val updatedTabs = state.tabs.map { tab ->
-                if (tab.id == state.activeTabId) {
-                    tab.copy(url = formattedUrl, isHomePage = false)
-                } else tab
+            val hasMatchingTab = state.tabs.any { it.id == state.activeTabId }
+            val effectiveActiveId = if (hasMatchingTab) state.activeTabId else (state.tabs.firstOrNull()?.id ?: state.activeTabId)
+
+            val updatedTabs = if (state.tabs.any { it.id == effectiveActiveId }) {
+                state.tabs.map { tab ->
+                    if (tab.id == effectiveActiveId) {
+                        tab.copy(url = formattedUrl, title = initialTitle, isHomePage = false)
+                    } else tab
+                }
+            } else {
+                val fallbackTab = BrowserTab(
+                    id = effectiveActiveId,
+                    url = formattedUrl,
+                    title = initialTitle,
+                    isHomePage = false,
+                    spaceId = state.activeSpaceId
+                )
+                listOf(fallbackTab)
             }
+
             state.copy(
                 isHomePage = false,
                 currentUrl = formattedUrl,
                 displayUrl = formattedUrl,
+                activeTabId = effectiveActiveId,
                 isBarVisible = true,
                 isReaderModeActive = false,
                 isReaderModeAvailable = false,
@@ -409,6 +433,7 @@ class BrowserViewModel : ViewModel() {
                 searchSuggestions = emptyList()
             )
         }
+        saveTabs()
     }
 
     fun openFromExternal(rawInput: String) {
@@ -425,7 +450,7 @@ class BrowserViewModel : ViewModel() {
         _uiState.update { state ->
             val updatedTabs = state.tabs.map { tab ->
                 if (tab.id == state.activeTabId) {
-                    tab.copy(isHomePage = true, url = state.searchEngine.homeUrl)
+                    tab.copy(isHomePage = true, url = state.searchEngine.homeUrl, title = "Início")
                 } else tab
             }
             state.copy(
@@ -437,20 +462,25 @@ class BrowserViewModel : ViewModel() {
                 siteThemeColor = null
             )
         }
+        saveTabs()
     }
 
     fun onPageStarted(url: String?) {
         stopReaderTts()
         if (!url.isNullOrBlank() && !_uiState.value.isHomePage) {
             _uiState.update { state ->
+                val hasMatchingTab = state.tabs.any { it.id == state.activeTabId }
+                val effectiveActiveId = if (hasMatchingTab) state.activeTabId else (state.tabs.firstOrNull()?.id ?: state.activeTabId)
+
                 val updatedTabs = state.tabs.map { tab ->
-                    if (tab.id == state.activeTabId) {
+                    if (tab.id == effectiveActiveId) {
                         tab.copy(url = url, isHomePage = false)
                     } else tab
                 }
                 state.copy(
                     currentUrl = url,
                     displayUrl = url,
+                    activeTabId = effectiveActiveId,
                     tabs = updatedTabs,
                     isReaderModeActive = false,
                     readerArticle = null,
@@ -484,12 +514,20 @@ class BrowserViewModel : ViewModel() {
 
     fun onPageFinished(url: String?, canBack: Boolean, canForward: Boolean = false, title: String? = null) {
         val effectiveUrl = url ?: _uiState.value.currentUrl
-        val effectiveTitle = if (!title.isNullOrBlank()) title else extractDomain(effectiveUrl)
+        val effectiveDomain = extractDomain(effectiveUrl)
+        val effectiveTitle = when {
+            !title.isNullOrBlank() && title != "about:blank" -> title
+            effectiveDomain.isNotBlank() -> effectiveDomain
+            else -> "Página Web"
+        }
 
         val previousHistory = _uiState.value.history
         _uiState.update { state ->
+            val hasMatchingTab = state.tabs.any { it.id == state.activeTabId }
+            val effectiveActiveId = if (hasMatchingTab) state.activeTabId else (state.tabs.firstOrNull()?.id ?: state.activeTabId)
+
             val updatedTabs = state.tabs.map { tab ->
-                if (tab.id == state.activeTabId) {
+                if (tab.id == effectiveActiveId) {
                     tab.copy(
                         url = effectiveUrl,
                         title = effectiveTitle,
@@ -514,6 +552,7 @@ class BrowserViewModel : ViewModel() {
                 canGoForward = canForward,
                 currentUrl = effectiveUrl,
                 displayUrl = effectiveUrl,
+                activeTabId = effectiveActiveId,
                 tabs = updatedTabs,
                 history = newHistory
             )
@@ -522,6 +561,7 @@ class BrowserViewModel : ViewModel() {
         if (_uiState.value.history !== previousHistory) {
             saveHistory()
         }
+        saveTabs()
     }
 
     fun toggleIncognitoMode() {
@@ -565,6 +605,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun onAppForegrounded() {
+        checkForUpdates(forceCheck = false)
         // Keeps lock overlay active if incognito is locked
         desktopSyncManager?.let { sync ->
             viewModelScope.launch {
@@ -1804,6 +1845,37 @@ class BrowserViewModel : ViewModel() {
         initDownloads(app)
         loadPreferences(app)
         desktopSyncManager = com.tessera.browser.sync.TesseraDesktopSyncManager(app)
+        checkForUpdates(forceCheck = false)
+    }
+
+    // UPDATE CHECKER SUBSYSTEM (GitHub Releases)
+    fun checkForUpdates(forceCheck: Boolean = false) {
+        val app = appContext ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCheckingForUpdates = true) }
+            val info = com.tessera.browser.data.TesseraUpdateManager.checkForUpdates(
+                context = app,
+                forceCheck = forceCheck
+            )
+            _uiState.update { state ->
+                state.copy(
+                    isCheckingForUpdates = false,
+                    appUpdateInfo = info,
+                    showUpdateDialog = if (forceCheck && info?.hasUpdate == true) true else state.showUpdateDialog
+                )
+            }
+        }
+    }
+
+    fun showUpdateDialog(show: Boolean) {
+        _uiState.update { it.copy(showUpdateDialog = show) }
+    }
+
+    fun launchAppUpdate() {
+        val app = appContext ?: return
+        val info = _uiState.value.appUpdateInfo ?: return
+        com.tessera.browser.data.TesseraUpdateManager.launchDownload(app, info.downloadUrl)
+        _uiState.update { it.copy(showUpdateDialog = false) }
     }
 
     // DOWNLOADS SUBSYSTEM
@@ -2328,8 +2400,9 @@ class BrowserViewModel : ViewModel() {
                 } else null
                 val savedActiveSpaceId = prefs.getString("active_space_id", null)
 
-                // Tabs
+                // Tabs & Active Tab
                 val tabsJson = prefs.getString("tabs_list", null)
+                val savedActiveTabId = prefs.getString("active_tab_id", null)
                 val loadedTabs = if (!tabsJson.isNullOrBlank()) {
                     val arr = JSONArray(tabsJson)
                     val list = mutableListOf<BrowserTab>()
@@ -2352,10 +2425,24 @@ class BrowserViewModel : ViewModel() {
                 } else null
 
                 _uiState.update { current ->
+                    val effectiveTabs = loadedTabs ?: current.tabs
+                    val effectiveActiveTabId = if (savedActiveTabId != null && effectiveTabs.any { it.id == savedActiveTabId }) {
+                        savedActiveTabId
+                    } else {
+                        effectiveTabs.firstOrNull()?.id ?: current.activeTabId
+                    }
+                    val activeTab = effectiveTabs.find { it.id == effectiveActiveTabId }
+
                     current.copy(
                         spaces = loadedSpaces ?: current.spaces,
                         activeSpaceId = savedActiveSpaceId ?: current.activeSpaceId,
-                        tabs = loadedTabs ?: current.tabs,
+                        tabs = effectiveTabs,
+                        activeTabId = effectiveActiveTabId,
+                        isHomePage = activeTab?.isHomePage ?: current.isHomePage,
+                        currentUrl = activeTab?.url ?: current.currentUrl,
+                        displayUrl = if (activeTab?.isHomePage == true) "" else (activeTab?.url ?: current.displayUrl),
+                        canGoBack = activeTab?.canGoBack ?: current.canGoBack,
+                        canGoForward = activeTab?.canGoForward ?: current.canGoForward,
                         speedDialItems = loadedBookmarks ?: current.speedDialItems,
                         history = loadedHistory ?: current.history,
                         savedPages = loadedSavedPages ?: current.savedPages,
@@ -2416,7 +2503,10 @@ class BrowserViewModel : ViewModel() {
                 val prefs = app.getSharedPreferences("tessera_browser_prefs", Context.MODE_PRIVATE)
                 val arr = JSONArray()
                 _uiState.value.tabs.forEach { t -> arr.put(t.toJson()) }
-                prefs.edit().putString("tabs_list", arr.toString()).apply()
+                prefs.edit()
+                    .putString("tabs_list", arr.toString())
+                    .putString("active_tab_id", _uiState.value.activeTabId)
+                    .apply()
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao salvar abas", e)
             }

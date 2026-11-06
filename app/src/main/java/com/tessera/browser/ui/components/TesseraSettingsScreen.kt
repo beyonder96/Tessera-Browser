@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Security
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -139,6 +141,10 @@ fun TesseraSettingsScreen(
     onOpenDesktopSync: () -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
+    appUpdateInfo: com.tessera.browser.data.AppUpdateInfo? = null,
+    isCheckingForUpdates: Boolean = false,
+    onCheckForUpdates: () -> Unit = {},
+    onLaunchUpdate: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1052,12 +1058,90 @@ fun TesseraSettingsScreen(
                                 color = textSecondary
                             )
                             Spacer(modifier = Modifier.height(8.dp))
+                            val context = LocalContext.current
+                            val currentVersion = remember(context) {
+                                try {
+                                    val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                                    pInfo.versionName ?: "3.6.4"
+                                } catch (e: Exception) {
+                                    "3.6.4"
+                                }
+                            }
                             Text(
-                                text = if (isDarkMode) "Versão 3.3.0 • Pure OLED" else "Versão 3.3.0 • Edição Journal",
+                                text = "Versão $currentVersion • ${if (isDarkMode) "Pure OLED" else "Edição Journal"}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = textSecondary
                             )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Cartão de Nova Versão Detectada no GitHub
+                            if (appUpdateInfo != null && appUpdateInfo.hasUpdate) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isDarkMode) Color(0xFF1C2D1F) else Color(0xFFE8F5E9),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF34C759).copy(alpha = 0.6f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp)
+                                        .clickable { onLaunchUpdate() }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "Nova Versão v${appUpdateInfo.remoteVersion} disponível",
+                                                color = if (isDarkMode) Color(0xFF4CD964) else Color(0xFF2E7D32),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = "Toque para baixar o APK release",
+                                                color = textSecondary,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Rounded.Download,
+                                            contentDescription = null,
+                                            tint = if (isDarkMode) Color(0xFF4CD964) else Color(0xFF2E7D32),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+
+                            // Botão Cirúrgico Verificar Atualizações
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = squircleBg,
+                                border = androidx.compose.foundation.BorderStroke(0.8.dp, dividerColor),
+                                modifier = Modifier.clickable { onCheckForUpdates() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Refresh,
+                                        contentDescription = null,
+                                        tint = textSecondary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = if (isCheckingForUpdates) "Verificando no GitHub..." else "Verificar Atualizações",
+                                        color = textPrimary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Projetado para foco, privacidade e leitura calma.",

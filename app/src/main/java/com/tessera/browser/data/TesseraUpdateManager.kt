@@ -21,7 +21,11 @@ object TesseraUpdateManager {
 
     private const val PREFS_NAME = "tessera_update_prefs"
     private const val KEY_LAST_CHECK = "last_check_timestamp"
-    private const val CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L // 6 horas de intervalo de cache
+    private const val KEY_REMOTE_VERSION = "cached_remote_version"
+    private const val KEY_DOWNLOAD_URL = "cached_download_url"
+    private const val KEY_RELEASE_URL = "cached_release_url"
+    private const val KEY_RELEASE_NOTES = "cached_release_notes"
+    private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L // 15 minutos de intervalo de cache
 
     suspend fun checkForUpdates(
         context: Context,
@@ -34,15 +38,32 @@ object TesseraUpdateManager {
             val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0L)
             val now = System.currentTimeMillis()
 
-            if (!forceCheck && (now - lastCheck < CHECK_INTERVAL_MS)) {
-                return@withContext null
-            }
-
             val currentVersion = try {
                 val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                 pInfo.versionName ?: ""
             } catch (e: Exception) {
                 ""
+            }
+
+            // Se dentro da janela de cache e não for forçado, retorna o último resultado se ainda houver update
+            if (!forceCheck && (now - lastCheck < CHECK_INTERVAL_MS)) {
+                val cachedRemote = prefs.getString(KEY_REMOTE_VERSION, null)
+                val cachedDownload = prefs.getString(KEY_DOWNLOAD_URL, null)
+                val cachedRelease = prefs.getString(KEY_RELEASE_URL, null)
+                val cachedNotes = prefs.getString(KEY_RELEASE_NOTES, "") ?: ""
+                if (!cachedRemote.isNullOrBlank() && !cachedDownload.isNullOrBlank()) {
+                    val hasUpdate = isNewerVersion(cachedRemote, currentVersion)
+                    if (hasUpdate) {
+                        return@withContext AppUpdateInfo(
+                            hasUpdate = true,
+                            remoteVersion = cachedRemote,
+                            releaseNotes = cachedNotes,
+                            downloadUrl = cachedDownload,
+                            releaseUrl = cachedRelease ?: cachedDownload
+                        )
+                    }
+                }
+                return@withContext null
             }
 
             val url = URL("https://api.github.com/repos/$repoOwner/$repoName/releases/latest")
@@ -67,19 +88,33 @@ object TesseraUpdateManager {
             var downloadUrl = releaseUrl
             val assets = json.optJSONArray("assets")
             if (assets != null) {
+                var fallbackApk: String? = null
                 for (i in 0 until assets.length()) {
                     val asset = assets.getJSONObject(i)
                     val assetName = asset.optString("name", "")
-                    if (assetName.endsWith(".apk", ignoreCase = true)) {
-                        downloadUrl = asset.optString("browser_download_url", releaseUrl)
+                    val assetDownload = asset.optString("browser_download_url", "")
+                    if (assetName.contains("release", ignoreCase = true) && assetName.endsWith(".apk", ignoreCase = true)) {
+                        downloadUrl = assetDownload
                         break
+                    } else if (assetName.endsWith(".apk", ignoreCase = true) && fallbackApk == null) {
+                        fallbackApk = assetDownload
                     }
+                }
+                if (downloadUrl == releaseUrl && fallbackApk != null) {
+                    downloadUrl = fallbackApk
                 }
             }
 
-            prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
-
             val hasUpdate = isNewerVersion(remoteVersion, currentVersion)
+
+            prefs.edit()
+                .putLong(KEY_LAST_CHECK, now)
+                .putString(KEY_REMOTE_VERSION, remoteVersion)
+                .putString(KEY_DOWNLOAD_URL, downloadUrl)
+                .putString(KEY_RELEASE_URL, releaseUrl)
+                .putString(KEY_RELEASE_NOTES, releaseNotes)
+                .apply()
+
             AppUpdateInfo(
                 hasUpdate = hasUpdate,
                 remoteVersion = remoteVersion,
