@@ -31,7 +31,10 @@ class MainActivity : FragmentActivity() {
         // Make system bars fully transparent for immersive feel
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        handleIntent(intent)
+        viewModel.initPersistence(this)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
 
         setContent {
             val state by viewModel.uiState.collectAsState()
@@ -104,6 +107,7 @@ class MainActivity : FragmentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
 
         when (intent.action) {
             Intent.ACTION_VIEW -> {
@@ -121,10 +125,11 @@ class MainActivity : FragmentActivity() {
                 }
             }
             Intent.ACTION_SEND -> {
-                if (intent.type == "text/plain") {
+                if (intent.type?.startsWith("text/plain") == true) {
                     val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                     if (!sharedText.isNullOrBlank()) {
-                        viewModel.openFromExternal(sharedText)
+                        val urlMatch = Regex("https?://\\S+").find(sharedText)?.value
+                        viewModel.openFromExternal(urlMatch ?: sharedText)
                         return
                     }
                 }

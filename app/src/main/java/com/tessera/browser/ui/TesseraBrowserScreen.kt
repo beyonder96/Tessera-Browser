@@ -819,12 +819,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
     }
 
     // Synchronize navigation requests from state to WebView safely
-    LaunchedEffect(state.currentUrl, state.isHomePage, state.activeTabId) {
-        if (!state.isHomePage && state.currentUrl.isNotBlank()) {
+    LaunchedEffect(state.currentUrl, state.isHomePage, state.activeTabId, webViewInstance) {
+        val wv = webViewInstance
+        if (!state.isHomePage && state.currentUrl.isNotBlank() && wv != null) {
             if (state.currentUrl != lastLoadedUrl || state.activeTabId != lastActiveTabId) {
                 lastLoadedUrl = state.currentUrl
                 lastActiveTabId = state.activeTabId
-                webViewInstance?.loadUrl(state.currentUrl)
+                wv.loadUrl(state.currentUrl)
             }
         }
     }
@@ -869,6 +870,13 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
 
     var isAirBarExpanded by remember { mutableStateOf(false) }
     var isSearchEditing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.externalLaunchNonce) {
+        if (state.externalLaunchNonce > 0L) {
+            isAirBarExpanded = false
+            isSearchEditing = false
+        }
+    }
 
     // Voice Search Launcher (Native SpeechRecognizer Intent)
     val voiceSearchLauncher = rememberLauncherForActivityResult(
@@ -1140,6 +1148,17 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                 onSearchClick = { isSearchEditing = true }
             )
         } else {
+            DisposableEffect(Unit) {
+                onDispose {
+                    webViewInstance?.let { wv ->
+                        wv.stopLoading()
+                        wv.destroy()
+                    }
+                    webViewInstance = null
+                    lastLoadedUrl = null
+                    lastActiveTabId = null
+                }
+            }
             // WEBVIEW BROWSER VIEW (Viewport com altura fixa e estável para eliminar reflow contínuo do Chromium)
             Box(
                 modifier = Modifier
@@ -1326,7 +1345,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         Log.w("TesseraBrowser", "JS reportou falha na extração do leitor: $errorMsg")
                                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                                             val currentTitle = webViewInstance?.title ?: "Documento"
-                                            val currentDomain = try { Uri.parse(state.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+                                            val currentDomain = try { Uri.parse(viewModel.uiState.value.displayUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
                                             viewModel.fallbackReaderArticle(currentTitle, currentDomain)
                                         }
                                     },
@@ -1340,7 +1359,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                                 viewModel.openAiAssistant(
                                                     title = title,
                                                     domain = domain,
-                                                    url = state.displayUrl,
+                                                    url = viewModel.uiState.value.displayUrl,
                                                     content = content
                                                 )
                                             } catch (e: Exception) {
@@ -1436,7 +1455,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                             context = currentContext,
                                             view = view,
                                             urlString = urlString,
-                                            openLinksInExternalApps = state.openLinksInExternalApps
+                                            openLinksInExternalApps = viewModel.uiState.value.openLinksInExternalApps
                                         )
                                     ) {
                                         return true
@@ -1450,14 +1469,15 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     request: WebResourceRequest?
                                 ): WebResourceResponse? {
                                     try {
-                                        if (state.adBlockEnabled) {
+                                        val liveState = viewModel.uiState.value
+                                        if (liveState.adBlockEnabled) {
                                             val host = request?.url?.host?.lowercase() ?: ""
                                             val urlString = request?.url?.toString()?.lowercase() ?: ""
 
-                                            // Usar state.currentUrl e header Referer em vez de view?.url,
+                                            // Usar liveState.currentUrl e header Referer em vez de view?.url,
                                             // pois shouldInterceptRequest roda na thread IO do Chromium
                                             // e chamar métodos de WebView (como getUrl()) fora da UI thread causa crash nativo.
-                                            val pageUrl = state.currentUrl.lowercase()
+                                            val pageUrl = liveState.currentUrl.lowercase()
                                             val referer = request?.requestHeaders?.get("Referer")?.lowercase().orEmpty()
                                             val isGoogleAppOrigin = pageUrl.contains(".google.com") || pageUrl.contains("://google.com") || referer.contains(".google.com")
 
@@ -1567,7 +1587,7 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         viewModel.onPageStarted(url)
                                         viewModel.resetPageTrackers(url)
                                         viewModel.setReaderModeAvailable(false)
-                                        if (state.isReaderModeActive) {
+                                        if (viewModel.uiState.value.isReaderModeActive) {
                                             viewModel.toggleReaderMode()
                                         }
                                     }
@@ -1577,21 +1597,24 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                     if (!url.isNullOrBlank()) {
                                         lastLoadedUrl = url
                                         viewModel.onPageFinished(url, canGoBack(), canGoForward(), view?.title)
+                                        val liveState = viewModel.uiState.value
 
                                         // Captura de thumbnail da página para o carrossel de abas
-                                        view?.let { wv ->
-                                            if (wv.width > 0 && wv.height > 0) {
-                                                try {
-                                                    val thumbWidth = 360
-                                                    val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
-                                                    val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
-                                                    val canvas = android.graphics.Canvas(bmp)
-                                                    val scale = thumbWidth.toFloat() / wv.width.toFloat()
-                                                    canvas.scale(scale, scale)
-                                                    wv.draw(canvas)
-                                                    viewModel.updateTabThumbnail(state.activeTabId, bmp)
-                                                } catch (e: Exception) {
-                                                    // Silencioso em layouts extremos
+                                        if (!liveState.isHomePage) {
+                                            view?.let { wv ->
+                                                if (wv.width > 0 && wv.height > 0) {
+                                                    try {
+                                                        val thumbWidth = 360
+                                                        val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
+                                                        val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                                                        val canvas = android.graphics.Canvas(bmp)
+                                                        val scale = thumbWidth.toFloat() / wv.width.toFloat()
+                                                        canvas.scale(scale, scale)
+                                                        wv.draw(canvas)
+                                                        viewModel.updateTabThumbnail(liveState.activeTabId, bmp)
+                                                    } catch (e: Exception) {
+                                                        // Silencioso em layouts extremos
+                                                    }
                                                 }
                                             }
                                         }
@@ -1600,12 +1623,12 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                                         val isGoogleOrRecaptcha = pageHost.contains("google.") || pageHost.contains("recaptcha") || pageHost.contains("gstatic.")
 
                                         // Injeção de AdBlock Cosmético (Ocultação de espaços vazios, exceto domínios Google/reCAPTCHA)
-                                        if (state.adBlockEnabled && !isGoogleOrRecaptcha) {
+                                        if (liveState.adBlockEnabled && !isGoogleOrRecaptcha) {
                                             view?.evaluateJavascript(COSMETIC_ADBLOCK_SCRIPT, null)
                                         }
 
                                         // Cookie banner blocker injection (Opera-style inteligente, exceto domínios Google/reCAPTCHA)
-                                        if (state.cookieBlockerEnabled && !isGoogleOrRecaptcha) {
+                                        if (liveState.cookieBlockerEnabled && !isGoogleOrRecaptcha) {
                                             view?.evaluateJavascript(
                                                 """
                                                 (function() {
@@ -2078,9 +2101,10 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             }
 
 
-                            loadUrl(state.currentUrl)
-                            lastLoadedUrl = state.currentUrl
-                            lastActiveTabId = state.activeTabId
+                            val latestState = viewModel.uiState.value
+                            loadUrl(latestState.currentUrl)
+                            lastLoadedUrl = latestState.currentUrl
+                            lastActiveTabId = latestState.activeTabId
                             webViewInstance = this
                         }
                     },
@@ -2486,19 +2510,21 @@ fun TesseraBrowserScreen(viewModel: BrowserViewModel = viewModel()) {
                             launchReaderMode()
                         },
                         onOpenTabs = {
-                            webViewInstance?.let { wv ->
-                                if (wv.width > 0 && wv.height > 0) {
-                                    try {
-                                        val thumbWidth = 360
-                                        val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
-                                        val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
-                                        val canvas = android.graphics.Canvas(bmp)
-                                        val scale = thumbWidth.toFloat() / wv.width.toFloat()
-                                        canvas.scale(scale, scale)
-                                        wv.draw(canvas)
-                                        viewModel.updateTabThumbnail(state.activeTabId, bmp)
-                                    } catch (e: Exception) {
-                                        // Silencioso
+                            if (!state.isHomePage) {
+                                webViewInstance?.let { wv ->
+                                    if (wv.width > 0 && wv.height > 0) {
+                                        try {
+                                            val thumbWidth = 360
+                                            val thumbHeight = ((wv.height.toLong() * thumbWidth) / wv.width).toInt().coerceIn(200, 720)
+                                            val bmp = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                                            val canvas = android.graphics.Canvas(bmp)
+                                            val scale = thumbWidth.toFloat() / wv.width.toFloat()
+                                            canvas.scale(scale, scale)
+                                            wv.draw(canvas)
+                                            viewModel.updateTabThumbnail(state.activeTabId, bmp)
+                                        } catch (e: Exception) {
+                                            // Silencioso
+                                        }
                                     }
                                 }
                             }

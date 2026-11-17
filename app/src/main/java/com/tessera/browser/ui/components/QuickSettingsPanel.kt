@@ -228,65 +228,71 @@ fun QuickSettingsPanel(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Domínio Ativo & Permissões do Site
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(tileBg)
-                            .border(0.6.dp, tileBorder, RoundedCornerShape(14.dp))
-                            .clickable {
-                                onDismiss()
-                                if (isWebPageActive) onOpenSiteSettings() else onOpenPrivacyDashboard()
-                            }
-                            .padding(horizontal = 11.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Icon(
-                            imageVector = when {
-                                !isWebPageActive -> Icons.Rounded.Shield
-                                isSecureSite -> Icons.Rounded.Lock
-                                else -> Icons.Rounded.LockOpen
-                            },
-                            contentDescription = "Segurança e permissões",
-                            tint = when {
-                                !isWebPageActive -> accentColor
-                                isSecureSite -> ApplePalette.Green
-                                else -> ApplePalette.Red
-                            },
-                            modifier = Modifier.size(15.dp)
-                        )
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = cleanDomain,
-                                color = textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = if (isWebPageActive) {
-                                    "Permissões do site"
-                                } else if (privacyBlockedCount > 0) {
-                                    "$privacyBlockedCount rastreadores barrados"
-                                } else {
-                                    "Proteção ativa"
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(tileBg)
+                                .border(0.5.dp, tileBorder, RoundedCornerShape(11.dp))
+                                .clickable {
+                                    onDismiss()
+                                    if (isWebPageActive) onOpenSiteSettings() else onOpenPrivacyDashboard()
+                                }
+                                .padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = when {
+                                    !isWebPageActive -> Icons.Rounded.Shield
+                                    isSecureSite -> Icons.Rounded.Lock
+                                    else -> Icons.Rounded.LockOpen
                                 },
-                                color = textSecondary,
-                                fontSize = 10.5.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                contentDescription = "Segurança e permissões",
+                                tint = when {
+                                    !isWebPageActive -> accentColor
+                                    isSecureSite -> ApplePalette.Green
+                                    else -> ApplePalette.Red
+                                },
+                                modifier = Modifier.size(13.dp)
+                            )
+
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
+                                Text(
+                                    text = cleanDomain,
+                                    color = textPrimary,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (isWebPageActive) {
+                                        "Permissões do site"
+                                    } else if (privacyBlockedCount > 0) {
+                                        "$privacyBlockedCount rastreadores barrados"
+                                    } else {
+                                        "Proteção ativa"
+                                    },
+                                    color = textSecondary,
+                                    fontSize = 9.5.sp,
+                                    lineHeight = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(13.dp)
                             )
                         }
-
-                        Icon(
-                            imageVector = Icons.Rounded.ChevronRight,
-                            contentDescription = null,
-                            tint = textSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
                     }
 
                     // Pílula Inline de Zoom de Texto (A- | 100% | A+)

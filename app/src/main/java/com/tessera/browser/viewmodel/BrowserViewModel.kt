@@ -349,7 +349,8 @@ data class BrowserUiState(
     // Atualizações Automáticas via GitHub Releases
     val appUpdateInfo: com.tessera.browser.data.AppUpdateInfo? = null,
     val showUpdateDialog: Boolean = false,
-    val isCheckingForUpdates: Boolean = false
+    val isCheckingForUpdates: Boolean = false,
+    val externalLaunchNonce: Long = 0L
 ) {
     val isCurrentPageBookmarked: Boolean
         get() = speedDialItems.any { it.url.equals(displayUrl, ignoreCase = true) || it.url.equals(currentUrl, ignoreCase = true) }
@@ -374,6 +375,15 @@ class BrowserViewModel : ViewModel() {
     private var suggestionJob: Job? = null
     private var undoBannerJob: Job? = null
     private var appContext: Context? = null
+    private var isPersistenceInitialized = false
+    private var isPreferencesLoaded = false
+
+    private data class PendingExternalLaunch(
+        val tabId: String,
+        val rawInput: String
+    )
+    private val pendingExternalLaunches = mutableListOf<PendingExternalLaunch>()
+
     var desktopSyncManager: com.tessera.browser.sync.TesseraDesktopSyncManager? = null
 
     init {
@@ -436,14 +446,92 @@ class BrowserViewModel : ViewModel() {
         saveTabs()
     }
 
-    fun openFromExternal(rawInput: String) {
-        val trimmed = rawInput.trim()
-        if (trimmed.isBlank()) return
+    private fun dismissExternalLaunchOverlays() {
         dismissAiAssistant()
         dismissHistoryModal()
         dismissTabsModal()
         dismissQuickSettings()
-        openUrl(trimmed)
+        dismissFullSettings()
+        dismissSiteSettings()
+        dismissQrCodeModal()
+        dismissDesktopSyncModal()
+        toggleSpaceSwitcherModal(false)
+        clearPageError()
+        closeFindInPage()
+        dismissPeekModal()
+    }
+
+    fun openFromExternal(rawInput: String) {
+        val trimmed = rawInput.trim()
+        if (trimmed.isBlank()) return
+        dismissExternalLaunchOverlays()
+
+        if (!isPreferencesLoaded) {
+            val pendingTabId = UUID.randomUUID().toString()
+            pendingExternalLaunches.add(PendingExternalLaunch(pendingTabId, trimmed))
+            openExternalInTabs(rawInput = trimmed, preferredTabId = pendingTabId, persist = false)
+            return
+        }
+
+        openExternalInTabs(rawInput = trimmed, preferredTabId = null, persist = true)
+    }
+
+    private fun openExternalInTabs(rawInput: String, preferredTabId: String?, persist: Boolean) {
+        stopReaderTts()
+        val trimmed = rawInput.trim()
+        if (trimmed.isBlank()) return
+
+        val formattedUrl = formatInputAsUrl(trimmed)
+        val isQuerySearch = formattedUrl.contains("?q=") || formattedUrl.contains("&q=")
+        val initialTitle = if (isQuerySearch) trimmed else extractDomain(formattedUrl)
+
+        _uiState.update { state ->
+            val effectiveSpaceId = if (state.spaces.any { it.id == state.activeSpaceId }) {
+                state.activeSpaceId
+            } else {
+                state.spaces.firstOrNull()?.id ?: "space_general"
+            }
+            val activeTab = state.tabs.find { it.id == state.activeTabId }
+            val newTabId = preferredTabId ?: UUID.randomUUID().toString()
+            val targetTab = BrowserTab(
+                id = newTabId,
+                url = formattedUrl,
+                title = initialTitle,
+                isHomePage = false,
+                spaceId = effectiveSpaceId
+            )
+
+            // Se a guia ativa for apenas a Start Page vazia (isHomePage), reutiliza-a;
+            // caso já exista uma guia aberta com página, abre o link externo em uma nova aba.
+            val updatedTabs = if (activeTab != null && activeTab.isHomePage) {
+                state.tabs.map { if (it.id == activeTab.id) targetTab else it }
+            } else {
+                state.tabs + targetTab
+            }
+
+            state.copy(
+                tabs = updatedTabs,
+                activeTabId = newTabId,
+                activeSpaceId = effectiveSpaceId,
+                isHomePage = false,
+                currentUrl = formattedUrl,
+                displayUrl = formattedUrl,
+                canGoBack = false,
+                canGoForward = false,
+                isBarVisible = true,
+                isIncognitoMode = false,
+                isIncognitoLocked = false,
+                isReaderModeActive = false,
+                isReaderModeAvailable = false,
+                readerArticle = null,
+                isReaderSettingsOpen = false,
+                searchSuggestions = emptyList(),
+                externalLaunchNonce = state.externalLaunchNonce + 1L
+            )
+        }
+        if (persist) {
+            saveTabs()
+        }
     }
 
     fun goHome() {
@@ -453,10 +541,17 @@ class BrowserViewModel : ViewModel() {
                     tab.copy(isHomePage = true, url = state.searchEngine.homeUrl, title = "Início")
                 } else tab
             }
+            val updatedThumbs = if (state.tabThumbnails.containsKey(state.activeTabId)) {
+                state.tabThumbnails.toMutableMap().apply { remove(state.activeTabId) }
+            } else {
+                state.tabThumbnails
+            }
             state.copy(
                 isHomePage = true,
+                displayUrl = "",
                 progress = 0f,
                 tabs = updatedTabs,
+                tabThumbnails = updatedThumbs,
                 searchSuggestions = emptyList(),
                 pageError = null,
                 siteThemeColor = null
@@ -1220,6 +1315,10 @@ class BrowserViewModel : ViewModel() {
 
     fun updateTabThumbnail(tabId: String, bitmap: Bitmap) {
         _uiState.update { state ->
+            val targetTab = state.tabs.find { it.id == tabId }
+            if (targetTab == null || targetTab.isHomePage) {
+                return@update state
+            }
             val updated = state.tabThumbnails.toMutableMap()
             updated[tabId] = bitmap
             state.copy(tabThumbnails = updated)
@@ -1842,6 +1941,8 @@ class BrowserViewModel : ViewModel() {
     fun initPersistence(context: Context) {
         val app = context.applicationContext
         appContext = app
+        if (isPersistenceInitialized) return
+        isPersistenceInitialized = true
         initDownloads(app)
         loadPreferences(app)
         desktopSyncManager = com.tessera.browser.sync.TesseraDesktopSyncManager(app)
@@ -2424,57 +2525,133 @@ class BrowserViewModel : ViewModel() {
                     map
                 } else null
 
-                _uiState.update { current ->
-                    val effectiveTabs = loadedTabs ?: current.tabs
-                    val effectiveActiveTabId = if (savedActiveTabId != null && effectiveTabs.any { it.id == savedActiveTabId }) {
-                        savedActiveTabId
+                withContext(Dispatchers.Main) {
+                    val launches = if (pendingExternalLaunches.isNotEmpty()) {
+                        pendingExternalLaunches.toList().also { pendingExternalLaunches.clear() }
                     } else {
-                        effectiveTabs.firstOrNull()?.id ?: current.activeTabId
+                        emptyList()
                     }
-                    val activeTab = effectiveTabs.find { it.id == effectiveActiveTabId }
+                    isPreferencesLoaded = true
 
-                    current.copy(
-                        spaces = loadedSpaces ?: current.spaces,
-                        activeSpaceId = savedActiveSpaceId ?: current.activeSpaceId,
-                        tabs = effectiveTabs,
-                        activeTabId = effectiveActiveTabId,
-                        isHomePage = activeTab?.isHomePage ?: current.isHomePage,
-                        currentUrl = activeTab?.url ?: current.currentUrl,
-                        displayUrl = if (activeTab?.isHomePage == true) "" else (activeTab?.url ?: current.displayUrl),
-                        canGoBack = activeTab?.canGoBack ?: current.canGoBack,
-                        canGoForward = activeTab?.canGoForward ?: current.canGoForward,
-                        speedDialItems = loadedBookmarks ?: current.speedDialItems,
-                        history = loadedHistory ?: current.history,
-                        savedPages = loadedSavedPages ?: current.savedPages,
-                        tabGroups = loadedGroups ?: current.tabGroups,
-                        siteSettings = loadedSiteSettings ?: current.siteSettings,
-                        isDarkMode = isDark ?: current.isDarkMode,
-                        forceDarkPages = forceDark ?: current.forceDarkPages,
-                        pageTextZoom = pageTextZoom ?: current.pageTextZoom,
-                        tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
-                        adBlockEnabled = adBlock ?: current.adBlockEnabled,
-                        cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
-                        isDesktopMode = isDesktop ?: current.isDesktopMode,
-                        searchEngine = searchEngine ?: current.searchEngine,
-                        readerFontSizeSp = readerFontSize ?: current.readerFontSizeSp,
-                        readerTheme = readerTheme ?: current.readerTheme,
-                        readerFontFamily = readerFont ?: current.readerFontFamily,
-                        readerShowImages = readerShowImages ?: current.readerShowImages,
-                        isAutoPipEnabled = autoPip ?: current.isAutoPipEnabled,
-                        geminiApiKey = loadedGeminiKey ?: current.geminiApiKey,
-                        groqApiKey = loadedGroqKey ?: current.groqApiKey,
-                        aiProvider = loadedAiProvider ?: current.aiProvider,
-                        incognitoBiometricLock = loadedIncognitoLock ?: current.incognitoBiometricLock,
-                        openLinksInExternalApps = loadedOpenInExternal ?: current.openLinksInExternalApps,
-                        privacyState = current.privacyState.copy(
-                            totalBlockedCount = savedTotalBlocked,
-                            dataSavedBytes = savedTotalBlocked.toLong() * PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST,
-                            estimatedTimeSavedMs = savedTotalBlocked.toLong() * PrivacyTrackerEngine.TIME_SAVED_PER_BLOCKED_MS
+                    _uiState.update { current ->
+                        val effectiveSpaces = loadedSpaces ?: current.spaces
+                        val effectiveSpaceId = if (savedActiveSpaceId != null && effectiveSpaces.any { it.id == savedActiveSpaceId }) {
+                            savedActiveSpaceId
+                        } else if (effectiveSpaces.any { it.id == current.activeSpaceId }) {
+                            current.activeSpaceId
+                        } else {
+                            effectiveSpaces.firstOrNull()?.id ?: current.activeSpaceId
+                        }
+                        val baseTabs = loadedTabs ?: current.tabs
+                        val baseActiveTabId = if (savedActiveTabId != null && baseTabs.any { it.id == savedActiveTabId }) {
+                            savedActiveTabId
+                        } else {
+                            baseTabs.firstOrNull()?.id ?: current.activeTabId
+                        }
+                        val effectiveSearchEngine = searchEngine ?: current.searchEngine
+                        val baseActiveTab = baseTabs.find { it.id == baseActiveTabId }
+
+                        var mergedTabs = baseTabs
+                        var mergedActiveTabId = baseActiveTabId
+                        var mergedIsHomePage = baseActiveTab?.isHomePage ?: current.isHomePage
+                        var mergedCurrentUrl = baseActiveTab?.url ?: current.currentUrl
+                        var mergedDisplayUrl = if (mergedIsHomePage) "" else mergedCurrentUrl
+                        var mergedCanGoBack = baseActiveTab?.canGoBack ?: current.canGoBack
+                        var mergedCanGoForward = baseActiveTab?.canGoForward ?: current.canGoForward
+                        var mergedNonce = current.externalLaunchNonce
+
+                        for (launch in launches) {
+                            val trimmed = launch.rawInput.trim()
+                            if (trimmed.isBlank()) continue
+                            val formattedUrl = when {
+                                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+                                trimmed.contains(".") && !trimmed.contains(" ") -> "https://$trimmed"
+                                else -> effectiveSearchEngine.buildSearchUrl(trimmed)
+                            }
+                            val isQuerySearch = formattedUrl.contains("?q=") || formattedUrl.contains("&q=")
+                            val initialTitle = if (isQuerySearch) trimmed else extractDomain(formattedUrl)
+                            val activeTab = mergedTabs.find { it.id == mergedActiveTabId }
+                            val newTab = BrowserTab(
+                                id = launch.tabId,
+                                url = formattedUrl,
+                                title = initialTitle,
+                                isHomePage = false,
+                                spaceId = effectiveSpaceId
+                            )
+                            mergedTabs = if (activeTab != null && activeTab.isHomePage) {
+                                mergedTabs.map { if (it.id == activeTab.id) newTab else it }
+                            } else {
+                                mergedTabs + newTab
+                            }
+                            mergedActiveTabId = launch.tabId
+                            mergedIsHomePage = false
+                            mergedCurrentUrl = formattedUrl
+                            mergedDisplayUrl = formattedUrl
+                            mergedCanGoBack = false
+                            mergedCanGoForward = false
+                            mergedNonce += 1L
+                        }
+
+                        current.copy(
+                            spaces = effectiveSpaces,
+                            activeSpaceId = effectiveSpaceId,
+                            tabs = mergedTabs,
+                            activeTabId = mergedActiveTabId,
+                            isHomePage = mergedIsHomePage,
+                            currentUrl = mergedCurrentUrl,
+                            displayUrl = mergedDisplayUrl,
+                            canGoBack = mergedCanGoBack,
+                            canGoForward = mergedCanGoForward,
+                            isIncognitoMode = if (launches.isNotEmpty()) false else current.isIncognitoMode,
+                            isIncognitoLocked = if (launches.isNotEmpty()) false else current.isIncognitoLocked,
+                            externalLaunchNonce = mergedNonce,
+                            speedDialItems = loadedBookmarks ?: current.speedDialItems,
+                            history = loadedHistory ?: current.history,
+                            savedPages = loadedSavedPages ?: current.savedPages,
+                            tabGroups = loadedGroups ?: current.tabGroups,
+                            siteSettings = loadedSiteSettings ?: current.siteSettings,
+                            isDarkMode = isDark ?: current.isDarkMode,
+                            forceDarkPages = forceDark ?: current.forceDarkPages,
+                            pageTextZoom = pageTextZoom ?: current.pageTextZoom,
+                            tesseraAiEnabled = tesseraAi ?: current.tesseraAiEnabled,
+                            adBlockEnabled = adBlock ?: current.adBlockEnabled,
+                            cookieBlockerEnabled = cookieBlocker ?: current.cookieBlockerEnabled,
+                            isDesktopMode = isDesktop ?: current.isDesktopMode,
+                            searchEngine = effectiveSearchEngine,
+                            readerFontSizeSp = readerFontSize ?: current.readerFontSizeSp,
+                            readerTheme = readerTheme ?: current.readerTheme,
+                            readerFontFamily = readerFont ?: current.readerFontFamily,
+                            readerShowImages = readerShowImages ?: current.readerShowImages,
+                            isAutoPipEnabled = autoPip ?: current.isAutoPipEnabled,
+                            geminiApiKey = loadedGeminiKey ?: current.geminiApiKey,
+                            groqApiKey = loadedGroqKey ?: current.groqApiKey,
+                            aiProvider = loadedAiProvider ?: current.aiProvider,
+                            incognitoBiometricLock = loadedIncognitoLock ?: current.incognitoBiometricLock,
+                            openLinksInExternalApps = loadedOpenInExternal ?: current.openLinksInExternalApps,
+                            privacyState = current.privacyState.copy(
+                                totalBlockedCount = savedTotalBlocked,
+                                dataSavedBytes = savedTotalBlocked.toLong() * PrivacyTrackerEngine.BYTES_PER_BLOCKED_REQUEST,
+                                estimatedTimeSavedMs = savedTotalBlocked.toLong() * PrivacyTrackerEngine.TIME_SAVED_PER_BLOCKED_MS
+                            )
                         )
-                    )
+                    }
+
+                    if (launches.isNotEmpty()) {
+                        saveTabs()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("BrowserViewModel", "Erro ao carregar preferências", e)
+                withContext(Dispatchers.Main) {
+                    isPreferencesLoaded = true
+                    if (pendingExternalLaunches.isNotEmpty()) {
+                        val launches = pendingExternalLaunches.toList()
+                        pendingExternalLaunches.clear()
+                        for (launch in launches) {
+                            openExternalInTabs(rawInput = launch.rawInput, preferredTabId = launch.tabId, persist = true)
+                        }
+                    }
+                }
             }
         }
     }

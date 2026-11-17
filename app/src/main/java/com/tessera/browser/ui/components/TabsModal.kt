@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Public
@@ -177,44 +178,48 @@ fun TabsModal(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     // Seletor de Espaços (Arc Spaces)
-                    Box {
+                    Box(modifier = Modifier.weight(1f, fill = false)) {
                         Surface(
                             onClick = { showSpaceSelectorMenu = true },
                             shape = CircleShape,
                             color = cardBg,
-                            border = BorderStroke(0.8.dp, cardBorder)
+                            border = BorderStroke(0.6.dp, cardBorder)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 SpaceVectorIcon(
                                     identifier = currentSpace.iconEmoji,
                                     tint = contentColor,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = currentSpace.name,
                                     color = contentColor,
-                                    fontSize = 13.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Icon(
                                     imageVector = Icons.Rounded.KeyboardArrowDown,
                                     contentDescription = "Alternar Espaço",
                                     tint = mutedColor,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }
@@ -285,26 +290,28 @@ fun TabsModal(
                         shape = CircleShape,
                         color = if (isIncognito) ApplePalette.Purple.copy(alpha = 0.22f) else cardBg,
                         border = BorderStroke(
-                            0.8.dp,
+                            0.6.dp,
                             if (isIncognito) ApplePalette.Purple.copy(alpha = 0.55f) else cardBorder
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.VisibilityOff,
                                 contentDescription = "Modo Anônimo",
                                 tint = if (isIncognito) ApplePalette.Purple else mutedColor,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "Anônimo",
                                 color = if (isIncognito) ApplePalette.Purple else contentColor,
-                                fontSize = 12.5.sp,
-                                fontWeight = if (isIncognito) FontWeight.SemiBold else FontWeight.Medium
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isIncognito) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -312,7 +319,7 @@ fun TabsModal(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     // Pílula Reabrir Guia Fechada
                     AnimatedVisibility(
@@ -324,39 +331,46 @@ fun TabsModal(
                             onClick = onRestoreClosedTab,
                             shape = CircleShape,
                             color = cardBg,
-                            border = BorderStroke(0.8.dp, cardBorder)
+                            border = BorderStroke(0.6.dp, cardBorder)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Replay,
                                     contentDescription = "Reabrir guia fechada",
                                     tint = contentColor,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = "Reabrir",
                                     color = contentColor,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
 
                     // Botão Concluído / Fechar Modal
-                    TextButton(
-                        onClick = onDismiss,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(onClick = onDismiss)
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "Concluído",
                             color = if (isIncognito) ApplePalette.Purple else if (isDarkMode) ApplePalette.BlueDark else ApplePalette.Blue,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -823,7 +837,7 @@ private fun ArcTabCard(
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Public,
+                        imageVector = if (tab.isHomePage) Icons.Rounded.Home else Icons.Rounded.Public,
                         contentDescription = null,
                         tint = if (tab.isPinned) accentColor else mutedColor,
                         modifier = Modifier.size(14.dp)
@@ -870,7 +884,7 @@ private fun ArcTabCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (thumbnail != null) {
+                if (!tab.isHomePage && thumbnail != null) {
                     Image(
                         bitmap = thumbnail.asImageBitmap(),
                         contentDescription = tab.title,
@@ -891,14 +905,14 @@ private fun ArcTabCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Public,
+                                imageVector = if (tab.isHomePage) Icons.Rounded.Home else Icons.Rounded.Public,
                                 contentDescription = null,
                                 tint = accentColor,
                                 modifier = Modifier.size(26.dp)
                             )
                         }
                         Text(
-                            text = optimizedName,
+                            text = if (tab.isHomePage) "Página Inicial" else optimizedName,
                             color = contentColor,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
